@@ -4,6 +4,12 @@ from backend.app.features.research.search.ranking import (
 )
 
 
+class _FakeReranker:
+    """compute_score trả điểm cố định theo thứ tự đầu vào."""
+    def __init__(self, scores): self._scores = scores
+    def compute_score(self, pairs, normalize=True): return self._scores
+
+
 def test_recency_score_newer_is_higher():
     assert recency_score({"year": 2024}) > recency_score({"year": 2000})
 
@@ -31,3 +37,31 @@ def test_fallback_still_prefers_recent(monkeypatch):
     new = SearchResult(source="web", title="new", url="u2", content="c", score=0.5, extra={"year": 2024})
     ranked = rerank_results("q", [old, new], top_k=2)
     assert ranked[0].title == "new"
+
+
+def test_bge_path_prefers_more_recent_when_rerank_ties(monkeypatch):
+    import backend.app.features.research.search.ranking as ranking
+    monkeypatch.setattr(ranking, "_get_reranker", lambda: _FakeReranker([0.8, 0.8]))
+    old = SearchResult(source="web", title="old", url="u1", content="c", score=0.5, extra={"year": 2000})
+    new = SearchResult(source="web", title="new", url="u2", content="c", score=0.5, extra={"year": 2024})
+    ranked = rerank_results("q", [old, new], top_k=2)
+    assert ranked[0].title == "new"
+
+
+def test_bge_path_prefers_more_cited_when_rerank_ties(monkeypatch):
+    import backend.app.features.research.search.ranking as ranking
+    monkeypatch.setattr(ranking, "_get_reranker", lambda: _FakeReranker([0.8, 0.8]))
+    low = SearchResult(source="arxiv", title="low", url="u1", content="c", score=0.5, extra={"citation_count": 0})
+    high = SearchResult(source="arxiv", title="high", url="u2", content="c", score=0.5, extra={"citation_count": 400})
+    ranked = rerank_results("q", [low, high], top_k=2)
+    assert ranked[0].title == "high"
+
+
+def test_bge_path_preserves_relevance_when_signals_absent(monkeypatch):
+    """Khi recency/citation = 0 cho cả hai, thứ tự theo rerank (top-1 relevance không tụt)."""
+    import backend.app.features.research.search.ranking as ranking
+    monkeypatch.setattr(ranking, "_get_reranker", lambda: _FakeReranker([0.3, 0.9]))
+    a = SearchResult(source="web", title="less_relevant", url="u1", content="c", score=0.5, extra={})
+    b = SearchResult(source="web", title="more_relevant", url="u2", content="c", score=0.5, extra={})
+    ranked = rerank_results("q", [a, b], top_k=2)
+    assert ranked[0].title == "more_relevant"

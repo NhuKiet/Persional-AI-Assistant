@@ -76,8 +76,14 @@ def rerank_results(
             ranked = []
             for result, rerank_score in zip(results, scores):
                 cred   = _CREDIBILITY.get(result.source, 0.5)
-                # Weighted combination: reranker 60%, credibility 25%, original score 15%
-                final  = rerank_score * 0.60 + cred * 0.25 + result.score * 0.15
+                # Weighted combination: reranker 55%, credibility 20%, recency 10%, citation 10%, original score 5%
+                final  = (
+                    rerank_score * 0.55
+                    + cred * 0.20
+                    + recency_score(result.extra) * 0.10
+                    + citation_score(result.extra) * 0.10
+                    + result.score * 0.05
+                )
                 ranked.append((result, final))
 
             ranked.sort(key=lambda x: x[1], reverse=True)
