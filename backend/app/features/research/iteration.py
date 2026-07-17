@@ -15,7 +15,7 @@ def needs_iteration(
         return False
     if len(output.claims) < min_grounded:
         return True
-    if output.confidence is None or output.confidence < 0.5:
+    if output.confidence is None or output.confidence < 0.5:  # deliberate: missing confidence counts as weak, iterate up to cap
         return True
     return False
 

@@ -241,6 +241,54 @@ def test_run_streaming_no_iteration_when_first_result_strong(monkeypatch):
     assert [e for e in events if e.get("type") == "iteration"] == []
 
 
+def test_run_iterates_once_when_first_result_weak(monkeypatch):
+    """run() (non-streaming): grounding yếu ở vòng 1 → 1 vòng bù rồi trả kết quả mạnh."""
+    import backend.app.features.research.agent as ra
+    from backend.app.features.research.models import ResearchOutput, Claim, SearchResult
+    import backend.app.core.config as cfg
+    monkeypatch.setattr(cfg.settings, "RESEARCH_MAX_ITERATIONS", 1, raising=False)
+
+    agent = ra.ResearchAgent.__new__(ra.ResearchAgent)
+
+    calls = {"synth": 0, "search_rounds": 0}
+
+    class _Synth:
+        def synthesize_grounded(self, q, s):
+            calls["synth"] += 1
+            o = ResearchOutput(query=q)
+            if calls["synth"] == 1:      # vòng 1: yếu (ít claim, confidence thấp)
+                o.claims = []
+                o.confidence = 0.2
+                o.follow_up_questions = ["deeper aspect?"]
+            else:                        # vòng bù: mạnh
+                o.claims = [Claim(text="c", source_ids=["x"], grounded=True) for _ in range(4)]
+                o.confidence = 0.8
+            return o
+        def synthesize_rag(self, q, s): return ResearchOutput(query=q)
+    agent.synth = _Synth()
+
+    def _fake_search_all(q, *a, **k):
+        calls["search_rounds"] += 1
+        return [SearchResult(source="web", title="t", url=f"u{calls['search_rounds']}", content="x")]
+    monkeypatch.setattr(agent, "_search_all", _fake_search_all)
+    monkeypatch.setattr(agent, "_process_pipeline", lambda q, raw, **k: raw)
+
+    monkeypatch.setattr(ra, "get_store", lambda: type("K", (), {
+        "retrieve": lambda self, q: [], "add_results": lambda self, q, s: 0})())
+    monkeypatch.setattr(ra, "expand_query", lambda q: [q])
+    monkeypatch.setattr(ra, "get_dynamic_k", lambda q: {})
+    monkeypatch.setattr(ra, "_enrich_web_results", lambda r: r)
+    monkeypatch.setattr(ra, "deduplicate_results", lambda r, threshold=0.92: r)
+    monkeypatch.setattr(ra, "rerank_results", lambda q, r, top_k=15: r)
+
+    output = agent.run("q")
+
+    assert calls["synth"] == 2                 # synth 2 lần (vòng 1 + bù)
+    # _search_all gọi 1 lần cho search ban đầu + 1 lần cho vòng bù
+    assert calls["search_rounds"] == 2
+    assert output.confidence == 0.8             # kết quả bù (mạnh) được trả về
+
+
 def test_rerank_fallback_prefers_more_recent(monkeypatch):
     """F2 regression: ở nhánh fallback (không BGE), paper mới hơn phải xếp trên.
 

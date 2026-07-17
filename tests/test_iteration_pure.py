@@ -41,3 +41,25 @@ def test_gap_query_falls_back_to_evidence_framing():
 
 def test_gap_query_empty_query_returns_none():
     assert gap_query("   ", _out()) is None
+
+
+def test_needs_iteration_true_when_confidence_none_and_claims_strong():
+    assert needs_iteration(_out(n_claims=5, confidence=None), rounds_done=0, max_rounds=1) is True
+
+
+def test_gap_query_truncates_long_follow_up_to_200_chars():
+    long_fq = "a" * 250
+    o = _out(follow_ups=[long_fq])
+    result = gap_query("original", o)
+    assert len(result) == 200
+
+
+def test_gap_query_truncates_long_evidence_framing_to_200_chars():
+    long_query = "x" * 250
+    result = gap_query(long_query, _out())
+    assert len(result) == 200
+
+
+def test_gap_query_whitespace_only_follow_up_falls_back_to_evidence_framing():
+    o = _out(follow_ups=["   "])
+    assert gap_query("neural nets", o) == "neural nets evidence details"

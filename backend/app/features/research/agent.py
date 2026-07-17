@@ -191,6 +191,26 @@ class ResearchAgent:
         )
         return reranked
 
+    def _iteration_step(self, query, sources, output, synth):
+        """Run one bounded extra search round targeting a grounding gap.
+
+        Returns (new_sources, new_output), or None to stop (no gap query, or a
+        non-fatal failure — caller keeps the prior output).
+        """
+        gq = gap_query(query, output)
+        if not gq:
+            return None
+        try:
+            extra_raw = self._search_all(gq)
+            extra = self._process_pipeline(gq, extra_raw)
+            combined = deduplicate_results(sources + extra, threshold=0.92)
+            new_sources = rerank_results(query, combined, top_k=15)
+            new_output = synth.synthesize_grounded(query, new_sources)
+            return new_sources, new_output
+        except Exception as e:  # noqa: BLE001 — non-fatal, keep prior output
+            logger.warning("[ITERATION] round failed (non-fatal): %s", e)
+            return None
+
     # ── Public API ───────────────────────────────────────────────────────────
 
     def run(self, query: str) -> ResearchOutput:
@@ -235,19 +255,11 @@ class ResearchAgent:
         rounds = 0
         max_rounds = getattr(settings, "RESEARCH_MAX_ITERATIONS", 1)
         while needs_iteration(output, rounds, max_rounds):
-            gq = gap_query(query, output)
-            if not gq:
-                break
             rounds += 1
-            try:
-                extra_raw = self._search_all(gq)
-                extra = self._process_pipeline(gq, extra_raw)
-                combined = deduplicate_results(sources + extra, threshold=0.92)
-                sources = rerank_results(query, combined, top_k=15)
-                output = self.synth.synthesize_grounded(query, sources)
-            except Exception as e:
-                logger.warning("[ITERATION] round %d failed (non-fatal): %s", rounds, e)
+            step = self._iteration_step(query, sources, output, self.synth)
+            if step is None:
                 break
+            sources, output = step
 
         logger.info("[FINAL] Search answer (%.1fs)", time.time() - t0)
         return output
@@ -371,9 +383,6 @@ class ResearchAgent:
                 rounds = 0
                 max_rounds = getattr(settings, "RESEARCH_MAX_ITERATIONS", 1)
                 while needs_iteration(output, rounds, max_rounds):
-                    gq = gap_query(query, output)
-                    if not gq:
-                        break
                     rounds += 1
                     yield {
                         "type":    "iteration",
@@ -381,15 +390,10 @@ class ResearchAgent:
                         "message": f"Additional research (round {rounds})…",
                         "source":  "llm",
                     }
-                    try:
-                        extra_raw = self._search_all(gq)
-                        extra = self._process_pipeline(gq, extra_raw)
-                        combined = deduplicate_results(all_sources + extra, threshold=0.92)
-                        all_sources = rerank_results(query, combined, top_k=15)
-                        output = synth.synthesize_grounded(query, all_sources)
-                    except Exception as e:
-                        logger.warning("[ITERATION] round %d failed (non-fatal): %s", rounds, e)
+                    step = self._iteration_step(query, all_sources, output, synth)
+                    if step is None:
                         break
+                    all_sources, output = step
 
             yield {
                 "type": "done",
