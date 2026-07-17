@@ -309,3 +309,71 @@ def test_rerank_fallback_prefers_more_recent(monkeypatch):
     ranked = ranking.rerank_results("q", [old, new], top_k=2)
 
     assert ranked[0].title == "new"
+
+
+def test_run_streaming_stops_early_when_cancelled(monkeypatch):
+    """cancel_event set sẵn → run_streaming dừng, phát 'cancelled', KHÔNG synthesize, KHÔNG done."""
+    import threading
+    import backend.app.features.research.agent as ra
+    from backend.app.features.research.models import ResearchOutput, SearchResult
+
+    agent = ra.ResearchAgent.__new__(ra.ResearchAgent)
+    synth_called = {"n": 0}
+
+    class _Synth:
+        def synthesize_grounded(self, q, s):
+            synth_called["n"] += 1
+            return ResearchOutput(query=q)
+        def synthesize_rag(self, q, s):
+            synth_called["n"] += 1
+            return ResearchOutput(query=q)
+    agent.synth = _Synth()
+
+    # tắt knowledge + search inline
+    monkeypatch.setattr(ra, "get_store", lambda: type("K", (), {
+        "retrieve": lambda self, q: [], "add_results": lambda self, q, s: 0})())
+    monkeypatch.setattr(ra, "expand_query", lambda q: [q])
+    monkeypatch.setattr(ra, "get_dynamic_k", lambda q: {})
+    monkeypatch.setattr(ra, "_enrich_web_results", lambda r: r)
+    monkeypatch.setattr(ra, "deduplicate_results", lambda r, threshold=0.92: r)
+    monkeypatch.setattr(ra, "rerank_results", lambda q, r, top_k=15: r)
+    for attr in ("web", "arxiv", "wiki", "semantic", "hf", "github", "openalex"):
+        setattr(agent, attr, type("S", (), {"search": lambda self, q, k=4: []})())
+
+    ev = threading.Event()
+    ev.set()   # đã hủy trước khi chạy
+    events = list(agent.run_streaming("q", cancel_event=ev))
+
+    assert any(e.get("type") == "cancelled" for e in events)
+    assert not any(e.get("type") == "done" for e in events)
+    assert synth_called["n"] == 0
+
+
+def test_run_streaming_normal_when_not_cancelled(monkeypatch):
+    """Không truyền cancel_event → hành vi cũ (có 'done')."""
+    import backend.app.features.research.agent as ra
+    from backend.app.features.research.models import ResearchOutput
+    agent = ra.ResearchAgent.__new__(ra.ResearchAgent)
+
+    class _Synth:
+        def synthesize_grounded(self, q, s):
+            o = ResearchOutput(query=q); o.confidence = 0.9
+            o.claims = []
+            return o
+        def synthesize_rag(self, q, s): return ResearchOutput(query=q)
+    agent.synth = _Synth()
+    agent._search_all = lambda q, *a, **k: []
+    agent._process_pipeline = lambda q, raw, **k: raw
+    monkeypatch.setattr(ra, "get_store", lambda: type("K", (), {
+        "retrieve": lambda self, q: [], "add_results": lambda self, q, s: 0})())
+    monkeypatch.setattr(ra, "expand_query", lambda q: [q])
+    monkeypatch.setattr(ra, "get_dynamic_k", lambda q: {})
+    monkeypatch.setattr(ra, "_enrich_web_results", lambda r: r)
+    monkeypatch.setattr(ra, "deduplicate_results", lambda r, threshold=0.92: r)
+    monkeypatch.setattr(ra, "rerank_results", lambda q, r, top_k=15: r)
+    for attr in ("web", "arxiv", "wiki", "semantic", "hf", "github", "openalex"):
+        setattr(agent, attr, type("S", (), {"search": lambda self, q, k=4: []})())
+
+    events = list(agent.run_streaming("q"))
+    assert any(e.get("type") == "done" for e in events)
+    assert not any(e.get("type") == "cancelled" for e in events)

@@ -19,6 +19,7 @@ from backend.app.features.research.grounding import (
     ClaimAuditor, compute_confidence, derive_limitations, extract_claims,
 )
 from backend.app.features.research.models import ResearchOutput, SearchResult
+from backend.app.features.research.security import frame_untrusted, UNTRUSTED_GUARD
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +53,7 @@ class Synthesizer:
         parts, total = [], 0
         for s in sources:
             content_preview = s.content[:per_source]
-            chunk = f"[{s.source.upper()}] {s.title}\n{content_preview}"
+            chunk = f"[{s.source.upper()}] {s.title}\n{frame_untrusted(content_preview)}"
             if total + len(chunk) > max_chars:
                 remaining = max_chars - total
                 if remaining > 200:
@@ -60,7 +61,8 @@ class Synthesizer:
                 break
             parts.append(chunk)
             total += len(chunk)
-        return "\n\n---\n\n".join(parts)
+        body = "\n\n---\n\n".join(parts)
+        return f"{UNTRUSTED_GUARD}\n\n{body}" if body else body
 
     # ── JSON parsers ──────────────────────────────────────────────────────────
 
@@ -253,11 +255,12 @@ class Synthesizer:
             return
 
         src_text = "\n".join(
-            f"{i+1}. [{s.source}] {s.title}: {s.content[:200].replace(chr(10), ' ')}"
+            f"{i+1}. [{s.source}] {s.title}: {frame_untrusted(s.content[:200].replace(chr(10), ' '))}"
             for i, s in enumerate(sources[:4])
         )
 
         raw = self._call(
+            f"{UNTRUSTED_GUARD}\n\n"
             f"Compare these sources about '{query}'.\n\n"
             f"Sources:\n{src_text}\n\n"
             f"Return ONLY valid JSON array, nothing else:\n"
@@ -479,8 +482,9 @@ class Synthesizer:
     def answer(self, question: str, context: str) -> str:
         """Answer a follow-up question grounded in previous research context."""
         return self._call(
+            f"{UNTRUSTED_GUARD}\n\n"
             f"You are a research assistant. Answer using the context below.\n"
             f"Be specific and cite sources when possible.\n\n"
-            f"Context:\n{context[:4000]}\n\n"
+            f"Context:\n{frame_untrusted(context[:4000])}\n\n"
             f"Question: {question}\n\nAnswer:"
         )

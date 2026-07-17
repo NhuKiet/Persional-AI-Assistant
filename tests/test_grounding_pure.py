@@ -54,3 +54,23 @@ def test_derive_limitations_flags_ungrounded_and_abstract_only():
     lims = derive_limitations(sources, claims)
     assert any("nguồn" in l.lower() for l in lims)      # có nhắc tới giới hạn nguồn/claim
     assert isinstance(lims, list) and all(isinstance(l, str) for l in lims)
+
+
+def test_derive_limitations_flags_single_source_corroboration():
+    sources = [SearchResult(source="web", title="A", url="u", content="x" * 500)]
+    claims = [
+        Claim(text="a", source_ids=["same"], grounded=True),
+        Claim(text="b", source_ids=["same"], grounded=True),
+    ]
+    lims = derive_limitations(sources, claims)
+    assert any("một nguồn" in l.lower() for l in lims)
+
+
+def test_derive_limitations_no_corroboration_flag_when_multiple_sources():
+    sources = [SearchResult(source="web", title="A", url="u", content="x" * 500)]
+    claims = [
+        Claim(text="a", source_ids=["s1"], grounded=True),
+        Claim(text="b", source_ids=["s2"], grounded=True),
+    ]
+    lims = derive_limitations(sources, claims)
+    assert not any("một nguồn" in l.lower() for l in lims)

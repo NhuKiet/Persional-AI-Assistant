@@ -14,7 +14,7 @@ def test_stream_events_yields_done_with_contract_keys(monkeypatch):
     }
 
     class _FakeAgent:
-        def run_streaming(self, query, provider=None, model=None):
+        def run_streaming(self, query, provider=None, model=None, cancel_event=None):
             yield {"type": "source_done", "source": "web", "count": 1}
             yield {"type": "done", "data": DONE}
 

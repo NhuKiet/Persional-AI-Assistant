@@ -115,6 +115,10 @@ class ResearchAgent:
         # Ở đây chỉ cần xác nhận có kết quả trả về.
         return bool(results)
 
+    @staticmethod
+    def _cancelled(cancel_event) -> bool:
+        return cancel_event is not None and cancel_event.is_set()
+
     # ── Core search pipeline ─────────────────────────────────────────────────
 
     def _search_all(
@@ -266,7 +270,9 @@ class ResearchAgent:
 
     def run_streaming(
         self, query: str, provider: str | None = None, model: str | None = None,
+        cancel_event: threading.Event | None = None,
     ) -> Generator[dict, None, None]:
+        _CANCEL = {"type": "cancelled", "message": "Đã hủy theo yêu cầu."}
         try:
             t0 = time.time()
             logger.info("[QUERY] %s", query)
@@ -297,6 +303,10 @@ class ResearchAgent:
 
             else:
                 # ── Live search ───────────────────────────────────────────────
+                if self._cancelled(cancel_event):
+                    yield _CANCEL
+                    return
+
                 logger.info("[SEARCH] TRIGGERED")
 
                 # Query expansion (non-blocking yield)
@@ -372,6 +382,10 @@ class ResearchAgent:
                     logger.warning("[KNOWLEDGE] STORE failed (non-fatal): %s", e)
 
             # ── Synthesize ────────────────────────────────────────────────────
+            if self._cancelled(cancel_event):
+                yield _CANCEL
+                return
+
             yield {"type": "synthesizing", "message": "Synthesizing with AI…", "source": "llm"}
 
             if retrieved and self._is_relevant(query, retrieved):
@@ -383,6 +397,10 @@ class ResearchAgent:
                 rounds = 0
                 max_rounds = getattr(settings, "RESEARCH_MAX_ITERATIONS", 1)
                 while needs_iteration(output, rounds, max_rounds):
+                    if self._cancelled(cancel_event):
+                        yield _CANCEL
+                        return
+
                     rounds += 1
                     yield {
                         "type":    "iteration",

@@ -127,7 +127,7 @@ def test_chat_stream_serializes_token_and_error_events(monkeypatch):
 
 def test_research_stream_serializes_research_event_shapes(monkeypatch):
     class FakeAgent:
-        def run_streaming(self, *_args):
+        def run_streaming(self, *_args, **_kwargs):
             yield {"type": "status", "message": "Searching", "source": "web"}
             yield {"type": "source_done", "source": "web", "count": 2}
             yield {"type": "synthesizing", "message": "Writing", "source": "llm"}
@@ -160,7 +160,7 @@ def test_research_stream_serializes_research_event_shapes(monkeypatch):
 
 def test_research_stream_serializes_error_events(monkeypatch):
     class FailingAgent:
-        def run_streaming(self, *_args):
+        def run_streaming(self, *_args, **_kwargs):
             raise RuntimeError("search unavailable")
 
     monkeypatch.setattr(

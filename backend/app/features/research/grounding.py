@@ -9,6 +9,7 @@ import logging
 import re
 
 from backend.app.features.research.models import Claim, SearchResult
+from backend.app.features.research.security import frame_untrusted, UNTRUSTED_GUARD
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +52,12 @@ def derive_limitations(sources: list[SearchResult], claims: list[Claim]) -> list
     abstract_only = [s for s in sources if s.source in ("arxiv", "semantic_scholar", "huggingface", "openalex") and len(s.content) < 400]
     if abstract_only:
         lims.append(f"{len(abstract_only)} nguồn học thuật chỉ có tóm tắt (abstract), không phải toàn văn.")
+    grounded_claims = [c for c in claims if c.grounded]
+    cited_ids = {sid for c in grounded_claims for sid in c.source_ids}
+    if len(grounded_claims) >= 2 and len(cited_ids) == 1:
+        lims.append(
+            "Phần lớn nhận định chỉ dựa trên một nguồn — cần thêm nguồn độc lập để đối chứng."
+        )
     return lims
 
 
@@ -59,9 +66,10 @@ _EVIDENCE_TYPES = {"direct", "inference", "opinion", "uncertain"}
 
 def _claim_extraction_prompt(query: str, sources: list[SearchResult]) -> str:
     numbered = "\n".join(
-        f"[{i+1}] {s.title}: {s.content[:400]}" for i, s in enumerate(sources)
+        f"[{i+1}] {s.title}: {frame_untrusted(s.content[:400])}" for i, s in enumerate(sources)
     )
     return (
+        f"{UNTRUSTED_GUARD}\n\n"
         f"From the sources below, extract up to 8 factual claims that answer: {query}\n\n"
         f"Sources:\n{numbered}\n\n"
         f'Return ONLY a JSON array. Each item: '
