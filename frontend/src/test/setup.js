@@ -45,3 +45,11 @@ if (!global.ResizeObserver) {
     observe() {} unobserve() {} disconnect() {}
   };
 }
+
+// Giả lập react-pdf để tránh crash trong môi trường jsdom (CI/GitHub Actions)
+vi.mock("react-pdf", () => ({
+  pdfjs: { GlobalWorkerOptions: { workerSrc: "" } },
+  Document: ({ children }) => children,
+  Page: () => null,
+}));
+vi.mock("pdfjs-dist/build/pdf.worker.min.mjs?url", () => ({ default: "" }));

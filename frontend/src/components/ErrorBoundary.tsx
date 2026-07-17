@@ -35,6 +35,9 @@ export class ErrorBoundary extends Component<Props, State> {
 
   render() {
     if (!this.state.error) return this.props.children;
+    if (typeof process !== "undefined" && process.env.NODE_ENV === "test") {
+      throw this.state.error;
+    }
 
     const { label } = this.props;
     return (
