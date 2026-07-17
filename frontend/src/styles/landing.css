@@ -1,0 +1,265 @@
+/* Trang chủ (LandingPage.tsx) — nav, hero, bảng công cụ, ánh sáng bám con trỏ. */
+
+.landing {
+  height: 100vh;
+  height: 100dvh;
+  overflow-y: auto;
+  position: relative;
+}
+
+/* Nguồn sáng bám con trỏ — lớp nền cố định, đứng dưới nội dung.
+   LandingPage.tsx cập nhật --mx/--my qua rAF; giá trị mặc định (50%, 22%)
+   giữ quầng sáng ở vùng hero trước khi chuột di chuyển lần đầu. */
+.ld-light {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: radial-gradient(560px circle at var(--mx, 50%) var(--my, 22%),
+    color-mix(in srgb, var(--accent) 12%, transparent) 0%,
+    color-mix(in srgb, var(--accent-research) 7%, transparent) 38%,
+    transparent 68%);
+}
+
+.landing-wrap {
+  position: relative;
+  z-index: 1;
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 0 var(--page-padding-x) 64px;
+}
+
+/* ── Nav ─────────────────────────────────────────────────── */
+
+.ld-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 22px;
+  margin-top: 20px;
+  background: var(--glass);
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+}
+.ld-brand { display: flex; align-items: center; gap: 8px; }
+.ld-brand-logo { width: 20px; height: 20px; object-fit: contain; }
+
+.ld-cta {
+  font-family: var(--sans);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--bg);
+  background: var(--accent);
+  border: none;
+  border-radius: 10px;
+  padding: 9px 18px;
+  cursor: pointer;
+  transition: transform var(--dur) var(--ease-out), box-shadow var(--dur) var(--ease-out);
+}
+.ld-cta:hover { transform: translateY(-2px); box-shadow: var(--shadow-2); }
+.ld-cta:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+/* ── Hero ────────────────────────────────────────────────── */
+
+.ld-hero { padding: 88px 0 56px; text-align: center; }
+
+.ld-eyebrow {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--text3);
+  margin-bottom: 22px;
+}
+
+.ld-headline {
+  font-family: var(--display);
+  font-size: clamp(38px, 6vw, 72px);
+  font-weight: 700;
+  font-variation-settings: 'opsz' 72;
+  letter-spacing: -0.035em;
+  line-height: 1.02;
+  text-wrap: balance;
+  margin-bottom: 18px;
+}
+.ld-headline em {
+  font-style: normal;
+  background: linear-gradient(96deg, var(--accent), var(--accent-research));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.ld-sub {
+  font-size: 16px;
+  color: var(--text2);
+  max-width: 46ch;
+  margin: 0 auto 36px;
+  text-wrap: balance;
+}
+
+.ld-input-wrap { display: flex; justify-content: center; }
+
+.ld-input-glass {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  max-width: 600px;
+  background: var(--glass);
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
+  border: 1px solid var(--border2);
+  border-radius: 16px;
+  padding: 10px 10px 10px 20px;
+  transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+}
+.ld-input-glass:focus-within {
+  border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+  box-shadow: var(--shadow-1);
+}
+.ld-input-glass input {
+  flex: 1;
+  background: none;
+  border: none;
+  outline: none;
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 16px;
+}
+.ld-input-glass input::placeholder { color: var(--text3); }
+
+.ld-send {
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 11px;
+  cursor: pointer;
+  background: var(--accent);
+  color: var(--bg);
+  transition: transform var(--dur) var(--ease-out), filter var(--dur) var(--ease-out);
+}
+.ld-send:hover { transform: scale(1.07); filter: brightness(1.1); }
+.ld-send:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+/* ── Bảng công cụ ────────────────────────────────────────── */
+
+.ld-rack-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text3);
+  text-align: center;
+  margin: 68px 0 18px;
+}
+
+.ld-rack {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.ld-tool {
+  --tint: var(--accent);
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  text-align: left;
+  background: var(--glass);
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 20px 18px 18px;
+  cursor: pointer;
+  font-family: inherit;
+  color: inherit;
+  transition: transform var(--dur-slow) var(--ease-out), background var(--dur-slow) var(--ease-out),
+              border-color var(--dur-slow) var(--ease-out), box-shadow var(--dur-slow) var(--ease-out);
+}
+/* Cạnh trên bắt sáng khi hover — dấu hiệu thị giác của một bề mặt kính,
+   không phải trang trí. Dùng mask để chỉ vẽ viền, không tô cả nền. */
+.ld-tool::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  pointer-events: none;
+  background: linear-gradient(180deg, var(--glass-lit), transparent 40%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity var(--dur-slow) var(--ease-out);
+}
+.ld-tool::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(280px circle at 50% 0%, color-mix(in srgb, var(--tint) 16%, transparent), transparent 70%);
+  opacity: 0;
+  transition: opacity var(--dur-slow) var(--ease-out);
+}
+.ld-tool:hover {
+  transform: translateY(-5px);
+  background: var(--glass-hi);
+  border-color: color-mix(in srgb, var(--tint) 42%, transparent);
+  box-shadow: var(--shadow-2);
+}
+.ld-tool:hover::before,
+.ld-tool:hover::after { opacity: 1; }
+.ld-tool:focus-visible { outline: 2px solid var(--tint); outline-offset: 3px; }
+
+.ld-tool-top { display: flex; align-items: center; gap: 10px; position: relative; z-index: 1; }
+.ld-tool-icon {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  font-size: 15px;
+  background: color-mix(in srgb, var(--tint) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--tint) 26%, transparent);
+}
+.ld-tool-name {
+  font-family: var(--display);
+  font-size: 16px;
+  font-weight: 600;
+  font-variation-settings: 'opsz' 18;
+  letter-spacing: -0.015em;
+}
+.ld-tool-desc { font-size: 13px; color: var(--text2); line-height: 1.5; position: relative; z-index: 1; }
+
+/* ── Vào sân — cùng cơ chế với trang chat (base.css: @keyframes rise) ──
+   Mỗi phần tử tự khai --rd (delay) qua inline style trong LandingPage.tsx
+   thay vì nth-child, vì bảng 6 công cụ lặp trong .map() — nth-child sẽ đúng
+   nhưng phải đếm cả các phần tử đứng trước nó trong DOM, dễ lệch khi thêm
+   bớt gì phía trên. Tự khai delay tại chỗ tạo ra thì rõ ràng hơn. */
+.ld-rise {
+  animation: rise var(--dur-slow) var(--ease-out) backwards;
+  animation-delay: var(--rd, 0ms);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ld-rise { animation-delay: 0ms; }
+}
+
+@media (max-width: 860px) {
+  .ld-rack { grid-template-columns: 1fr; }
+  .ld-hero { padding: 56px 0 40px; }
+  .ld-rack-label { margin-top: 48px; }
+}

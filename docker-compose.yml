@@ -1,0 +1,49 @@
+# KiNg — chạy toàn bộ stack bằng: docker compose up --build
+# Yêu cầu: file .env ở thư mục gốc (copy từ .env.example rồi điền key).
+
+services:
+  backend:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      # Trong container, "localhost" trỏ về chính container. Ollama chạy trên
+      # MÁY HOST nên phải gọi qua host.docker.internal. Ghi đè giá trị trong .env.
+      OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      # Giữ dữ liệu runtime (pdf, sandbox, chat sqlite) ngoài container.
+      - ./data:/app/data
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # Trình duyệt (không phải container) gọi backend, nên localhost:8000
+        # đúng khi backend map ra cổng 8000 của host ở trên.
+        VITE_API_URL: http://localhost:8000
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+# ── Ollama (tuỳ chọn) ────────────────────────────────────────────────
+# Mặc định dùng Ollama đã cài trên máy host (qua host.docker.internal ở trên).
+# Muốn đóng gói Ollama vào compose: bỏ comment khối dưới, và đổi OLLAMA_URL của
+# backend thành http://ollama:11434.
+#
+#  ollama:
+#    image: ollama/ollama
+#    ports:
+#      - "11434:11434"
+#    volumes:
+#      - ollama_data:/root/.ollama
+#    restart: unless-stopped
+#
+#volumes:
+#  ollama_data:

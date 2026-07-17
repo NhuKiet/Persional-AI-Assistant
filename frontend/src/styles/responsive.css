@@ -1,0 +1,50 @@
+/* breakpoints tablet/mobile */
+/* ── 20. Responsive ────────────────────────────────────────── */
+
+/* Tablet */
+@media (max-width: 900px) {
+  :root {
+    --page-padding-x: 20px;
+    --sidebar-width:  300px;
+  }
+}
+
+/* Mobile */
+@media (max-width: 700px) {
+  :root {
+    --page-padding-x: 14px;
+  }
+  .suggestions-grid          { grid-template-columns: 1fr; }
+  .dock                      { gap: 4px; }
+  .dock-item                 { min-width: 60px; padding: 8px 10px 6px; }
+  .dock-label                { font-size: 10px; }
+  .coding-body               { flex-direction: column; }
+  .coding-split .coding-left { flex: 0 0 auto; }
+  .coding-right              { min-height: 300px; }
+  .resize-divider            { display: none; }
+  .phase-label               { display: none; }
+  .mode-hint                 { display: none; }
+
+  /* Sidebar overlay trên mobile */
+  .sidebar {
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    z-index: 101;
+    box-shadow: 4px 0 24px rgba(0,0,0,0.5);
+  }
+  .sb-overlay { display: block; }
+  .app-main   { width: 100%; }
+}
+
+/* Reduced motion — wins via !important on a universal selector, not import
+   order (responsive.css is not the last import in styles.css). Do not add
+   an !important animation/transition rule on * elsewhere, it would compete
+   with this one. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

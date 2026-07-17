@@ -1,0 +1,124 @@
+import logging
+
+from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse, StreamingResponse
+
+from backend.app.core.config import settings
+from backend.app.features.pdf.processor import PDF_DIR
+from backend.app.features.pdf.repository import PdfRepository
+from backend.app.features.pdf.schemas import PDFChatRequest, PDFSummarizeRequest
+from backend.app.features.pdf.service import PdfService
+from backend.app.shared.sse import sse
+
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(tags=["pdf"])
+_repository = PdfRepository(PDF_DIR)
+_service = PdfService()
+
+
+PDF_SYSTEM = """Bạn là KiNg, một trợ lý AI thông minh chuyên phân tích tài liệu PDF.
+Trả lời dựa CHÍNH XÁC vào nội dung tài liệu được cung cấp.
+Nếu thông tin không có trong tài liệu, hãy nói rõ "Tài liệu không đề cập đến điều này."
+Trích dẫn số trang khi có thể. Trả lời bằng tiếng Việt trừ khi người dùng hỏi bằng tiếng Anh.
+Dùng markdown để format câu trả lời cho rõ ràng."""
+
+SUMMARY_SYSTEM = """Bạn là KiNg, chuyên tóm tắt tài liệu PDF một cách súc tích và đầy đủ.
+Tóm tắt theo cấu trúc:
+1. **Tổng quan** — Tài liệu về chủ đề gì, mục đích là gì
+2. **Nội dung chính** — Các điểm/chương quan trọng nhất (dùng bullet)
+3. **Kết luận / Kết quả** — Điều rút ra quan trọng nhất
+Trả lời bằng tiếng Việt. Giữ tóm tắt trong 600-1000 từ."""
+
+
+def _check_filename(filename: str | None) -> str:
+    try:
+        return _repository.validate_filename(filename)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/api/pdf/upload")
+async def upload_pdf(file: UploadFile = File(...)):
+    filename = _check_filename(file.filename)
+    if not filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Chỉ chấp nhận file PDF (.pdf)")
+
+    content = await file.read()
+    if len(content) > 50 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File quá lớn (tối đa 50MB)")
+
+    destination = _repository.save(filename, content)
+    try:
+        document = _service._processor.extract(filename)
+        _service._doc_cache[filename] = document
+        return {
+            "filename": filename,
+            "size": len(content),
+            "total_pages": document.total_pages,
+            "total_chars": document.total_chars,
+            "chunks": len(document.chunks),
+        }
+    except Exception as exc:
+        destination.unlink(missing_ok=True)
+        raise HTTPException(status_code=500, detail=f"Lỗi đọc PDF: {str(exc)}")
+
+
+@router.get("/api/pdf/list")
+async def list_pdfs():
+    return {"files": _repository.list(_service._doc_cache)}
+
+
+@router.get("/api/pdf/raw/{filename}")
+async def raw_pdf(filename: str):
+    path = _repository.resolve(_check_filename(filename))
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Not found")
+    return FileResponse(str(path), media_type="application/pdf")
+
+
+@router.delete("/api/pdf/file/{filename}")
+async def delete_pdf(filename: str):
+    filename = _check_filename(filename)
+    _repository.delete(filename)
+    _service._doc_cache.pop(filename, None)
+    _service._conv_manager.clear_session(filename)
+    return {"deleted": filename}
+
+
+@router.post("/api/pdf/stream")
+async def pdf_chat_stream(request: PDFChatRequest):
+    if not request.message.strip():
+        raise HTTPException(status_code=400, detail="Message required")
+    if len(request.message) > settings.MAX_MESSAGE_CHARS:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Message quá dài (giới hạn {settings.MAX_MESSAGE_CHARS} ký tự).",
+        )
+    _check_filename(request.filename)
+
+    async def generate():
+        async for event in _service.chat_events(request, PDF_SYSTEM):
+            yield sse(event)
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@router.post("/api/pdf/summarize")
+async def pdf_summarize(request: PDFSummarizeRequest):
+    _check_filename(request.filename)
+
+    async def generate():
+        async for event in _service.summarize_events(request, SUMMARY_SYSTEM):
+            yield sse(event)
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )

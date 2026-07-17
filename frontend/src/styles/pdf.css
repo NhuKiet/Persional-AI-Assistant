@@ -1,0 +1,124 @@
+/* PDF split-view + context pins */
+/* ── PDF split-view + context pins ─────────────────────────── */
+.pdf-split { display: flex; height: calc(100vh - 120px); overflow: hidden; }
+.pdf-pane-left { overflow: auto; background: #2a2f3a; }
+.pdf-pane-right { display: flex; flex-direction: column; overflow: hidden; }
+.pdf-divider { width: 6px; cursor: col-resize; background: #3a4152; flex: 0 0 auto; }
+.pdf-divider:hover { background: #FF8C69; }
+.context-pins { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px; border-bottom: 1px solid #333; }
+.pin-chip { display: inline-flex; align-items: center; gap: 4px; background: #262b36; border: 1px solid #3a4152; border-radius: 6px; padding: 2px 6px; font-size: 12px; }
+.pin-thumb { width: 28px; height: 28px; object-fit: cover; border-radius: 4px; }
+.pin-x { background: none; border: none; color: #aaa; cursor: pointer; }
+.pin-page { color: #888; }
+
+
+/* ── File Upload Zone ──────────────────────────────────────── */
+
+.upload-zone-wrap {
+  margin-bottom: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.upload-drop {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px 16px;
+  background: var(--bg2);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  border-bottom: 1px solid transparent;
+}
+.upload-drop:hover          { background: var(--bg3); }
+.upload-drop-active         { background: rgba(168,230,163,0.06); border-color: rgba(168,230,163,0.3); }
+
+.upload-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text3);
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.upload-icon  { font-size: 16px; }
+.upload-link  { color: var(--accent-coding); cursor: pointer; }
+.upload-types { font-size: 10px; color: var(--text3); font-family: var(--mono); width: 100%; text-align: center; margin-top: 2px; }
+
+/* File list */
+.upload-file-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.upload-file-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  background: var(--bg2);
+  border-top: 1px solid var(--border);
+  transition: background 0.12s;
+}
+.upload-file-item:hover     { background: var(--bg3); }
+.upload-file-icon           { font-size: 14px; flex-shrink: 0; }
+.upload-file-name           { flex: 1; font-size: 12px; color: var(--text2); font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.upload-file-size           { font-size: 11px; color: var(--text3); flex-shrink: 0; }
+.upload-file-del            { width: 18px; height: 18px; border-radius: 4px; border: none; background: none; color: var(--text3); cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease); flex-shrink: 0; line-height: 1; }
+.upload-file-del:hover      { background: rgba(255,133,133,0.12); color: var(--danger); }
+
+/* Upload toggle button in mode bar */
+.upload-toggle-btn {
+  margin-left: 4px;
+  padding: 6px 12px;
+  border-radius: 20px;
+  border: 1px solid var(--border2);
+  background: var(--bg2);
+  color: var(--text2);
+  font-family: var(--sans);
+  font-size: 12px;
+  cursor: pointer;
+  transition: color var(--dur) var(--ease), background var(--dur) var(--ease), border-color var(--dur) var(--ease);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.upload-toggle-btn:hover     { color: var(--text); background: var(--bg3); }
+.upload-toggle-active        { background: var(--bg3); border-color: rgba(168,230,163,0.35); color: var(--accent-coding); }
+.upload-toggle-has-files     { border-color: rgba(168,230,163,0.5); }
+
+
+/* ── Drag-to-resize divider ────────────────────────────────── */
+
+.resize-divider {
+  width: 8px;
+  flex-shrink: 0;
+  cursor: col-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  z-index: 10;
+  /* Expand hit area */
+  margin: 0 -3px;
+}
+
+.resize-divider:hover .resize-handle,
+.resize-divider:active .resize-handle {
+  background: rgba(168, 230, 163, 0.5);
+  width: 3px;
+}
+
+.resize-handle {
+  width: 1px;
+  height: 100%;
+  min-height: 60px;
+  background: var(--border2);
+  border-radius: 2px;
+  transition: background 0.15s, width 0.15s;
+  pointer-events: none;
+}
+
+

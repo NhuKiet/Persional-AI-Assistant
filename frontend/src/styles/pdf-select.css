@@ -1,0 +1,16 @@
+/* selection layer: toolbar + crop box */
+/* ============================================================
+   PDF Selection Layer — text highlight + Alt-drag image crop
+   ============================================================ */
+.sel-toolbar { position: absolute; display: flex; gap: 4px; background: #1f2430; border: 1px solid #3a4152; border-radius: 8px; padding: 4px; z-index: 50; transform: translate(-50%, 6px); }
+.sel-tb-btn { background: #FF8C69; border: none; color: #111; border-radius: 6px; padding: 4px 8px; cursor: pointer; font-size: 12px; }
+.sel-tb-close { background: transparent; border: none; color: #aaa; cursor: pointer; }
+.crop-box { position: absolute; border: 2px dashed #FF8C69; background: rgba(255,140,105,0.12); pointer-events: none; z-index: 40; }
+/* Khung giữ lại sau khi thả chuột: nền trong hơn để nhìn rõ vùng đã cắt,
+   viền đậm + quầng sáng để phân biệt với khung đang kéo. */
+.crop-box-done {
+  background: rgba(255,140,105,0.04);
+  border-color: #FFA98C;
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.35), 0 0 10px rgba(255,140,105,0.35);
+}
+.selection-host { user-select: text; }

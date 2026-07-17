@@ -1,0 +1,354 @@
+/* coding page: layout, phase bar, agent log, code block, output, tabs, plan */
+/* ── 12. Coding Page — Layout ──────────────────────────────── */
+
+.coding-mode-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 0 12px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 12px;
+}
+
+.mode-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: 1px solid var(--border2);
+  background: var(--bg2);
+  color: var(--text2);
+  font-family: var(--sans);
+  font-size: 14px;
+  cursor: pointer;
+  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.mode-btn:hover  { color: var(--text); }
+/* .mode-btn.mode-active (0,2,0) — bằng specificity với .mode-btn:hover và đứng
+   sau nó, nên thắng nhờ thứ tự. Đừng hạ về .mode-active: sẽ thua hover và phải
+   bù bằng !important như trước. Màu lấy từ --accent mà CodingPage set inline
+   theo từng tool. */
+.mode-btn.mode-active {
+  background: var(--bg3);
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  color: var(--accent);
+}
+.mode-icon       { font-size: 13px; }
+.mode-hint       { margin-left: auto; font-size: 12px; color: var(--text3); }
+
+/* Two-column body */
+.coding-body { flex: 1; overflow: hidden; display: flex; gap: 16px; min-height: 0; }
+
+/* Khi split: dùng --left-pct từ drag resize (default 38%) */
+.coding-split .coding-left  { flex: 0 0 var(--left-pct, var(--sidebar-width)); min-width: 0; }
+.coding-split .coding-right { flex: 1; min-width: 0; }
+
+.coding-left {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  min-height: 0;
+}
+.coding-left::-webkit-scrollbar       { width: 2px; }
+.coding-left::-webkit-scrollbar-thumb { background: var(--border2); }
+
+.coding-right {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg2);
+}
+
+/* Coding input area */
+.coding-input-wrap { display: flex; flex-direction: column; gap: 6px; }
+.running-notice    { font-size: 11px; color: var(--text3); padding: 0 4px; display: flex; align-items: center; gap: 6px; }
+
+
+/* ── 13. Coding Page — Phase Bar ───────────────────────────── */
+
+.phase-bar  { display: flex; align-items: center; gap: 0; padding: 12px 0 8px; flex-shrink: 0; }
+.phase-step { display: flex; align-items: center; gap: 6px; }
+
+.phase-dot {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  flex-shrink: 0;
+  border: 1px solid var(--border2);
+}
+.phase-done   { background: rgba(168,230,163,0.12); border-color: rgba(168,230,163,0.3); color: var(--accent-coding); }
+.phase-active {
+  background: rgba(168,230,163,0.08);
+  border-color: rgba(168,230,163,0.5);
+  color: var(--accent-coding);
+  position: relative;
+}
+.phase-active::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px rgba(168,230,163,0.2);
+  opacity: 0;
+  pointer-events: none;
+  animation: pulseBorder 1.5s ease-in-out infinite;
+}
+@keyframes pulseBorder {
+  0%,100% { opacity: 0; }
+  50%     { opacity: 1; }
+}
+.phase-future { background: var(--bg3); color: var(--text3); }
+
+.phase-label             { font-size: 10px; color: var(--text3); white-space: nowrap; }
+.phase-label-active      { color: var(--accent-coding); }
+.phase-label-done        { color: var(--text2); }
+.phase-line              { flex: 1; min-width: 8px; height: 1px; background: var(--border); margin: 0 4px; }
+.phase-line-done         { background: rgba(168,230,163,0.25); }
+
+.phase-spinner {
+  width: 9px;
+  height: 9px;
+  border: 1.5px solid rgba(168,230,163,0.25);
+  border-top-color: var(--accent-coding);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  display: inline-block;
+}
+.mini-spinner {
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid rgba(0,0,0,0.15);
+  border-top-color: #000;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  display: inline-block;
+}
+
+
+/* ── 14. Coding Page — Agent Log & Events ──────────────────── */
+
+.agent-log { display: flex; flex-direction: column; gap: 4px; }
+.event-log { display: flex; flex-direction: column; gap: 2px; padding: 4px 0; }
+
+.event-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  transition: background 0.1s;
+}
+.event-row:hover { background: var(--bg2); }
+.event-row-err .event-label { color: var(--danger); }
+/* Heartbeat — hiện khi LLM đang xử lý */
+.heartbeat-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  margin: 2px 0 4px;
+  border-radius: 8px;
+  background: rgba(124,158,255,0.04);
+  border: 1px solid rgba(124,158,255,0.1);
+}
+.heartbeat-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent-research);
+  flex-shrink: 0;
+  animation: rpPulse 1.2s ease-in-out infinite;
+}
+.heartbeat-msg {
+  font-size: 12px;
+  color: var(--text3);
+  font-style: italic;
+}
+
+.event-icon  { font-size: 13px; flex-shrink: 0; width: 18px; text-align: center; }
+.event-label { font-size: 12px; color: var(--text2); line-height: 1.4; }
+
+.final-banner { padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-top: 8px; }
+.banner-ok   { background: rgba(168,230,163,0.08); border: 1px solid rgba(168,230,163,0.2); color: var(--accent-coding); }
+.banner-fail { background: rgba(255,133,133,0.06); border: 1px solid rgba(255,133,133,0.2); color: var(--danger); }
+
+
+/* ── 15. Coding Page — Code Block ──────────────────────────── */
+
+.code-block     { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-bottom: 12px; }
+.code-block-fix { border-color: rgba(232,160,255,0.2); }
+
+.code-block-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 12px;
+  background: var(--bg3);
+  border-bottom: 1px solid var(--border);
+}
+.code-lang     { font-size: 11px; color: var(--text3); font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.05em; }
+.code-filename { font-size: 11px; color: var(--text3); font-family: var(--mono); }
+.code-fix-badge {
+  font-size: 10px;
+  color: #E8A0FF;
+  background: rgba(232,160,255,0.1);
+  border: 1px solid rgba(232,160,255,0.2);
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+.code-copy-btn {
+  font-size: 11px;
+  color: var(--text3);
+  background: none;
+  border: 1px solid var(--border2);
+  border-radius: 6px;
+  padding: 2px 8px;
+  cursor: pointer;
+  transition: color var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+.code-copy-btn:hover { color: var(--text); border-color: rgba(255,255,255,0.2); }
+
+.code-pre {
+  padding: 14px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.65;
+  background: var(--bg);
+}
+.code-pre::-webkit-scrollbar       { height: 2px; }
+.code-pre::-webkit-scrollbar-thumb { background: var(--border2); }
+
+/* Syntax highlight — chỉnh màu token tại đây */
+.sh-kw  { color: var(--sh-keyword); }
+.sh-str { color: var(--sh-string); }
+.sh-cmt { color: var(--sh-comment); font-style: italic; }
+.sh-num { color: var(--sh-number); }
+
+
+/* ── 16. Coding Page — Output Panel ────────────────────────── */
+
+.output-panel { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-bottom: 12px; }
+.output-ok    { border-color: rgba(168,230,163,0.2); }
+.output-err   { border-color: rgba(255,133,133,0.2); }
+
+.output-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 12px;
+  background: var(--bg3);
+  border-bottom: 1px solid var(--border);
+}
+.output-status           { font-size: 12px; font-weight: 500; }
+.output-ok  .output-status { color: var(--accent-coding); }
+.output-err .output-status { color: var(--danger); }
+.output-duration { font-size: 11px; color: var(--text3); }
+
+.output-pre {
+  padding: 12px 14px;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.65;
+  overflow-x: auto;
+  max-height: 300px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.output-stdout { color: var(--text); }
+.output-stderr { color: var(--danger); background: rgba(255,133,133,0.03); }
+
+.final-msg  { padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-top: 4px; }
+.final-ok   { background: rgba(168,230,163,0.06); border: 1px solid rgba(168,230,163,0.15); color: var(--accent-coding); }
+.final-fail { background: rgba(255,133,133,0.05); border: 1px solid rgba(255,133,133,0.15); color: var(--danger); }
+
+
+/* ── 17. Coding Page — Result Tabs ─────────────────────────── */
+
+.coding-result { display: flex; flex-direction: column; height: 100%; }
+
+.result-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.result-tab  {
+  flex: 1;
+  padding: 9px 12px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text3);
+  font-family: var(--sans);
+  font-size: 12px;
+  cursor: pointer;
+  transition: color var(--dur) var(--ease), border-bottom-color var(--dur) var(--ease);
+  font-weight: 500;
+}
+.result-tab:hover      { color: var(--text2); }
+.result-tab-active     { color: var(--accent-coding); border-bottom-color: var(--accent-coding); }
+
+.result-body { flex: 1; overflow-y: auto; padding: 12px; }
+.result-body::-webkit-scrollbar       { width: 2px; }
+.result-body::-webkit-scrollbar-thumb { background: var(--border2); }
+
+
+/* ── 18. Coding Page — Plan View ───────────────────────────── */
+
+.plan-wrap  { display: flex; flex-direction: column; gap: 0; padding: 4px 0; }
+.plan-step  { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.plan-step:last-child { border-bottom: none; }
+
+.plan-num {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  flex-shrink: 0;
+  border: 1px solid var(--border2);
+  color: var(--text3);
+  margin-top: 1px;
+}
+.plan-num-done   { background: rgba(168,230,163,0.1); border-color: rgba(168,230,163,0.3); color: var(--accent-coding); }
+.plan-num-active { border-color: rgba(168,230,163,0.4); color: var(--accent-coding); }
+
+.plan-body  { flex: 1; }
+.plan-title { font-size: 13px; font-weight: 500; color: var(--text); margin-bottom: 2px; }
+.plan-desc  { font-size: 12px; color: var(--text3); line-height: 1.5; }
+
+
+
+/* ══════════════════════════════════════════════════════════════
+   SIDEBAR & APP LAYOUT
+   ══════════════════════════════════════════════════════════════ */
+
+.app-layout {
+  display: flex;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.app-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+.app-main .page {
+  height: 100%;
+}
+

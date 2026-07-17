@@ -1,0 +1,17 @@
+/* styles.css — chi la muc luc.
+   THU TU IMPORT = thu tu goc cua file 1995 dong truoc khi tach.
+   Doi thu tu la doi cascade — dung sap xep lai cho 'gon'. */
+@import "./styles/base.css";
+@import "./styles/chat.css";
+@import "./styles/research.css";
+@import "./styles/coding.css";
+@import "./styles/sidebar.css";
+@import "./styles/artifact.css";
+@import "./styles/pdf.css";
+@import "./styles/scrollbar.css";
+@import "./styles/responsive.css";
+@import "./styles/coding-v2.css";
+@import "./styles/deepdive.css";
+@import "./styles/agent-chat.css";
+@import "./styles/pdf-select.css";
+@import "./styles/landing.css";

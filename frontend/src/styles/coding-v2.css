@@ -1,0 +1,137 @@
+/* coding agent v2: streaming preview, installer, test output, review */
+/* ─── Coding Agent v2 — New Components ─────────────────────────────────────── */
+
+/* Streaming code preview while LLM is generating */
+.code-stream-preview {
+  background: #0d0d14;
+  border: 1px solid #2a2a3a;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.code-stream-label {
+  padding: 8px 14px;
+  font-size: 12px;
+  color: var(--accent-research);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  animation: pulse 1.4s ease-in-out infinite;
+}
+.code-stream-pre {
+  padding: 14px;
+  margin: 0;
+  font-family: "JetBrains Mono", "Fira Code", monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+/* Package installer banner */
+.install-banner {
+  position: fixed;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1e1e3a;
+  border: 1px solid color-mix(in srgb, var(--accent-research) 27%, transparent);
+  border-radius: 10px;
+  padding: 10px 20px;
+  font-size: 13px;
+  color: var(--accent-research);
+  z-index: 200;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+  animation: slideUp 0.3s ease;
+  white-space: nowrap;
+}
+@keyframes slideUp {
+  from { opacity: 0; transform: translateX(-50%) translateY(10px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* Test output panel */
+.test-panel {
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid;
+}
+.test-panel.test-pass { border-color: #4CAF5066; }
+.test-panel.test-fail { border-color: #FF585866; }
+
+.test-header {
+  padding: 10px 16px;
+  font-weight: 600;
+  font-size: 14px;
+}
+.test-pass .test-header { background: #1a2e1a; color: #81c784; }
+.test-fail .test-header { background: #2e1a1a; color: #e57373; }
+
+.test-output {
+  margin: 0;
+  padding: 14px;
+  background: #0d0d14;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text);
+  white-space: pre-wrap;
+  max-height: 350px;
+  overflow-y: auto;
+}
+
+/* Code review panel */
+.review-panel {
+  padding: 16px;
+  background: #111120;
+  border-radius: 8px;
+  border: 1px solid #2a2a3a;
+  line-height: 1.7;
+  color: var(--text);
+}
+.review-panel h1, .review-panel h2, .review-panel h3 {
+  color: var(--accent-research);
+  margin: 12px 0 6px;
+}
+.review-panel ul { padding-left: 20px; }
+.review-panel li { margin-bottom: 4px; }
+.review-panel code {
+  background: var(--bg3);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+/* Multi-file badge on code blocks */
+.code-multifile-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #2a1a4a;
+  color: #c084fc;
+  border: 1px solid #c084fc44;
+  border-radius: 5px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* Install done notification */
+.install-ok-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #1a3a1a;
+  color: #81c784;
+  border-radius: 5px;
+  padding: 2px 8px;
+  font-size: 11px;
+}
+
+/* Phase bar — new phases */
+.phase-step:has(.phase-dot[data-phase="testing"]) .phase-dot { background: #FFB300; }
+.phase-step:has(.phase-dot[data-phase="reviewing"]) .phase-dot { background: #AB47BC; }
+

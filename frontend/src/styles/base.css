@@ -1,0 +1,336 @@
+/* fonts, reset, design tokens, base layout, header */
+/* ============================================================
+   styles.css — KiNg AI Interface
+   ============================================================
+
+   TABLE OF CONTENTS
+   -----------------
+   1.  Fonts & Reset
+   2.  Design Tokens (CSS Variables) ← chỉnh màu sắc, font ở đây
+   3.  Base Layout
+   4.  Header
+   5.  Chat Area
+   6.  Suggestion Cards & Dock
+   7.  Messages & Markdown
+   8.  Input Bar
+   9.  Tool Header & Suggestions
+   10. Research Page
+   11. Research Results (panels, papers, chart, compare)
+   12. Coding Page — Layout
+   13. Coding Page — Phase Bar
+   14. Coding Page — Agent Log & Events
+   15. Coding Page — Code Block (syntax highlight)
+   16. Coding Page — Output Panel
+   17. Coding Page — Result Tabs
+   18. Coding Page — Plan View
+   19. Scrollbars
+   20. Responsive (mobile)
+   ============================================================ */
+
+
+/* ── 1. Fonts & Reset ──────────────────────────────────────── */
+
+/* Instrument Serif chỉ xin bản italic — đó là kiểu duy nhất wordmark dùng. */
+@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Instrument+Serif:ital@1&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap');
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+
+/* ── 2. Design Tokens ──────────────────────────────────────── */
+/*
+   Chỉnh màu sắc tổng thể tại đây.
+   Tất cả màu trong app đều tham chiếu đến các biến này.
+*/
+
+:root {
+  /* --- Màu nền — thang nổi (elevation) ---
+     QUY TẮC 1: canvas tối nhất, bề mặt càng nổi càng sáng.
+     Thang phải luôn tăng đơn điệu: bg < bg2 < bg3 < bg4. Đổi một bậc thì
+     phải kiểm lại cả thang.
+     QUY TẮC 2: thang này lệch LẠNH nhẹ (B > R vài đơn vị) — cố ý, để kính
+     mờ có thứ để khúc xạ; xám tuyệt đối làm backdrop-filter ra hộp xám chết.
+     Lệch nhẹ ≠ màu bão hoà. Đừng bao giờ đặt màu có sắc độ rõ vào đây
+     (từng có #60703a olive lọt vào và làm mọi hover trong app ngả xanh rêu). */
+  --bg:   #07080b;   /* canvas — nền trang (tối nhất) */
+  --bg2:  #0e1015;   /* card, input, panel, sidebar */
+  --bg3:  #191d26;   /* hover, bề mặt nổi, header code block */
+  --bg4:  #222734;   /* inline code (sáng nhất) */
+
+  /* --- Kính mờ ---
+     Bề mặt kính = --glass + backdrop-filter. Khác --bg2 ở chỗ nó trong suốt,
+     nên bắt được ánh sáng nền phía sau. Dùng cho panel nổi, không cho canvas. */
+  --glass:      rgba(255, 255, 255, 0.045);
+  --glass-hi:   rgba(255, 255, 255, 0.075);   /* kính khi hover */
+  --glass-lit:  rgba(255, 255, 255, 0.28);    /* cạnh bắt sáng — viền trên thẻ kính khi hover */
+  --blur:       blur(20px) saturate(150%);
+
+  /* --- Viền --- */
+  --border:  rgba(255, 255, 255, 0.08);   /* viền nhạt */
+  --border2: rgba(255, 255, 255, 0.14);   /* viền đậm hơn, hover */
+
+  /* --- Đổ bóng — thang nổi, đi kèm --bg ---
+     Nền tối gần như nuốt hết bóng đen, nên bóng phải sâu và rộng mới thấy. */
+  --shadow-1: 0 2px 8px rgba(0, 0, 0, 0.4);
+  --shadow-2: 0 12px 32px -8px rgba(0, 0, 0, 0.7);
+
+  /* --- Màu chữ ---
+     Độ tương phản đo trên nền --bg2 (nền của hầu hết panel/card):
+       --text 14.98:1   --text2 7.36:1   --text3 4.61:1  (đo trong trình duyệt)
+     --text3 trước đây là #5e5d5b, chỉ đạt 2.89:1 — dưới chuẩn WCAG AA (4.5:1)
+     nên các label nhỏ ("Hôm nay", "Xóa tất cả lịch sử") bị chìm vào nền.
+     Giữ cả ba bậc trên 4.5:1; nếu chỉnh --bg2 thì phải đo lại thang này. */
+  --text:  #e6e4df;   /* chữ chính */
+  --text2: #a3a19a;   /* chữ phụ / label */
+  --text3: #7e7d78;   /* chữ mờ / placeholder */
+
+  /* --- Màu nhấn thương hiệu (accent) --- */
+  --accent:      #1ed1c2;                    /* teal — logo, session active, nút gửi */
+  --accent-soft: rgba(30, 209, 194, 0.08);   /* nền tint khi active */
+
+  /* --- Tool accent colors ---
+     Nguồn sự thật là các token này. Giá trị gốc cũng nằm ở config/tools.ts
+     (JSX đọc từ đó); CSS phải đọc token, không hardcode lại hex. */
+  --accent-research: #7C9EFF;        /* blue   */
+  --accent-coding:   var(--ok);      /* green — trùng --ok, xem ghi chú dưới */
+  --accent-homework: #FFB085;        /* orange */
+  --accent-essay:    #E8A0FF;        /* purple */
+  --accent-email:    #FF8585;        /* red    */
+  --accent-pdf:      #FF8C69;        /* coral  */
+
+  /* --- Trạng thái ---
+     App dùng chung một sắc xanh lá cho "coding" và "thành công" — đó là chủ ý,
+     không phải trùng lặp: tool coding được đặt màu theo kết quả chạy thành công.
+     --accent-coding trỏ vào --ok để quan hệ đó không thể trôi ra hai giá trị. */
+  --ok:     #A8E6A3;   /* thành công, done, output ok */
+  --danger: #FF8585;   /* lỗi, xóa, stderr */
+
+  /* --- Syntax highlight --- */
+  --sh-keyword: #c792ea;   /* def, class, import... */
+  --sh-string:  #c3e88d;   /* "strings" */
+  --sh-comment: #546e7a;   /* # comments */
+  --sh-number:  #f78c6c;   /* 42, 3.14 */
+
+  /* --- Typography ---
+     CẢNH BÁO TIẾNG VIỆT — đọc trước khi đổi font ở đây.
+     Font tiêu đề BẮT BUỘC phải có subset `vietnamese` (dải U+1EA0-1EF9).
+     Nếu không, chữ có dấu nặng/ngã/hỏi rơi ngược về Times New Roman ngay
+     giữa một từ ("Bài tập" → chữ "ậ" lạc font). Kiểm tra trước khi thêm:
+       curl 'https://fonts.googleapis.com/css2?family=<Tên>' | grep vietnamese
+
+     --display  Bricolage Grotesque — CÓ vietnamese. Dùng cho MỌI tiêu đề.
+     --wordmark Instrument Serif   — KHÔNG có vietnamese. Chỉ được dùng cho
+                chữ ký "KiNg" (thuần ASCII, cố định). Đừng dùng cho gì khác. */
+  --sans:     'Geist', sans-serif;
+  --display:  'Bricolage Grotesque', sans-serif;
+  --wordmark: 'Instrument Serif', serif;
+  --mono:     'Geist Mono', monospace;
+
+  /* --- Shape --- */
+  --r: 12px;   /* default border-radius */
+
+  /* --- Layout --- */
+  --page-padding-x: 28px;          /* padding ngang trang */
+  --sidebar-width:  360px;          /* cột trái coding khi split */
+
+  /* --- Motion --- */
+  --dur-fast:   120ms;   /* hover, focus, colour — should feel instant */
+  --dur:        150ms;   /* default; most transitions */
+  --dur-slow:   250ms;   /* panel/modal reveals, entrances */
+  --dur-slower: 350ms;   /* large layout shifts (sidebar split) */
+
+  --ease:     cubic-bezier(0.4, 0, 0.2, 1);   /* standard, both directions */
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);     /* entrances */
+  --ease-in:  cubic-bezier(0.4, 0, 1, 1);     /* exits */
+}
+
+
+/* ── 3. Base Layout ────────────────────────────────────────── */
+
+html, body, #root {
+  height: 100%;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* Film grain overlay */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 999;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+  opacity: 0.4;
+}
+
+/* Page container — fluid, centered, full height */
+.page {
+  height: 100vh;
+  height: 100dvh; /* dynamic viewport — tránh bị cắt bởi mobile browser bar */
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  margin: 0 auto;
+  padding: 0 var(--page-padding-x);
+  position: relative;
+  overflow: hidden;
+}
+
+.tool-page {
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.page-entered {
+  opacity: 1;
+  transform: none;
+}
+
+
+/* ── 4. Header ─────────────────────────────────────────────── */
+
+/* Compact header — chỉ hiện khi đang chat */
+.home-header {
+  flex-shrink: 0;
+}
+
+.header-compact {
+  padding: 16px 0 0;
+}
+
+.compact-header { display: flex; align-items: center; justify-content: space-between; }
+.compact-logo   { display: flex; align-items: baseline; gap: 6px; }
+.workspace-home-link {
+  position: absolute;
+  top: 16px;
+  right: 14px;
+  z-index: 10;
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  background: var(--bg2);
+  color: var(--text2);
+  font-family: var(--sans);
+  font-size: 12px;
+  padding: 5px 9px;
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease),
+              border-color var(--dur-fast) var(--ease);
+}
+.workspace-home-link:hover { background: var(--bg3); border-color: var(--accent); color: var(--text); }
+.workspace-home-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.logo-hex-sm    { font-size: 16px; color: var(--accent); }
+/* Mặc định là accent thương hiệu; Sidebar ghi đè inline theo màu từng tool. */
+.logo-name-sm   { font-family: var(--wordmark); font-size: 20px; color: var(--accent); font-style: italic; }
+
+.clear-btn {
+  font-family: var(--sans);
+  font-size: 14px;
+  color: var(--text2);
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: 20px;
+  padding: 4px 12px;
+  cursor: pointer;
+  transition: color var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+.clear-btn:hover { color: var(--text); border-color: rgba(255,255,255,0.2); }
+
+/* Idle home layout — logo ở trên, input + dock + suggestions căn giữa */
+.home-idle {
+  flex: 1;
+  min-height: 0;        /* quan trọng: cho phép flex child co lại đúng */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  padding: 0 0 32px;
+  overflow-y: auto;
+}
+
+/* Logo block — phía trên center block */
+.home-logo {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.logo-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.logo-img  { width: 65px; height: 65px; object-fit: contain;}
+.logo-name { font-family: var(--wordmark); font-size: 50px; color: var(--accent); letter-spacing: -0.02em; font-style: italic; }
+.logo-sub  { font-size: 15px; color: var(--text2); letter-spacing: 0.06em; text-transform: uppercase; }
+
+/* Center block — input + dock + suggestions */
+.home-center {
+  width: 100%;
+  max-width: 640px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+
+/* ── Vào sân: trang chủ hiện dần theo bậc ──────────────────
+   Chỉ chạy khi .home-idle được mount (tức là lúc chưa có tin nhắn nào),
+   và chạy lại khi bấm "Chat mới" — đúng như mong đợi.
+
+   fill-mode là `backwards`, KHÔNG phải `both`, và đây là chỗ dễ sai:
+   `both` sẽ giữ nguyên giá trị của keyframe `to` sau khi chạy xong, tức là
+   ghim cứng opacity:1 lên .dock và làm .dock-hidden vĩnh viễn hết tác dụng.
+   `backwards` chỉ giữ keyframe `from` trong lúc chờ animation-delay (nên
+   không bị nháy 1 frame), rồi trả quyền lại cho cascade. Cũng vì thế mà
+   trạng thái tĩnh của các phần tử này KHÔNG được đặt opacity:0 — nếu
+   animation không chạy vì lý do gì đó, chúng vẫn hiện bình thường.
+
+   Reduced motion: quy tắc chung ở cuối responsive.css ép animation-duration
+   về 0.01ms !important, nên toàn bộ khối này nhảy thẳng tới trạng thái cuối
+   — không chuyển động, không có gì kẹt vô hình. Đã kiểm chứng thực tế. */
+@keyframes rise {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.home-logo,
+.home-center > * {
+  animation: rise var(--dur-slow) var(--ease-out) backwards;
+}
+
+/* Bám theo thứ tự con thật của .home-center trong HomePage.tsx — nếu thêm/bớt
+   một khối ở đó thì phải sửa lại các bậc này. (ModelPicker từng là con số 1,
+   giờ đã dọn vào trong composer.) */
+.home-logo                    { animation-delay: 0ms; }
+.home-center > *:nth-child(1) { animation-delay: 60ms; }   /* ô nhập + ModelPicker */
+.home-center > *:nth-child(2) { animation-delay: 120ms; }  /* dock 6 tool */
+.home-center > *:nth-child(3) { animation-delay: 180ms; }  /* gợi ý */
+
+/* Quy tắc chung cuối responsive.css chỉ ép animation-DURATION về 0.01ms,
+   nó không đụng tới animation-DELAY. Nếu để nguyên, người bật reduced motion
+   sẽ thấy các khối nằm vô hình hết 240ms rồi "bụp" hiện ra lần lượt — không
+   chuyển động, nhưng giật và khó chịu hơn cả bản có animation.
+   Xoá delay để mọi thứ hiện cùng lúc, tức thì. Không xung đột với quy tắc
+   chung vì hai bên set hai thuộc tính khác nhau. */
+@media (prefers-reduced-motion: reduce) {
+  .home-logo,
+  .home-center > * { animation-delay: 0ms; }
+}
+
+

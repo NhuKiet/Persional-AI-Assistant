@@ -1,0 +1,85 @@
+/* agent conversation history */
+/* ─── Agent Conversation History ────────────────────────────────────────────── */
+
+.agent-history {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 0 4px;
+}
+
+.agent-history-turn {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.agent-history-turn-current {
+  /* turn hiện tại nổi bật hơn một chút */
+  opacity: 1;
+}
+
+.agent-history-turn:not(.agent-history-turn-current) {
+  opacity: 0.65;
+}
+
+.agent-history-user {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 7px 12px;
+  background: #1a1a2e;
+  border-radius: 10px;
+  border: 1px solid var(--border2);
+  max-width: 88%;
+  align-self: flex-end;
+}
+
+.agent-history-you {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--accent-coding);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.agent-history-msg {
+  font-size: 13px;
+  color: #d0d0e8;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.agent-history-result {
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  align-self: flex-start;
+  margin-left: 4px;
+}
+
+.ahr-ok {
+  color: #81c784;
+  background: #1a2e1a;
+  border: 1px solid #81c78422;
+}
+
+.ahr-fail {
+  color: #e57373;
+  background: #2e1a1a;
+  border: 1px solid #e5737322;
+}
+
+.ahr-artifacts {
+  opacity: 0.7;
+  font-style: italic;
+}
+
+/* Divider giữa history và agent-log hiện tại */
+.agent-history + .agent-log {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}

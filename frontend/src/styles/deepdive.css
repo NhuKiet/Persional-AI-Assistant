@@ -1,0 +1,252 @@
+/* deep dive modal */
+/* ─── Deep Dive Modal ───────────────────────────────────────────────────────── */
+
+.dd-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.65);
+  backdrop-filter: blur(4px);
+  z-index: 500;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 24px 16px;
+  overflow-y: auto;
+}
+
+.dd-modal {
+  background: #131320;
+  border: 1px solid var(--border2);
+  border-radius: 14px;
+  width: 100%;
+  max-width: 740px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  box-shadow: 0 24px 60px rgba(0,0,0,0.7);
+  animation: ddSlideIn 0.22s ease;
+}
+@keyframes ddSlideIn {
+  from { opacity: 0; transform: translateY(-16px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0)     scale(1); }
+}
+
+.dd-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.dd-header-left { display: flex; align-items: center; gap: 8px; }
+
+.dd-source-badge {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border: 1px solid;
+  border-radius: 5px;
+  padding: 2px 8px;
+}
+.dd-year, .dd-cites {
+  font-size: 11px;
+  color: #666;
+}
+
+.dd-close {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  background: var(--bg3);
+  border: none;
+  color: #888;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.15s, color 0.15s;
+}
+.dd-close:hover { background: var(--bg4); color: var(--text); }
+
+.dd-title-wrap {
+  padding: 16px 18px 14px;
+  border-bottom: 1px solid #1a1a2a;
+}
+.dd-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #e0e0f0;
+  margin: 0 0 6px;
+  line-height: 1.4;
+}
+.dd-authors {
+  font-size: 12px;
+  color: #888;
+  margin: 0 0 10px;
+}
+.dd-links { display: flex; gap: 10px; flex-wrap: wrap; }
+.dd-link {
+  font-size: 12px;
+  color: var(--accent-research);
+  text-decoration: none;
+  border: 1px solid color-mix(in srgb, var(--accent-research) 20%, transparent);
+  border-radius: 5px;
+  padding: 3px 10px;
+  transition: background 0.15s;
+}
+.dd-link:hover { background: color-mix(in srgb, var(--accent-research) 9%, transparent); }
+
+.dd-content-section {
+  padding: 14px 18px;
+  border-bottom: 1px solid #1a1a2a;
+  max-height: 200px;
+  overflow-y: auto;
+}
+.dd-section-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: #555;
+  margin-bottom: 8px;
+}
+.dd-snippet {
+  font-size: 13px;
+  color: #aaa;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.dd-qa-section {
+  padding: 16px 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dd-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.dd-preset-pill {
+  font-size: 12px;
+  border: 1px solid;
+  border-radius: 20px;
+  padding: 5px 12px;
+  background: transparent;
+  cursor: pointer;
+  transition: opacity 0.15s, background 0.15s;
+  white-space: nowrap;
+}
+.dd-preset-pill:hover { opacity: 0.75; background: rgba(255,255,255,0.04); }
+
+.dd-input-row {
+  display: flex;
+  gap: 8px;
+}
+.dd-input {
+  flex: 1;
+  background: #0d0d18;
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 13px;
+  color: #e0e0f0;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.dd-input:focus { border-color: color-mix(in srgb, var(--accent-research) 40%, transparent); }
+.dd-ask-btn {
+  padding: 9px 18px;
+  border-radius: 8px;
+  border: none;
+  font-size: 13px;
+  font-weight: 600;
+  color: #000;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  white-space: nowrap;
+}
+.dd-ask-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.dd-answer {
+  background: #0d0d18;
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.dd-answer-label {
+  padding: 8px 14px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--accent-research);
+  border-bottom: 1px solid var(--border);
+}
+.dd-answer-body {
+  padding: 14px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text);
+  max-height: 320px;
+  overflow-y: auto;
+}
+.dd-answer-loading {
+  display: flex;
+  gap: 6px;
+  padding: 12px 0;
+  justify-content: center;
+}
+
+/* Paper card upgrades */
+.paper-card { cursor: pointer; transition: border-color 0.15s, transform 0.1s; }
+/* Không cần !important: rule này cùng specificity (0,2,0) với .paper-card:hover
+   ở research.css, và deepdive.css được @import sau nên đã thắng nhờ thứ tự. */
+.paper-card:hover { border-color: color-mix(in srgb, var(--accent-research) 30%, transparent); transform: translateY(-1px); }
+.paper-dive-hint {
+  margin-left: auto;
+  font-size: 10px;
+  color: #555;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.paper-card:hover .paper-dive-hint { opacity: 1; }
+.paper-dive-btn {
+  font-size: 11px;
+  border: 1px solid;
+  border-radius: 5px;
+  padding: 3px 8px;
+  background: transparent;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.paper-dive-btn:hover { opacity: 0.75; }
+
+/* Reference list deep dive */
+.ref-item-wrap {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+}
+.ref-item-wrap .ref-item { flex: 1; border-radius: 7px 0 0 7px; border-right: none; }
+.ref-dive-btn {
+  background: #1a1a2a;
+  border: 1px solid var(--border2);
+  border-left: none;
+  border-radius: 0 7px 7px 0;
+  padding: 0 10px;
+  font-size: 13px;
+  cursor: pointer;
+  color: #666;
+  transition: background 0.15s, color 0.15s;
+}
+.ref-dive-btn:hover { background: #252538; color: var(--accent-research); }
+
+@media (max-width: 600px) {
+  .dd-modal { max-width: 100%; border-radius: 12px 12px 0 0; }
+  .dd-overlay { padding: 60px 0 0; align-items: flex-end; }
+  .dd-presets { gap: 5px; }
+  .dd-preset-pill { font-size: 11px; padding: 4px 9px; }
+}
+

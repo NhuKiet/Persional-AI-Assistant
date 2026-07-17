@@ -1,0 +1,23 @@
+# Ảnh sandbox để chạy code do LLM sinh (EXECUTOR_MODE=docker).
+# Build: docker build -f Dockerfile.executor -t king-executor:latest .
+#
+# Container chạy với --network none nên KHÔNG cài package lúc runtime được —
+# phải nạp sẵn bộ thư viện hay dùng ở đây. Thêm gói mới thì bổ sung dòng dưới
+# rồi build lại image.
+FROM python:3.11-slim
+
+# Bộ thư viện phổ biến cho tác vụ data/coding của agent. Cố tình gọn để ảnh nhẹ.
+RUN pip install --no-cache-dir \
+        numpy \
+        pandas \
+        matplotlib \
+        scipy \
+        scikit-learn \
+        openpyxl \
+        tabulate
+
+# Không có ENTRYPOINT: executor gọi `docker run ... python /work/<script>.py`.
+# Không tạo user riêng ở đây để tránh vướng quyền ghi trên volume mount khi
+# chạy Docker Desktop trên Windows; cách ly chính đến từ --network none +
+# --read-only + giới hạn tài nguyên ở phía `docker run`.
+WORKDIR /work
