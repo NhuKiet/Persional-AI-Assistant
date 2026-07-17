@@ -11,6 +11,40 @@ from backend.app.features.research.reranker import _bge_reranker, _CREDIBILITY
 logger = logging.getLogger(__name__)
 
 
+def recency_score(extra: dict, ref_year: int = 2025) -> float:
+    """Pure scoring function for recency using exponential decay.
+
+    Args:
+        extra: dict with optional 'year' or 'published' fields
+        ref_year: reference year for age calculation (default 2025)
+
+    Returns:
+        float in [0.0, 1.0): exp(-age/5) where age = max(0, ref_year - year).
+        Returns 0.0 if year is missing or unparseable.
+    """
+    year = extra.get("year") or extra.get("published", "")
+    if not year:
+        return 0.0
+    try:
+        age = max(0, ref_year - int(str(year)[:4]))
+        return math.exp(-age / 5.0)
+    except (ValueError, TypeError):
+        return 0.0
+
+
+def citation_score(extra: dict) -> float:
+    """Pure scoring function for citation count with cap at 1.0.
+
+    Args:
+        extra: dict with optional 'citation_count' field
+
+    Returns:
+        float in [0.0, 1.0]: min(1.0, citation_count / 200).
+        Returns 0.0 if citation_count is missing or 0.
+    """
+    return min(1.0, (extra.get("citation_count", 0) or 0) / 200)
+
+
 def _get_reranker():
     """Delegate về reranker.py (nơi load BGE duy nhất)."""
     return _bge_reranker()
@@ -61,17 +95,13 @@ def rerank_results(
     # Fallback: credibility + citation + recency scoring
     ranked = []
     for r in results:
-        cred      = _CREDIBILITY.get(r.source, 0.5)
-        citations = min(1.0, (r.extra.get("citation_count", 0) or 0) / 200)
-        year      = r.extra.get("year") or r.extra.get("published", "")
-        recency   = 0.0
-        if year:
-            try:
-                age   = max(0, 2025 - int(str(year)[:4]))
-                recency = math.exp(-age / 5.0)
-            except Exception:
-                pass
-        final = r.score * 0.40 + cred * 0.35 + citations * 0.15 + recency * 0.10
+        cred = _CREDIBILITY.get(r.source, 0.5)
+        final = (
+            r.score * 0.40
+            + cred * 0.35
+            + citation_score(r.extra) * 0.15
+            + recency_score(r.extra) * 0.10
+        )
         ranked.append((r, final))
 
     ranked.sort(key=lambda x: x[1], reverse=True)
