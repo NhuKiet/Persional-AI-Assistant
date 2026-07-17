@@ -62,6 +62,7 @@ class Settings(BaseSettings):
 
     # ── Research grounding ────────────────────────────────────────────
     RESEARCH_GROUNDING_ENABLED: bool = True
+    RESEARCH_MAX_ITERATIONS: int = 1
 
     # ── Search APIs ─────────────────────────────────────────────────
     TAVILY_API_KEY: str | None = None

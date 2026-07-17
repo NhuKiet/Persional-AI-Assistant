@@ -5,6 +5,8 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Generator
 
+from backend.app.core.config import settings
+from backend.app.features.research.iteration import needs_iteration, gap_query
 from backend.app.features.research.models import ResearchOutput, SearchResult
 from backend.app.features.research.search import (
     ArxivSearcher,
@@ -228,6 +230,25 @@ class ResearchAgent:
             logger.warning("[KNOWLEDGE] STORE failed (non-fatal): %s", e)
 
         output = self.synth.synthesize_grounded(query, sources)
+
+        # ── Bounded gap-driven iteration (search path only) ─────────────────
+        rounds = 0
+        max_rounds = getattr(settings, "RESEARCH_MAX_ITERATIONS", 1)
+        while needs_iteration(output, rounds, max_rounds):
+            gq = gap_query(query, output)
+            if not gq:
+                break
+            rounds += 1
+            try:
+                extra_raw = self._search_all(gq)
+                extra = self._process_pipeline(gq, extra_raw)
+                combined = deduplicate_results(sources + extra, threshold=0.92)
+                sources = rerank_results(query, combined, top_k=15)
+                output = self.synth.synthesize_grounded(query, sources)
+            except Exception as e:
+                logger.warning("[ITERATION] round %d failed (non-fatal): %s", rounds, e)
+                break
+
         logger.info("[FINAL] Search answer (%.1fs)", time.time() - t0)
         return output
 
@@ -345,6 +366,30 @@ class ResearchAgent:
                 output = synth.synthesize_rag(query, all_sources)
             else:
                 output = synth.synthesize_grounded(query, all_sources)
+
+                # ── Bounded gap-driven iteration (search path only) ─────────
+                rounds = 0
+                max_rounds = getattr(settings, "RESEARCH_MAX_ITERATIONS", 1)
+                while needs_iteration(output, rounds, max_rounds):
+                    gq = gap_query(query, output)
+                    if not gq:
+                        break
+                    rounds += 1
+                    yield {
+                        "type":    "iteration",
+                        "round":   rounds,
+                        "message": f"Additional research (round {rounds})…",
+                        "source":  "llm",
+                    }
+                    try:
+                        extra_raw = self._search_all(gq)
+                        extra = self._process_pipeline(gq, extra_raw)
+                        combined = deduplicate_results(all_sources + extra, threshold=0.92)
+                        all_sources = rerank_results(query, combined, top_k=15)
+                        output = synth.synthesize_grounded(query, all_sources)
+                    except Exception as e:
+                        logger.warning("[ITERATION] round %d failed (non-fatal): %s", rounds, e)
+                        break
 
             yield {
                 "type": "done",

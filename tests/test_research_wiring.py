@@ -158,6 +158,89 @@ def test_arxiv_searcher_parses_results_without_nameerror(monkeypatch):
     assert r.extra["year"] == 2024
 
 
+def test_run_streaming_iterates_once_when_first_result_weak(monkeypatch):
+    """Grounding yếu ở vòng 1 → đúng 1 vòng bù (cap=1) rồi dừng; phát 'iteration'."""
+    import backend.app.features.research.agent as ra
+    from backend.app.features.research.models import ResearchOutput, Claim, SearchResult
+    import backend.app.core.config as cfg
+    monkeypatch.setattr(cfg.settings, "RESEARCH_MAX_ITERATIONS", 1, raising=False)
+
+    agent = ra.ResearchAgent.__new__(ra.ResearchAgent)
+
+    calls = {"synth": 0, "search_rounds": 0}
+
+    class _Synth:
+        def synthesize_grounded(self, q, s):
+            calls["synth"] += 1
+            o = ResearchOutput(query=q)
+            if calls["synth"] == 1:      # vòng 1: yếu (ít claim, confidence thấp)
+                o.claims = []
+                o.confidence = 0.2
+                o.follow_up_questions = ["deeper aspect?"]
+            else:                        # vòng bù: mạnh
+                o.claims = [Claim(text="c", source_ids=["x"], grounded=True) for _ in range(4)]
+                o.confidence = 0.8
+            return o
+        def synthesize_rag(self, q, s): return ResearchOutput(query=q)
+    agent.synth = _Synth()
+
+    def _fake_search_all(q, *a, **k):
+        calls["search_rounds"] += 1
+        return [SearchResult(source="web", title="t", url=f"u{calls['search_rounds']}", content="x")]
+    monkeypatch.setattr(agent, "_search_all", _fake_search_all)
+    monkeypatch.setattr(agent, "_process_pipeline", lambda q, raw, **k: raw)
+
+    # tắt knowledge + search inline của run_streaming
+    monkeypatch.setattr(ra, "get_store", lambda: type("K", (), {
+        "retrieve": lambda self, q: [], "add_results": lambda self, q, s: 0})())
+    monkeypatch.setattr(ra, "expand_query", lambda q: [q])
+    monkeypatch.setattr(ra, "get_dynamic_k", lambda q: {})
+    monkeypatch.setattr(ra, "_enrich_web_results", lambda r: r)
+    monkeypatch.setattr(ra, "deduplicate_results", lambda r, threshold=0.92: r)
+    monkeypatch.setattr(ra, "rerank_results", lambda q, r, top_k=15: r)
+    # ép các searcher inline trả rỗng để vòng 1 dùng nguồn tối thiểu
+    for attr in ("web", "arxiv", "wiki", "semantic", "hf", "github", "openalex"):
+        setattr(agent, attr, type("S", (), {"search": lambda self, q, k=4: []})())
+
+    events = list(agent.run_streaming("q"))
+    iters = [e for e in events if e.get("type") == "iteration"]
+    done = [e for e in events if e.get("type") == "done"]
+    assert len(iters) == 1                       # đúng 1 vòng bù
+    assert calls["synth"] == 2                    # synth 2 lần (vòng 1 + bù)
+    assert done and done[0]["data"]["confidence"] == 0.8   # dùng kết quả bù
+
+
+def test_run_streaming_no_iteration_when_first_result_strong(monkeypatch):
+    import backend.app.features.research.agent as ra
+    from backend.app.features.research.models import ResearchOutput, Claim
+    import backend.app.core.config as cfg
+    monkeypatch.setattr(cfg.settings, "RESEARCH_MAX_ITERATIONS", 1, raising=False)
+    agent = ra.ResearchAgent.__new__(ra.ResearchAgent)
+
+    class _Synth:
+        def synthesize_grounded(self, q, s):
+            o = ResearchOutput(query=q)
+            o.claims = [Claim(text="c", source_ids=["x"], grounded=True) for _ in range(5)]
+            o.confidence = 0.9
+            return o
+        def synthesize_rag(self, q, s): return ResearchOutput(query=q)
+    agent.synth = _Synth()
+    agent._search_all = lambda q, *a, **k: []
+    agent._process_pipeline = lambda q, raw, **k: raw
+    monkeypatch.setattr(ra, "get_store", lambda: type("K", (), {
+        "retrieve": lambda self, q: [], "add_results": lambda self, q, s: 0})())
+    monkeypatch.setattr(ra, "expand_query", lambda q: [q])
+    monkeypatch.setattr(ra, "get_dynamic_k", lambda q: {})
+    monkeypatch.setattr(ra, "_enrich_web_results", lambda r: r)
+    monkeypatch.setattr(ra, "deduplicate_results", lambda r, threshold=0.92: r)
+    monkeypatch.setattr(ra, "rerank_results", lambda q, r, top_k=15: r)
+    for attr in ("web", "arxiv", "wiki", "semantic", "hf", "github", "openalex"):
+        setattr(agent, attr, type("S", (), {"search": lambda self, q, k=4: []})())
+
+    events = list(agent.run_streaming("q"))
+    assert [e for e in events if e.get("type") == "iteration"] == []
+
+
 def test_rerank_fallback_prefers_more_recent(monkeypatch):
     """F2 regression: ở nhánh fallback (không BGE), paper mới hơn phải xếp trên.
 
