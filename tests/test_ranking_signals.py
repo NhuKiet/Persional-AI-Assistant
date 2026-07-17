@@ -65,3 +65,41 @@ def test_bge_path_preserves_relevance_when_signals_absent(monkeypatch):
     b = SearchResult(source="web", title="more_relevant", url="u2", content="c", score=0.5, extra={})
     ranked = rerank_results("q", [a, b], top_k=2)
     assert ranked[0].title == "more_relevant"
+
+
+def test_bge_path_large_rerank_gap_dominates_max_rival_signals(monkeypatch):
+    """Rerank gap 0.70 (> ~0.62 threshold) must win even against a rival loaded
+    with max recency/citation/credibility.
+
+    final_a = 0.90*0.55 + 0.55*0.20 + 0*0.10 + 0*0.10 + 0.5*0.05 = 0.63
+    final_b = 0.20*0.55 + 1.00*0.20 + 1*0.10 + 1*0.10 + 0.5*0.05 = 0.535
+    => a (0.63) beats b (0.535).
+    """
+    import backend.app.features.research.search.ranking as ranking
+    monkeypatch.setattr(ranking, "_get_reranker", lambda: _FakeReranker([0.90, 0.20]))
+    a = SearchResult(source="web", title="high_rerank", url="u1", content="c", score=0.5, extra={})
+    b = SearchResult(
+        source="arxiv", title="max_signals", url="u2", content="c", score=0.5,
+        extra={"year": 2025, "citation_count": 1000},
+    )
+    ranked = rerank_results("q", [a, b], top_k=2)
+    assert ranked[0].title == "high_rerank"
+
+
+def test_bge_path_small_rerank_gap_flipped_by_strong_signals(monkeypatch):
+    """Small rerank gap (0.10) is legitimately overturned by strong recency/
+    citation/credibility on the lower-rerank item — ranking is not rerank-only.
+
+    final_a = 0.50*0.55 + 1.00*0.20 + 1*0.10 + 1*0.10 + 0.5*0.05 = 0.70
+    final_b = 0.60*0.55 + 0.55*0.20 + 0*0.10 + 0*0.10 + 0.5*0.05 = 0.465
+    => a (0.70) beats b (0.465) despite b's higher raw rerank score.
+    """
+    import backend.app.features.research.search.ranking as ranking
+    monkeypatch.setattr(ranking, "_get_reranker", lambda: _FakeReranker([0.50, 0.60]))
+    a = SearchResult(
+        source="arxiv", title="high_signal", url="u1", content="c", score=0.5,
+        extra={"year": 2025, "citation_count": 1000},
+    )
+    b = SearchResult(source="web", title="high_rerank_only", url="u2", content="c", score=0.5, extra={})
+    ranked = rerank_results("q", [a, b], top_k=2)
+    assert ranked[0].title == "high_signal"

@@ -19,9 +19,10 @@ def recency_score(extra: dict, ref_year: int = 2025) -> float:
         ref_year: reference year for age calculation (default 2025)
 
     Returns:
-        float in [0.0, 1.0): exp(-age/5) where age = max(0, ref_year - year).
+        float in [0.0, 1.0]: exp(-age/5) where age = max(0, ref_year - year).
         Returns 0.0 if year is missing or unparseable.
     """
+    # A falsy-but-present "year" (0 or "") intentionally falls through to "published".
     year = extra.get("year") or extra.get("published", "")
     if not year:
         return 0.0
