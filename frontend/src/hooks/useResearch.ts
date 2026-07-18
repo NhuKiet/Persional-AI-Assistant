@@ -1,4 +1,4 @@
-import { useRef, useCallback } from "react";
+import { useRef, useCallback, useEffect } from "react";
 import { API } from "../lib/api";
 import type { ModelSelection } from "../types";
 
@@ -71,6 +71,10 @@ export function useResearch() {
       if ((e as Error).name !== "AbortError") onUpdate({ phase: "error", errMsg: "Mất kết nối backend." });
     }
   }, []);
+
+  // Rời trang bằng đường nào (sidebar "Trang chủ", đổi route) cũng hủy stream
+  // đang chạy — không để request nghiên cứu chạy ngầm lãng phí.
+  useEffect(() => () => abortRef.current?.abort(), []);
 
   const abort = useCallback(() => abortRef.current?.abort(), []);
   return { runSearch, abort };

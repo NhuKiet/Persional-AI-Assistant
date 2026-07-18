@@ -31,14 +31,11 @@ export function ResearchPage({ onBack }: ResearchPageProps) {
   const { sessions, activeId, setActiveId, addSession, removeSession, clearAll } = useChatHistory("research");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [model, setModel]             = useState<ModelSelection | null>(null);
-  const [query, setQuery]             = useState("");
   const [messages, setMessages]       = useState<ResearchMessage[]>([]);
   const [followUps, setFollowUps]     = useState<string[]>([]);
-  const inputRef  = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const accentColor = "#7C9EFF";
 
-  useEffect(() => { inputRef.current?.focus(); }, []);
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
@@ -63,11 +60,10 @@ export function ResearchPage({ onBack }: ResearchPageProps) {
   }, []);
 
   // Start a brand-new research session (new sidebar entry, clears history)
-  const handleSearch = (q?: string) => {
-    const text = q || query;
+  const handleSearch = (q: string) => {
+    const text = q;
     if (!text.trim()) return;
     abort();
-    setQuery(text);
     setFollowUps([]);
     setMessages([]);
     const sid = Math.random().toString(36).slice(2);
@@ -101,7 +97,7 @@ export function ResearchPage({ onBack }: ResearchPageProps) {
   const hasContent = messages.length > 0;
 
   const handleNewResearch = () => {
-    abort(); setQuery(""); setFollowUps([]); setMessages([]);
+    abort(); setFollowUps([]); setMessages([]);
     setActiveId(null);
   };
 
@@ -133,18 +129,14 @@ export function ResearchPage({ onBack }: ResearchPageProps) {
         <button className="clear-btn" onClick={handleNewResearch}>Reset</button>
       </header>
 
-      <div className="rs-bar">
-        <input ref={inputRef} className="rs-input" value={query}
-          onChange={e => setQuery(e.target.value)}
-          onKeyDown={e => e.key === "Enter" && handleSearch()}
+      <div className="input-wrap" style={{ paddingBottom: 12 }}>
+        <InputBar
+          onSend={q => handleSearch(q)}
+          streaming={isLoading}
+          onStop={abort}
           placeholder="Nhập chủ đề nghiên cứu…"
-          disabled={isLoading} />
-        <button className="rs-btn"
-          onClick={() => handleSearch()}
-          disabled={isLoading || !query.trim()}
-          style={{ background: accentColor }}>
-          {isLoading ? "…" : "→"}
-        </button>
+          accentColor={accentColor}
+        />
       </div>
 
       <div className="chat-area chat-active" style={{ paddingTop: 8 }}>
