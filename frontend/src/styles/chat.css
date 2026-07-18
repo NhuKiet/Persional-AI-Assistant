@@ -302,21 +302,6 @@
 
 .tool-header > .tool-title-wrap { margin-right: auto; }
 
-.back-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-family: var(--sans);
-  font-size: 15px;
-  color: var(--text2);
-  background: none;
-  border: none;
-  cursor: pointer;
-  transition: color 0.15s;
-  padding: 4px 0;
-}
-.back-btn:hover { color: var(--text); }
-
 /* ── ModelPicker — dropdown tự dựng (xem ModelPicker.tsx) ──
    Thay cho .model-picker cũ: đó là <select> gốc, phần xổ xuống do OS vẽ nên
    không style được. Rule cũ đã xoá cùng lúc với <select>, không để lại rác. */
