@@ -14,11 +14,7 @@ import { useDragResize } from "../hooks/useDragResize";
 import { API } from "../lib/api";
 import type { ModelSelection } from "../types";
 
-interface CodingPageProps {
-  onBack: () => void;
-}
-
-export function CodingPage({ onBack }: CodingPageProps) {
+export function CodingPage() {
   const { phase, events, plan, codes, output, artifacts, finalMsg, success, heartbeat, chatMsgs, planStream, codeStream, installing, testOutput, review, sessionId, run, reset, clearChat } = useCoding();
   const { sessions, activeId, setActiveId, addSession, removeSession, clearAll } = useChatHistory("coding");
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -77,9 +73,6 @@ export function CodingPage({ onBack }: CodingPageProps) {
     <div className="page tool-page page-entered coding-layout">
       {/* Header */}
       <header className="tool-header">
-        <button className="back-btn" onClick={() => { reset(); onBack(); }}>
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9 2L4 7l5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg> KiNg
-        </button>
         <div className="tool-title-wrap">
           <span className="tool-title-icon" style={{ color: accentColor }}>💻</span>
           <span className="tool-title-text">Coding Agent</span>

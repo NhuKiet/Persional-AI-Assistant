@@ -13,10 +13,9 @@ import type { ModelSelection } from "../types";
 
 interface ToolPageProps {
   tool: Tool;
-  onBack: () => void;
 }
 
-export function ToolPage({ tool, onBack }: ToolPageProps) {
+export function ToolPage({ tool }: ToolPageProps) {
   const { messages, streaming, send, clear, stop } = useChat(tool.id);
   const { sessions, activeId, setActiveId, addSession, removeSession, clearAll } = useChatHistory(tool.id);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -57,9 +56,6 @@ export function ToolPage({ tool, onBack }: ToolPageProps) {
       <div className="app-main">
         <div className="page tool-page page-entered">
           <header className="tool-header">
-            <button className="back-btn" onClick={onBack}>
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9 2L4 7l5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg> KiNg
-            </button>
             <div className="tool-title-wrap"><span className="tool-title-icon" style={{ color: tool.color }}>{tool.icon}</span><span className="tool-title-text">{tool.label}</span></div>
             <button className="clear-btn" onClick={handleClear}>Xóa</button>
           </header>

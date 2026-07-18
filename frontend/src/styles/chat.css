@@ -300,6 +300,8 @@
   flex-shrink: 0;
 }
 
+.tool-header > .tool-title-wrap { margin-right: auto; }
+
 .back-btn {
   display: flex;
   align-items: center;

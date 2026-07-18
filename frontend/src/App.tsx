@@ -1,6 +1,6 @@
 import { lazy, Suspense } from "react";
-import type { ComponentType, ReactElement } from "react";
-import { BrowserRouter, Navigate, Route, Routes, useNavigate, useParams } from "react-router-dom";
+import type { ReactElement } from "react";
+import { BrowserRouter, Navigate, Route, Routes, useParams } from "react-router-dom";
 import "./styles.css";
 
 import { TOOLS } from "./config/tools";
@@ -43,30 +43,12 @@ function guarded(element: ReactElement, label?: string): ReactElement {
   );
 }
 
-/** Mỗi tool có URL riêng, nên F5 giữ nguyên trang thay vì rơi về home.
- *  Các page vẫn nhận `onBack` như cũ — router chỉ cấp hàm điều hướng.
- *  onBack đưa về /chat (trợ lý), không phải "/" (trang chủ marketing) —
- *  bấm "back" từ một tool có nghĩa là quay lại làm việc, không phải quay
- *  lại trang giới thiệu. */
-function withBack(Page: ComponentType<{ onBack: () => void }>) {
-  return function BackRoute() {
-    const navigate = useNavigate();
-    return <Page onBack={() => navigate("/")} />;
-  };
-}
-
-const ResearchRoute = withBack(ResearchPage);
-const CodingRoute   = withBack(CodingPage);
-const PdfRoute      = withBack(PDFPage);
-
 function ToolRoute() {
   const { toolId } = useParams();
-  const navigate = useNavigate();
   const tool = TOOLS.find(t => t.id === toolId);
-  // toolId không khớp tool nào: đây là URL sai thật sự (không phải "back"),
-  // nên về "/" như catch-all bên dưới là đúng — khác với onBack ở dòng dưới.
+  // toolId không khớp tool nào: URL sai thật sự, về "/" như catch-all bên dưới.
   if (!tool) return <Navigate to="/" replace />;
-  return <ToolPage tool={tool} onBack={() => navigate("/")} />;
+  return <ToolPage tool={tool} />;
 }
 
 export function AppRoutes() {
@@ -74,9 +56,9 @@ export function AppRoutes() {
     <Routes>
       <Route path="/"             element={guarded(<LandingPage />)} />
       <Route path="/chat"         element={guarded(<HomePage />, "Trò chuyện")} />
-      <Route path="/research"     element={guarded(<ResearchRoute />, "Research")} />
-      <Route path="/coding"       element={guarded(<CodingRoute />, "Coding")} />
-      <Route path="/pdf"          element={guarded(<PdfRoute />, "PDF Chat")} />
+      <Route path="/research"     element={guarded(<ResearchPage />, "Research")} />
+      <Route path="/coding"       element={guarded(<CodingPage />, "Coding")} />
+      <Route path="/pdf"          element={guarded(<PDFPage />, "PDF Chat")} />
       <Route path="/tool/:toolId" element={guarded(<ToolRoute />)} />
       <Route path="*"             element={<Navigate to="/" replace />} />
     </Routes>

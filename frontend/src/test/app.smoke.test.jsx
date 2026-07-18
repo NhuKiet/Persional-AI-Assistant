@@ -140,17 +140,17 @@ describe("điều hướng sang từng tool", () => {
 
   it("quay lại trang chủ từ một tool có route riêng (Research)", async () => {
     const user = await openTool(TOOL_TITLE.research);
-    await user.click(await screen.findByRole("button", { name: /KiNg/i }));
+    await user.click(await screen.findByRole("button", { name: /Trang chủ/i }));
     expect(await screen.findByText(/Một chỗ làm việc/i)).toBeInTheDocument();
     expect(window.location.pathname).toBe("/");
   });
 
-  // ToolRoute (/tool/:toolId, ví dụ "Bài tập") tự định nghĩa onBack riêng,
-  // KHÔNG đi qua withBack() như Research/Coding/Pdf — dễ sửa một chỗ mà quên
-  // chỗ kia. Test riêng để bắt đúng lỗi đó nếu nó tái diễn.
+  // Không còn back-btn riêng trên header tool nào — nút "Trang chủ" trong
+  // sidebar là đường về nhà duy nhất, dùng chung cho mọi route. Test riêng
+  // để bắt lỗi nếu route /tool/:toolId (ví dụ "Bài tập") lỡ thiếu sidebar.
   it("quay lại trang chủ từ một tool dùng route chung (/tool/:id)", async () => {
     const user = await openTool(TOOL_TITLE.homework);
-    await user.click(await screen.findByRole("button", { name: /KiNg/i }));
+    await user.click(await screen.findByRole("button", { name: /Trang chủ/i }));
     expect(await screen.findByText(/Một chỗ làm việc/i)).toBeInTheDocument();
     expect(window.location.pathname).toBe("/");
   });

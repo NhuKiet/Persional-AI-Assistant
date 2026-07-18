@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import ModelPicker from "../components/ModelPicker";
+import { MicButton } from "../components/MicButton";
 import { Message } from "../components/Message";
 import { Sidebar } from "../components/Sidebar";
 import { SUGGESTIONS } from "../config/tools";
@@ -17,11 +18,7 @@ interface UploadedPdf {
   total_chars: number;
 }
 
-interface PDFPageProps {
-  onBack: () => void;
-}
-
-export function PDFPage({ onBack }: PDFPageProps) {
+export function PDFPage() {
   const accentColor = "#FF8C69";
   const { sessions, activeId, setActiveId, addSession, removeSession, clearAll } = useChatHistory("pdf");
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -210,9 +207,6 @@ export function PDFPage({ onBack }: PDFPageProps) {
     <div className="app-main">
     <div className="page tool-page page-entered">
       <header className="tool-header">
-        <button className="back-btn" onClick={onBack}>
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9 2L4 7l5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg> KiNg
-        </button>
         <div className="tool-title-wrap">
           <span className="tool-title-icon" style={{ color: accentColor }}>📄</span>
           <span className="tool-title-text">PDF Chat</span>
@@ -317,6 +311,7 @@ export function PDFPage({ onBack }: PDFPageProps) {
                   onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(input); } }}
                   placeholder="Hỏi về nội dung PDF…" rows={1}
                   disabled={streaming || summarizing} />
+                <MicButton onTranscript={t => setInput(v => (v ? v + " " + t : t))} disabled={streaming || summarizing} />
                 <button className="input-send" onClick={() => handleSend(input)}
                   disabled={streaming || summarizing || !input.trim()}
                   style={{ background: (streaming || summarizing) ? "#2a2a2e" : accentColor }}>
