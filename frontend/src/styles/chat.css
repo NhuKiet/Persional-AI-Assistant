@@ -255,6 +255,33 @@
 .input-send:disabled { opacity: 0.4; cursor: not-allowed; }
 
 
+/* ── Mic button (speech-to-text) ─────────────────────────── */
+.mic-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: none;
+  background: none;
+  color: var(--text2);
+  cursor: pointer;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color var(--dur) var(--ease), background var(--dur) var(--ease);
+}
+.mic-btn:hover:not(:disabled) { color: var(--text); background: var(--bg3); }
+.mic-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.mic-btn-active {
+  color: var(--accent);
+  background: var(--accent-soft);
+  animation: mic-pulse 1.4s var(--ease) infinite;
+}
+@keyframes mic-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 var(--accent-soft); }
+  50%      { box-shadow: 0 0 0 5px transparent; }
+}
+
 /* ── 9. Tool Header & Suggestions ──────────────────────────── */
 
 .tool-header {
