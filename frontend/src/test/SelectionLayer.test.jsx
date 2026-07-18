@@ -6,7 +6,7 @@
  */
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import SelectionLayer from "../pdf/SelectionLayer";
+import SelectionLayer from "../components/pdf/SelectionLayer";
 
 /** Giả lập window.getSelection trả về đoạn text đang bôi đen (hoặc rỗng).
  *  `rect` là bounding box của vùng chọn — toolbar neo theo nó. */
