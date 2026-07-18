@@ -195,6 +195,25 @@
 }
 .sb-clear-all:hover { background: rgba(255,133,133,0.08); color: var(--danger); }
 
+.sb-theme-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 8px;
+  margin-bottom: 4px;
+  border-radius: 8px;
+  border: none;
+  background: none;
+  color: var(--text2);
+  font-family: var(--sans);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.sb-theme-toggle:hover { background: var(--bg3); color: var(--text); }
+.sb-theme-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
 /* ── Overlay (mobile) ──────────────────────────────────────── */
 
 .sb-overlay {
