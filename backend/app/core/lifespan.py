@@ -15,7 +15,7 @@ async def lifespan(app: FastAPI):
     ensure_runtime_directories(Path(__file__).resolve().parents[3])
 
     try:
-        from tools.conversation import _store
+        from backend.app.shared.conversation_store import _store
 
         deleted = _store.cleanup_old(max_age_days=30)
         if deleted:

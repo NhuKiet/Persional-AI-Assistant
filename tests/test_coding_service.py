@@ -1,5 +1,3 @@
-import tools.coding_agent as legacy_coding_agent
-
 from backend.app.features.coding.artifacts import ARTIFACT_EXTS
 from backend.app.features.coding.execution import detect_missing_packages, install_packages
 from backend.app.features.coding.prompts import REVIEW_PROMPT, SYSTEM_PROMPT
@@ -52,12 +50,6 @@ def test_coding_prompts_and_plot_hint_keep_original_literals():
         "  print('Plot saved to plot.png')\n"
         "NEVER use plt.show()\n"
     )
-
-
-def test_legacy_coding_agent_reexports_original_helpers():
-    assert legacy_coding_agent.ARTIFACT_EXTS is ARTIFACT_EXTS
-    assert legacy_coding_agent._detect_missing_packages is detect_missing_packages
-    assert legacy_coding_agent._install_packages is install_packages
 
 
 def test_coding_agent_keeps_user_visible_vietnamese_events(monkeypatch, tmp_path):

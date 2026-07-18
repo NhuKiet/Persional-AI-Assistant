@@ -10,7 +10,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-import api_chat
+from backend.app.features.chat.router import router as _chat_router
 from backend.app.features.coding import router as coding_router
 from backend.app.features.pdf import router as pdf_router
 from backend.app.core.config import settings
@@ -42,7 +42,7 @@ def test_pdf_summarize_rejects_traversal(bad):
 
 def test_chat_rejects_oversized_message():
     huge = "x" * (settings.MAX_MESSAGE_CHARS + 1)
-    r = _client(api_chat.router).post("/api/chat/stream", json={"message": huge})
+    r = _client(_chat_router).post("/api/chat/stream", json={"message": huge})
     assert r.status_code == 413
 
 

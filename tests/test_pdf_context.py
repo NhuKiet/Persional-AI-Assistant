@@ -1,5 +1,5 @@
 # tests/test_pdf_context.py
-from core.pdf_context import build_multimodal_content, has_image_pin
+from backend.app.features.pdf.context import build_multimodal_content, has_image_pin
 
 
 def test_no_pins_returns_string():

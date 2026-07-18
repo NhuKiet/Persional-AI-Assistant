@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import ModelPicker from "../ModelPicker";
+import ModelPicker from "../components/ModelPicker";
 import { Message } from "../components/Message";
 import { Sidebar } from "../components/Sidebar";
 import { CodingResult } from "../components/coding/CodingResult";

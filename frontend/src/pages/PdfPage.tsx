@@ -1,14 +1,14 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import ModelPicker from "../ModelPicker";
+import ModelPicker from "../components/ModelPicker";
 import { Message } from "../components/Message";
 import { Sidebar } from "../components/Sidebar";
 import { SUGGESTIONS } from "../config/tools";
 import { useChatHistory } from "../hooks/useChatHistory";
 import { API, SESSION_ID } from "../lib/api";
 import { getPersistedSessionId, persistSessionId } from "../lib/storage";
-import ContextPins from "../pdf/ContextPins";
-import PdfViewer from "../pdf/PdfViewer";
-import SelectionLayer, { type Pin } from "../pdf/SelectionLayer";
+import ContextPins from "../components/pdf/ContextPins";
+import PdfViewer from "../components/pdf/PdfViewer";
+import SelectionLayer, { type Pin } from "../components/pdf/SelectionLayer";
 import type { ChatMessage, ModelSelection } from "../types";
 
 interface UploadedPdf {

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { API } from "./lib/api";
-import type { ModelSelection } from "./types";
+import { API } from "../lib/api";
+import type { ModelSelection } from "../types";
 
 export interface ModelOption extends ModelSelection {
   label: string;

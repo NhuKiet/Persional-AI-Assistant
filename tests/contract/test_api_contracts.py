@@ -2,12 +2,10 @@ import json
 
 from fastapi.testclient import TestClient
 
-import api_chat
 import backend.app.features.chat.router as chat_router
 import backend.app.features.coding.router as coding_router
 import backend.app.features.pdf.router as pdf_router
 import backend.app.features.research.router as research_router
-import api_research
 from backend.app.main import app as backend_app
 from main import app
 from backend.app.features.coding.execution import ExecutionResult
@@ -54,9 +52,7 @@ def test_root_asgi_adapter_exports_backend_application():
     assert app is backend_app
 
 
-def test_research_adapter_exports_feature_router_and_routes_remain_registered():
-    assert api_research.router is research_router.router
-
+def test_research_routes_remain_registered():
     research_routes = {
         (method, route.path)
         for route in app.routes

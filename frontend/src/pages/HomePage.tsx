@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import ModelPicker from "../ModelPicker";
+import ModelPicker from "../components/ModelPicker";
 import mainlogo from "../assets/mainlogo.png";
 import { InputBar } from "../components/InputBar";
 import { Message } from "../components/Message";
