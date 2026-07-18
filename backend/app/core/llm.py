@@ -1,4 +1,4 @@
-"""core/llm.py — LLM factory đa provider + registry model.
+"""LLM factory đa provider + registry model.
 
 Provider: "ollama" (local), "anthropic" (Claude), "openai" (OpenAI-compatible).
 Import provider lazily để môi trường chưa cài gói vẫn chạy Ollama được.

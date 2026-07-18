@@ -1,10 +1,8 @@
-"""core/settings.py — Nguồn config duy nhất cho KiNg.
+"""Nguồn config duy nhất cho KiNg.
 
 Thay thế các os.getenv rải rác. Đọc từ .env (giữ nguyên tên biến hiện có).
 """
 from __future__ import annotations
-
-# This module is the canonical configuration home; ``core.settings`` re-exports it.
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -97,8 +95,8 @@ class Settings(BaseSettings):
     EXECUTOR_PIDS: int = 128
     # Tên biến môi trường (phân tách bằng dấu phẩy) muốn lộ THÊM cho code do
     # LLM sinh chạy trong sandbox. Mặc định rỗng: sandbox KHÔNG kế thừa secret
-    # của server (xem _safe_env trong tools/code_executor.py). Chỉ thêm biến ở
-    # đây nếu một tác vụ hợp lệ thật sự cần, ví dụ "MPLBACKEND".
+    # của server (xem _safe_env trong backend/app/features/coding/execution.py).
+    # Chỉ thêm biến ở đây nếu một tác vụ hợp lệ thật sự cần, ví dụ "MPLBACKEND".
     CODE_ENV_EXTRA: str = ""
 
     # ── PDF ─────────────────────────────────────────────────────────
