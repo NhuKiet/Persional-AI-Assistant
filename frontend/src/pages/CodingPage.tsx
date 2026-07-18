@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import ModelPicker from "../components/ModelPicker";
+import { MicButton } from "../components/MicButton";
 import { Message } from "../components/Message";
 import { Sidebar } from "../components/Sidebar";
 import { CodingResult } from "../components/coding/CodingResult";
@@ -207,6 +208,7 @@ export function CodingPage({ onBack }: CodingPageProps) {
               rows={1}
               disabled={isRunning}
             />
+            <MicButton onTranscript={t => setInput(v => (v ? v + " " + t : t))} disabled={isRunning} />
             <button className="input-send" onClick={() => handleSend(input)} disabled={isRunning || !input.trim()}
               style={{ background: isRunning ? "#2a2a2e" : accentColor }}>
               {isRunning

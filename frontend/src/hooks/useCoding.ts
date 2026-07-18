@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { API, SESSION_ID } from "../lib/api";
 import type { ChatMessage } from "../types";
 
@@ -145,6 +145,10 @@ export function useCoding() {
       if ((e as Error).name !== "AbortError") { setPhase("error"); setFinalMsg("Mất kết nối backend."); }
     }
   }, []);
+
+  // Rời trang bằng đường nào cũng hủy agent đang chạy (không xóa session ở đây
+  // — reset() mới xóa; unmount chỉ cần dừng stream để khỏi rò rỉ).
+  useEffect(() => () => abortRef.current?.abort(), []);
 
   const reset = useCallback(() => {
     abortRef.current?.abort();
