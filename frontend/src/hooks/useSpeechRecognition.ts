@@ -30,7 +30,11 @@ export function useSpeechRecognition({ lang = "vi-VN", onResult }: Options) {
     };
     rec.onend = () => setListening(false);
     recRef.current = rec;
-    return () => { try { rec.stop(); } catch { /* already stopped */ } };
+    return () => {
+      try { rec.stop(); } catch { /* already stopped */ }
+      setListening(false);
+      recRef.current = null;
+    };
   }, [supported, lang, SR]);
 
   const start = useCallback(() => {
