@@ -149,6 +149,38 @@
   --ease-in:  cubic-bezier(0.4, 0, 1, 1);     /* exits */
 }
 
+/* ── Theme sáng ──────────────────────────────────────────────
+   Ghi đè token khi <html data-theme="light">. Đảo thang elevation:
+   canvas sáng nhất, bề mặt nổi tối/đậm dần. Giữ cùng TÊN biến nên mọi
+   CSS downstream chạy nguyên. Tương phản chữ đo trên --bg2 sáng, giữ ≥ 4.5:1. */
+:root[data-theme="light"] {
+  --bg:   #ffffff;   /* canvas — nền trang (sáng nhất) */
+  --bg2:  #f5f6f8;   /* card, input, panel, sidebar */
+  --bg3:  #e9ebef;   /* hover, bề mặt nổi */
+  --bg4:  #dfe2e8;   /* inline code (đậm nhất) */
+
+  --glass:      rgba(20, 24, 33, 0.035);
+  --glass-hi:   rgba(20, 24, 33, 0.06);
+  --glass-lit:  rgba(20, 24, 33, 0.14);
+
+  --border:  rgba(20, 24, 33, 0.10);
+  --border2: rgba(20, 24, 33, 0.16);
+
+  --shadow-1: 0 1px 3px rgba(20, 24, 33, 0.10);
+  --shadow-2: 0 12px 32px -8px rgba(20, 24, 33, 0.18);
+
+  --text:  #1a1d24;   /* chữ chính */
+  --text2: #545860;   /* chữ phụ / label */
+  --text3: #787c85;   /* chữ mờ / placeholder */
+
+  --accent-soft: rgba(30, 209, 194, 0.12);
+
+  --sh-keyword: #8b3fd6;
+  --sh-string:  #4f7a1f;
+  --sh-comment: #8a949c;
+  --sh-number:  #c05621;
+}
+
 
 /* ── 3. Base Layout ────────────────────────────────────────── */
 

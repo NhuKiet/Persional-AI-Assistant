@@ -7,6 +7,19 @@
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⬡</text></svg>"/>
   </head>
   <body>
+    <script>
+      // Set theme trước khi React render để tránh nháy sáng→tối (FOUC).
+      // Phải khớp logic initialTheme() trong hooks/useTheme.ts.
+      (function () {
+        try {
+          var t = localStorage.getItem("king-theme");
+          if (t !== "light" && t !== "dark") {
+            t = window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+          }
+          document.documentElement.dataset.theme = t;
+        } catch (e) { document.documentElement.dataset.theme = "dark"; }
+      })();
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
