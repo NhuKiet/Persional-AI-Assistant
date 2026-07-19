@@ -32,7 +32,7 @@ export function clampPage(page: number, totalPages: number): number {
 }
 
 export function normalizeSearchText(value: string): string {
-  return value.toLocaleLowerCase("vi").replace(/\s+/g, " ").trim();
+  return value.toLocaleLowerCase("vi").normalize("NFC").replace(/\s+/g, " ").trim();
 }
 
 interface NormalizedSearchText {
@@ -47,30 +47,48 @@ function normalizeSearchTextWithOffsets(value: string): NormalizedSearchText {
   const ends: number[] = [];
   let offset = 0;
   let whitespaceStart: number | null = null;
+  let cluster = "";
+  let clusterStart = 0;
+  let clusterEnd = 0;
+
+  const appendCluster = () => {
+    if (!cluster) return;
+
+    if (/^\s+$/u.test(cluster)) {
+      if (text && whitespaceStart === null) whitespaceStart = clusterStart;
+    } else {
+      if (whitespaceStart !== null) {
+        text += " ";
+        starts.push(whitespaceStart);
+        ends.push(clusterStart);
+        whitespaceStart = null;
+      }
+
+      const normalizedCluster = cluster.toLocaleLowerCase("vi").normalize("NFC");
+      text += normalizedCluster;
+      for (let index = 0; index < normalizedCluster.length; index += 1) {
+        starts.push(clusterStart);
+        ends.push(clusterEnd);
+      }
+    }
+
+    cluster = "";
+  };
 
   for (const character of value) {
     const characterEnd = offset + character.length;
-    if (/\s/u.test(character)) {
-      if (text && whitespaceStart === null) whitespaceStart = offset;
-      offset = characterEnd;
-      continue;
-    }
-
-    if (whitespaceStart !== null) {
-      text += " ";
-      starts.push(whitespaceStart);
-      ends.push(offset);
-      whitespaceStart = null;
-    }
-
-    const normalizedCharacter = character.toLocaleLowerCase("vi");
-    text += normalizedCharacter;
-    for (let index = 0; index < normalizedCharacter.length; index += 1) {
-      starts.push(offset);
-      ends.push(characterEnd);
+    if (/\p{M}/u.test(character) && cluster && !/^\s+$/u.test(cluster)) {
+      cluster += character;
+      clusterEnd = characterEnd;
+    } else {
+      appendCluster();
+      cluster = character;
+      clusterStart = offset;
+      clusterEnd = characterEnd;
     }
     offset = characterEnd;
   }
+  appendCluster();
 
   return { text, starts, ends };
 }

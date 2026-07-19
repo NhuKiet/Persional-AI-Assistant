@@ -41,6 +41,16 @@ describe("PDF document helpers", () => {
     ]);
   });
 
+  it("matches canonically equivalent Vietnamese text while retaining original offsets", () => {
+    const decomposed = "Trước u\u031B\u0303 liệu";
+    const [decomposedResult] = searchPdfPages([{ page: 4, text: decomposed }], "Ữ");
+    const [precomposedResult] = searchPdfPages([{ page: 5, text: "Trước ữ liệu" }], "u\u031B\u0303");
+
+    expect(decomposedResult).toMatchObject({ page: 4, matchStart: 6, matchEnd: 9 });
+    expect(decomposed.slice(decomposedResult.matchStart, decomposedResult.matchEnd)).toBe("u\u031B\u0303");
+    expect(precomposedResult).toMatchObject({ page: 5, matchStart: 6, matchEnd: 7 });
+  });
+
   it("clamps navigation to the loaded page range", () => {
     expect(clampPage(0, 12)).toBe(1);
     expect(clampPage(7, 12)).toBe(7);

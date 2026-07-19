@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  normalizeSearchText,
   searchPdfPages,
   type PdfSearchPage,
   type PdfSearchResult,
@@ -13,20 +14,27 @@ interface PdfSearchProps {
 
 export default function PdfSearch({ pages, onOpenResult, onClose }: PdfSearchProps) {
   const [query, setQuery] = useState("");
-  const [activeIndex, setActiveIndex] = useState(0);
+  const [requestedIndex, setRequestedIndex] = useState(0);
   const results = useMemo(() => searchPdfPages(pages, query), [pages, query]);
+  const hasSearchableText = useMemo(
+    () => pages.some((page) => page.text.trim().length > 0),
+    [pages],
+  );
+  const hasQuery = normalizeSearchText(query).length > 0;
+  const activeIndex = results.length > 0 ? Math.min(requestedIndex, results.length - 1) : 0;
+  const activeResult = results[activeIndex];
 
   useEffect(() => {
-    setActiveIndex(0);
+    setRequestedIndex(0);
   }, [pages, query]);
 
   useEffect(() => {
-    if (results.length > 0) onOpenResult(results[activeIndex]);
-  }, [activeIndex, onOpenResult, results]);
+    if (activeResult) onOpenResult(activeResult);
+  }, [activeResult, onOpenResult]);
 
   const openAt = (nextIndex: number) => {
     if (!results.length) return;
-    setActiveIndex((nextIndex + results.length) % results.length);
+    setRequestedIndex((nextIndex + results.length) % results.length);
   };
 
   return (
@@ -35,6 +43,7 @@ export default function PdfSearch({ pages, onOpenResult, onClose }: PdfSearchPro
         Tìm trong PDF
         <input
           aria-label="Tìm trong PDF"
+          disabled={!hasSearchableText}
           onChange={(event) => setQuery(event.target.value)}
           type="search"
           value={query}
@@ -42,29 +51,32 @@ export default function PdfSearch({ pages, onOpenResult, onClose }: PdfSearchPro
       </label>
       <button aria-label="Đóng tìm kiếm" onClick={onClose} type="button">Đóng</button>
 
-      {pages.length === 0 ? (
+      {!hasSearchableText ? (
         <p role="status">Không có văn bản để tìm kiếm</p>
-      ) : query && results.length === 0 ? (
+      ) : hasQuery && results.length === 0 ? (
         <p role="status">Không tìm thấy kết quả</p>
-      ) : results.length > 0 ? (
-        <div>
-          <output aria-live="polite">{activeIndex + 1} / {results.length}</output>
-          <button
-            aria-label="Kết quả trước đó"
-            onClick={() => openAt(activeIndex - 1)}
-            type="button"
-          >
-            Trước
-          </button>
-          <button
-            aria-label="Kết quả tiếp theo"
-            onClick={() => openAt(activeIndex + 1)}
-            type="button"
-          >
-            Tiếp theo
-          </button>
-        </div>
       ) : null}
+      <div>
+        {results.length > 0 ? (
+          <output aria-live="polite">{activeIndex + 1} / {results.length}</output>
+        ) : null}
+        <button
+          aria-label="Kết quả trước đó"
+          disabled={!activeResult}
+          onClick={() => openAt(activeIndex - 1)}
+          type="button"
+        >
+          Trước
+        </button>
+        <button
+          aria-label="Kết quả tiếp theo"
+          disabled={!activeResult}
+          onClick={() => openAt(activeIndex + 1)}
+          type="button"
+        >
+          Tiếp theo
+        </button>
+      </div>
     </section>
   );
 }
