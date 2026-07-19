@@ -1,7 +1,39 @@
-import { render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
+import { vi } from "vitest";
 import { AppRoutes } from "../App";
+
+function mockPdfUpload() {
+  vi.stubGlobal("fetch", vi.fn(async (input, init) => {
+    const url = String(input);
+    if (url.endsWith("/api/models")) {
+      return new Response(JSON.stringify({ models: [], default: null }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (url.endsWith("/api/pdf/upload") && init?.method === "POST") {
+      return new Response(JSON.stringify({
+        filename: "doc.pdf",
+        total_pages: 99,
+        total_chars: 3400,
+      }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    throw new Error(`Unexpected fetch: ${url}`);
+  }));
+}
+
+async function uploadPdf(container) {
+  const input = container.querySelector('input[type="file"]');
+  fireEvent.change(input, {
+    target: { files: [new File(["pdf"], "doc.pdf", { type: "application/pdf" })] },
+  });
+  expect(await screen.findAllByText("doc.pdf")).not.toHaveLength(0);
+}
 
 test.each([
   ["/", /KiNg/i],
@@ -70,8 +102,10 @@ describe.each([
 
   it("keeps the same reopen control at narrow (mobile) viewport width", async () => {
     const originalWidth = window.innerWidth;
-    window.innerWidth = 375;
-    window.dispatchEvent(new Event("resize"));
+    act(() => {
+      window.innerWidth = 375;
+      window.dispatchEvent(new Event("resize"));
+    });
     try {
       const user = userEvent.setup();
       render(
@@ -86,8 +120,47 @@ describe.each([
       await user.click(reopenBtn);
       expect(await screen.findByRole("button", { name: /Đóng sidebar/i })).toBeInTheDocument();
     } finally {
-      window.innerWidth = originalWidth;
-      window.dispatchEvent(new Event("resize"));
+      act(() => {
+        window.innerWidth = originalWidth;
+        window.dispatchEvent(new Event("resize"));
+      });
+    }
+  });
+});
+
+describe.each([
+  [1400, "desktop"],
+  [375, "narrow"],
+])("uploaded PDF workspace at %dpx (%s)", (width) => {
+  it("renders the named workspace controls without a split divider and keeps AppShell reopenable", async () => {
+    const originalWidth = window.innerWidth;
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: width });
+    try {
+      mockPdfUpload();
+      const user = userEvent.setup();
+      const { container } = render(
+        <MemoryRouter initialEntries={["/pdf"]}>
+          <AppRoutes />
+        </MemoryRouter>,
+      );
+
+      await uploadPdf(container);
+
+      expect(screen.getByRole("button", { name: /Mục lục/i })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Hỏi tài liệu|trợ lý tài liệu/i })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Tìm trong PDF" })).toBeInTheDocument();
+      expect(container.querySelector(".pdf-divider")).not.toBeInTheDocument();
+
+      const reopen = await screen.findByRole("button", { name: "Mở sidebar" });
+      await user.click(reopen);
+      expect(await screen.findByRole("button", { name: "Đóng sidebar" })).toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: "Đóng sidebar" }));
+      await waitFor(() => expect(screen.getByRole("button", { name: "Mở sidebar" })).toBeInTheDocument());
+    } finally {
+      act(() => {
+        Object.defineProperty(window, "innerWidth", { configurable: true, value: originalWidth });
+        window.dispatchEvent(new Event("resize"));
+      });
     }
   });
 });
