@@ -6,9 +6,41 @@ import {
   findExcerptSpanIndexes,
   normalizeSearchText,
   resolvePdfOutline,
+  searchPdfPages,
 } from "./pdfDocument";
 
 describe("PDF document helpers", () => {
+  it("searches case-insensitively while preserving Vietnamese accents", () => {
+    const pages = [
+      { page: 1, text: "Dữ liệu lớn và Embeddings" },
+      { page: 2, text: "Du lieu khong dau" },
+    ];
+
+    expect(searchPdfPages(pages, "EMBEDDINGS")).toEqual([
+      {
+        page: 1,
+        excerpt: "Dữ liệu lớn và Embeddings",
+        matchText: "EMBEDDINGS",
+        matchStart: 15,
+        matchEnd: 25,
+      },
+    ]);
+    expect(searchPdfPages(pages, "dữ liệu")).toHaveLength(1);
+    expect(searchPdfPages(pages, "du lieu")).toHaveLength(1);
+  });
+
+  it("keeps result order and reports offsets from the original page text", () => {
+    const pages = [
+      { page: 8, text: "Trước  Agent\ngraph sau" },
+      { page: 3, text: "Agent graph thứ hai" },
+    ];
+
+    expect(searchPdfPages(pages, "agent graph")).toEqual([
+      expect.objectContaining({ page: 8, matchStart: 7, matchEnd: 18 }),
+      expect.objectContaining({ page: 3, matchStart: 0, matchEnd: 11 }),
+    ]);
+  });
+
   it("clamps navigation to the loaded page range", () => {
     expect(clampPage(0, 12)).toBe(1);
     expect(clampPage(7, 12)).toBe(7);

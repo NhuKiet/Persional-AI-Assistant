@@ -5,6 +5,14 @@ export interface PdfSearchPage {
   text: string;
 }
 
+export interface PdfSearchResult {
+  page: number;
+  excerpt: string;
+  matchText: string;
+  matchStart: number;
+  matchEnd: number;
+}
+
 export interface TextRange {
   start: number;
   end: number;
@@ -25,6 +33,66 @@ export function clampPage(page: number, totalPages: number): number {
 
 export function normalizeSearchText(value: string): string {
   return value.toLocaleLowerCase("vi").replace(/\s+/g, " ").trim();
+}
+
+interface NormalizedSearchText {
+  text: string;
+  starts: number[];
+  ends: number[];
+}
+
+function normalizeSearchTextWithOffsets(value: string): NormalizedSearchText {
+  let text = "";
+  const starts: number[] = [];
+  const ends: number[] = [];
+  let offset = 0;
+  let whitespaceStart: number | null = null;
+
+  for (const character of value) {
+    const characterEnd = offset + character.length;
+    if (/\s/u.test(character)) {
+      if (text && whitespaceStart === null) whitespaceStart = offset;
+      offset = characterEnd;
+      continue;
+    }
+
+    if (whitespaceStart !== null) {
+      text += " ";
+      starts.push(whitespaceStart);
+      ends.push(offset);
+      whitespaceStart = null;
+    }
+
+    const normalizedCharacter = character.toLocaleLowerCase("vi");
+    text += normalizedCharacter;
+    for (let index = 0; index < normalizedCharacter.length; index += 1) {
+      starts.push(offset);
+      ends.push(characterEnd);
+    }
+    offset = characterEnd;
+  }
+
+  return { text, starts, ends };
+}
+
+export function searchPdfPages(pages: PdfSearchPage[], query: string): PdfSearchResult[] {
+  const needle = normalizeSearchText(query);
+  if (!needle) return [];
+
+  return pages.flatMap((page) => {
+    const normalized = normalizeSearchTextWithOffsets(page.text);
+    const matchStart = normalized.text.indexOf(needle);
+    if (matchStart < 0) return [];
+
+    const matchEnd = matchStart + needle.length;
+    return [{
+      page: page.page,
+      excerpt: page.text.slice(0, 180),
+      matchText: query,
+      matchStart: normalized.starts[matchStart],
+      matchEnd: normalized.ends[matchEnd - 1],
+    }];
+  });
 }
 
 export function findExcerptRange(pageText: string, excerpt: string): TextRange | null {
