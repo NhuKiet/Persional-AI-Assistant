@@ -15,7 +15,14 @@ export default function ContextPins({ pins, onRemove }: ContextPinsProps) {
             ? <img className="pin-thumb" src={p.data_url} alt={`trang ${p.page}`} />
             : <span className="pin-text">"{p.text.slice(0, 40)}{p.text.length > 40 ? "…" : ""}"</span>}
           <span className="pin-page">tr.{p.page}</span>
-          <button className="pin-x" onClick={() => onRemove(i)}>✕</button>
+          <button
+            aria-label={`Bỏ ghim trang ${p.page}`}
+            className="pin-x"
+            onClick={() => onRemove(i)}
+            type="button"
+          >
+            ✕
+          </button>
         </span>
       ))}
     </div>

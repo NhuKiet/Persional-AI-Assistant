@@ -1,10 +1,27 @@
-/* PDF split-view + context pins */
-/* ── PDF split-view + context pins ─────────────────────────── */
-.pdf-split { display: flex; height: calc(100vh - 120px); overflow: hidden; }
-.pdf-pane-left { overflow: auto; background: #2a2f3a; }
-.pdf-pane-right { display: flex; flex-direction: column; overflow: hidden; }
-.pdf-divider { width: 6px; cursor: col-resize; background: #3a4152; flex: 0 0 auto; }
-.pdf-divider:hover { background: #FF8C69; }
+/* PDF reading-first workspace + context pins */
+/* ── PDF workspace layout ──────────────────────────────────── */
+.pdf-workspace { height: calc(100dvh - 72px); min-height: 0; display: flex; flex-direction: column; }
+.pdf-workspace-body { min-height: 0; flex: 1; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; position: relative; overflow: hidden; }
+.pdf-outline-panel { width: 232px; border-right: 1px solid var(--border); background: var(--bg2); overflow: auto; }
+.pdf-viewer-panel { min-width: 0; overflow: hidden; background: var(--bg3); }
+.pdf-assistant-panel { width: 360px; border-left: 1px solid var(--border); background: var(--bg2); overflow: hidden; }
+.pdf-viewer { height: 100%; overflow: auto; padding: 24px; }
+.pdf-page-wrap { width: max-content; max-width: 100%; margin: 0 auto 20px; box-shadow: var(--shadow-2); }
+.pdf-source-chip { border: 1px solid color-mix(in srgb, var(--accent-pdf) 45%, transparent); color: var(--accent-pdf); background: color-mix(in srgb, var(--accent-pdf) 8%, transparent); }
+.pdf-source-chip:focus-visible { outline: 2px solid var(--accent-pdf); outline-offset: 2px; }
+.pdf-source-highlight { background: color-mix(in srgb, var(--accent-pdf) 26%, transparent); }
+.pdf-source-page-target { outline: 3px solid var(--accent-pdf); outline-offset: 4px; }
+
+.pdf-outline-panel,
+.pdf-assistant-panel {
+  transition: opacity var(--dur-slow) var(--ease-out), transform var(--dur-slow) var(--ease-out);
+}
+
+.pdf-overlay-backdrop {
+  padding: 0;
+  transition: opacity var(--dur) var(--ease);
+}
+
 .context-pins { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px; border-bottom: 1px solid #333; }
 .pin-chip { display: inline-flex; align-items: center; gap: 4px; background: #262b36; border: 1px solid #3a4152; border-radius: 6px; padding: 2px 6px; font-size: 12px; }
 .pin-thumb { width: 28px; height: 28px; object-fit: cover; border-radius: 4px; }
@@ -88,37 +105,4 @@
 .upload-toggle-btn:hover     { color: var(--text); background: var(--bg3); }
 .upload-toggle-active        { background: var(--bg3); border-color: rgba(168,230,163,0.35); color: var(--accent-coding); }
 .upload-toggle-has-files     { border-color: rgba(168,230,163,0.5); }
-
-
-/* ── Drag-to-resize divider ────────────────────────────────── */
-
-.resize-divider {
-  width: 8px;
-  flex-shrink: 0;
-  cursor: col-resize;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  z-index: 10;
-  /* Expand hit area */
-  margin: 0 -3px;
-}
-
-.resize-divider:hover .resize-handle,
-.resize-divider:active .resize-handle {
-  background: rgba(168, 230, 163, 0.5);
-  width: 3px;
-}
-
-.resize-handle {
-  width: 1px;
-  height: 100%;
-  min-height: 60px;
-  background: var(--border2);
-  border-radius: 2px;
-  transition: background 0.15s, width 0.15s;
-  pointer-events: none;
-}
-
 

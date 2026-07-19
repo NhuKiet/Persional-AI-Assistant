@@ -26,6 +26,7 @@ afterEach(() => {
   cleanup();
   window.localStorage.clear();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 // jsdom không implement scrollIntoView; các page tự cuộn xuống cuối khi có message.
@@ -45,11 +46,17 @@ if (!global.ResizeObserver) {
     observe() {} unobserve() {} disconnect() {}
   };
 }
+if (!global.IntersectionObserver) {
+  global.IntersectionObserver = class {
+    constructor(callback) { this.callback = callback; }
+    observe() {} unobserve() {} disconnect() {}
+  };
+}
 
 // Giả lập react-pdf để tránh crash trong môi trường jsdom (CI/GitHub Actions)
 vi.mock("react-pdf", () => ({
   pdfjs: { GlobalWorkerOptions: { workerSrc: "" } },
-  Document: ({ children }) => children,
-  Page: () => null,
+  Document: vi.fn(({ children }) => children),
+  Page: vi.fn(() => null),
 }));
 vi.mock("pdfjs-dist/build/pdf.worker.min.mjs?url", () => ({ default: "" }));

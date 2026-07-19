@@ -11,6 +11,10 @@
 ## Global Constraints
 
 - Preserve upload, delete/change-file, continuous rendering, text selection, `Alt + drag` image crop, context pins, streaming chat, summarization, model selection, session history, microphone input, and the image-pin vision guard.
+- Preserve the current `AppShell` integration, universal sidebar reopen control, PDF session-history restore, recovery notice, and React-state `sessionId` lifecycle.
+- Preserve 409 session-busy handling and `KeyedLockRegistry`; adding source events must not weaken or bypass the existing single-worker session lock.
+- Preserve bounded PDF map-reduce summarization, `PDFDocument.full_text`, the 100-page/100,000-character scope limit, and `pdf.summary_scope_rejected` handling.
+- Reuse the buffered `parseSSE` transport and the centralized `pdfRawUrl` / `pdfDeleteUrl` helpers; do not reimplement URL construction or SSE framing in PDF components.
 - Remove the draggable 50/50 divider; outline and assistant widths are not user-resizable in this MVP.
 - Use PDF.js page count as the canonical viewer page count after document load.
 - Use actual PDF outline data; do not synthesize headings with AI.
@@ -1265,13 +1269,17 @@ if (event.type === "error" && event.code === "pdf_not_found") {
   setUploadedPDF(null);
   setMessages([]);
   setPins([]);
-  sessionId.current = SESSION_ID();
+  const newId = SESSION_ID();
+  setSessionId(newId);
+  persistSessionId("pdf", newId);
   return;
 }
 setMessages((current) => applyPdfStreamEvent(current, aiId, event));
 ```
 
 Keep the pins used for a request until a `done` event arrives. Do not call `setPins([])` immediately after `fetch`; on `error` or connection loss leave the pins and user question visible so the same context can be retried.
+
+Keep the current 409 branches ahead of SSE parsing in both chat and summarize. Keep `pdf.summary_scope_rejected` in the summarize loop; it is not a `PdfStreamEvent` from the chat endpoint.
 
 Open a source through the viewer:
 
@@ -1298,9 +1306,11 @@ Use `totalPages` from `onDocumentReady`, not `uploadedPDF.total_pages`, for tool
 
 Pass `onDocumentError` from `PdfViewer` to `PdfPage`. Generic render failures keep the assistant available with the existing viewer error; only the machine-readable `pdf_not_found` stream event exits the workspace and returns to upload.
 
+Continue to render the route through `AppShell`; do not restore a direct `Sidebar` wrapper. Keep `notice`, `handleSelectSession`, and the existing sidebar reopen contract intact. Continue to use `pdfRawUrl(uploadedPDF.filename)` for the viewer and `pdfDeleteUrl(uploadedPDF.filename, sessionId)` for deletion.
+
 - [ ] **Step 6: Extend route contract coverage**
 
-Add assertions to the PDF route test that the uploaded state renders controls named `Mục lục`, `Hỏi tài liệu`, `Tìm trong PDF`, and no element with class `.pdf-divider`.
+Add assertions to the PDF route test that the uploaded state renders controls named `Mục lục`, `Hỏi tài liệu`, `Tìm trong PDF`, and no element with class `.pdf-divider`. Preserve the existing close/reopen sidebar tests for `/pdf` on desktop and narrow widths.
 
 Run: `npm test -- --run src/components/pdf/PdfAssistantPanel.test.tsx src/test/routes.contract.test.jsx && npm run typecheck`
 

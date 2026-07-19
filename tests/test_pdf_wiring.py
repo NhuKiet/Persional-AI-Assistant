@@ -62,6 +62,18 @@ def test_raw_missing_file_is_404():
     assert r.status_code == 404
 
 
+def test_stream_missing_file_has_machine_readable_error_code():
+    r = _stream(
+        _client(),
+        filename="definitely-missing-source-contract.pdf",
+        message="question",
+    )
+
+    assert r.status_code == 200
+    assert '"type": "error"' in r.text
+    assert '"code": "pdf_not_found"' in r.text
+
+
 # ── Vision guard ─────────────────────────────────────────────────────────────
 
 def _stream(client, **body):
@@ -90,7 +102,12 @@ def test_text_pin_with_ollama_passes_guard(monkeypatch):
     """Pin text khong dinh gi den vision => guard KHONG duoc chan."""
     monkeypatch.setattr(pdf_router.settings, "DEFAULT_PROVIDER", "ollama", raising=False)
     monkeypatch.setattr(pdf_router._service, "_get_doc", lambda f: object())
-    monkeypatch.setattr(pdf_router._service._processor, "build_context", lambda doc, q: "CTX")
+    monkeypatch.setattr(pdf_router._service._processor, "retrieve", lambda doc, q: [])
+    monkeypatch.setattr(
+        pdf_router._service._processor,
+        "build_context_from_chunks",
+        lambda doc, chunks: "CTX",
+    )
     monkeypatch.setattr(pdf_router._service, "_stream_llm",
                         lambda *a, **k: iter(["ok"]))
     r = _stream(_client(), message="giai thich",
@@ -102,7 +119,12 @@ def test_text_pin_with_ollama_passes_guard(monkeypatch):
 def test_no_pins_with_ollama_passes_guard(monkeypatch):
     monkeypatch.setattr(pdf_router.settings, "DEFAULT_PROVIDER", "ollama", raising=False)
     monkeypatch.setattr(pdf_router._service, "_get_doc", lambda f: object())
-    monkeypatch.setattr(pdf_router._service._processor, "build_context", lambda doc, q: "CTX")
+    monkeypatch.setattr(pdf_router._service._processor, "retrieve", lambda doc, q: [])
+    monkeypatch.setattr(
+        pdf_router._service._processor,
+        "build_context_from_chunks",
+        lambda doc, chunks: "CTX",
+    )
     monkeypatch.setattr(pdf_router._service, "_stream_llm", lambda *a, **k: iter(["ok"]))
     r = _stream(_client(), message="tom tat")
     assert '"type": "token"' in r.text

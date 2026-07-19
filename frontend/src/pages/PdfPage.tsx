@@ -1,18 +1,32 @@
-import { useState, useEffect, useRef, useCallback } from "react";
-import ModelPicker from "../components/ModelPicker";
-import { MicButton } from "../components/MicButton";
-import { Message } from "../components/Message";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { PDFDocumentProxy } from "pdfjs-dist";
 import { AppShell } from "../components/AppShell";
-import { SUGGESTIONS } from "../config/tools";
-import { fetchSessionHistory, SESSION_RECOVERY_NOTICE, useChatHistory } from "../hooks/useChatHistory";
+import ModelPicker from "../components/ModelPicker";
+import PdfAssistantPanel from "../components/pdf/PdfAssistantPanel";
+import PdfOutline from "../components/pdf/PdfOutline";
+import PdfSearch from "../components/pdf/PdfSearch";
+import PdfToolbar from "../components/pdf/PdfToolbar";
+import PdfViewer, { type PdfViewerHandle } from "../components/pdf/PdfViewer";
+import PdfWorkspace from "../components/pdf/PdfWorkspace";
+import SelectionLayer, { type Pin } from "../components/pdf/SelectionLayer";
+import {
+  resolvePdfOutline,
+  type PdfSearchPage,
+  type PdfSearchResult,
+  type ResolvedOutlineItem,
+} from "../components/pdf/pdfDocument";
+import { usePdfLayout, usePdfLayoutMode } from "../components/pdf/usePdfLayout";
+import {
+  fetchSessionHistory,
+  SESSION_RECOVERY_NOTICE,
+  useChatHistory,
+} from "../hooks/useChatHistory";
 import { API, SESSION_ID } from "../lib/api";
+import { pdfDeleteUrl, pdfRawUrl } from "../lib/pdfUrls";
+import { applyPdfStreamEvent, type PdfStreamEvent } from "../lib/pdfStreamState";
 import { parseSSE, readErrorResponse } from "../lib/sse";
 import { getPersistedSessionId, persistSessionId } from "../lib/storage";
-import { pdfDeleteUrl, pdfRawUrl } from "../lib/pdfUrls";
-import ContextPins from "../components/pdf/ContextPins";
-import PdfViewer from "../components/pdf/PdfViewer";
-import SelectionLayer, { type Pin } from "../components/pdf/SelectionLayer";
-import type { ChatMessage, ModelSelection } from "../types";
+import type { ChatMessage, ModelSelection, PdfSource } from "../types";
 
 interface UploadedPdf {
   filename: string;
@@ -26,214 +40,353 @@ export function PDFPage() {
   const accentColor = "#FF8C69";
   const { sessions, activeId, setActiveId, addSession, removeSession, clearAll } = useChatHistory("pdf");
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [uploadedPDF, setUploadedPDF]   = useState<UploadedPdf | null>(null);
-  const [uploading,   setUploading]     = useState(false);
-  const [messages,    setMessages]      = useState<ChatMessage[]>([]);
-  const [streaming,   setStreaming]     = useState(false);
-  const [summarizing, setSummarizing]   = useState(false);
-  const [input,       setInput]         = useState("");
-  const [model,       setModel]         = useState<ModelSelection | null>(null);
-  const [notice,      setNotice]        = useState("");
-  const [sessionId, setSessionId] = useState(() => getPersistedSessionId("pdf") || SESSION_ID());
-  const bottomRef  = useRef<HTMLDivElement>(null);
-  const fileRef    = useRef<HTMLInputElement>(null);
+  const [uploadedPDF, setUploadedPDF] = useState<UploadedPdf | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [streaming, setStreaming] = useState(false);
+  const [summarizing, setSummarizing] = useState(false);
+  const [input, setInput] = useState("");
+  const [model, setModel] = useState<ModelSelection | null>(null);
+  const [notice, setNotice] = useState("");
+  const [sessionId, setSessionId] = useState(
+    () => getPersistedSessionId("pdf") || SESSION_ID(),
+  );
+  const [pins, setPins] = useState<Pin[]>([]);
+  const [pdfProxy, setPdfProxy] = useState<PDFDocumentProxy | null>(null);
+  const [totalPages, setTotalPages] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [outline, setOutline] = useState<ResolvedOutlineItem[]>([]);
+  const [searchPages, setSearchPages] = useState<PdfSearchPage[]>([]);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const canvasesRef = useRef(new Map<number, HTMLCanvasElement>());
+  const viewerRef = useRef<PdfViewerHandle>(null);
+  const nextMessageIdRef = useRef(Date.now());
+  const nextMessageId = useCallback(() => (nextMessageIdRef.current += 1), []);
+  const layoutMode = usePdfLayoutMode();
+  const layout = usePdfLayout(layoutMode);
 
-  // ── Split-view + context pins ───────────────────────────────
-  const [pins, setPins]         = useState<Pin[]>([]);
-  const [splitRatio, setSplit]  = useState(() => Number(localStorage.getItem("pdf-split")) || 0.5);
-  const canvasesRef             = useRef(new Map<number, HTMLCanvasElement>());
-  const dragSplit                = useRef(false);
+  const startFreshSession = useCallback(() => {
+    const newId = SESSION_ID();
+    setSessionId(newId);
+    persistSessionId("pdf", newId);
+    setActiveId(null);
+    return newId;
+  }, [setActiveId]);
 
-  const onCanvasReady = useCallback((pageNum: number, canvas: HTMLCanvasElement) => {
-    canvasesRef.current.set(pageNum, canvas);
+  const resetViewerState = useCallback(() => {
+    setPdfProxy(null);
+    setTotalPages(0);
+    setCurrentPage(1);
+    setOutline([]);
+    setSearchPages([]);
+    setSearchOpen(false);
+    canvasesRef.current.clear();
   }, []);
 
-  // Canvas được đánh key theo số trang, nên đổi tài liệu là chúng vô nghĩa.
-  // Buộc theo filename thay vì gọi clear() ở từng chỗ đổi file (upload / đổi
-  // file / phiên mới) — thêm lối đổi file thứ tư cũng không thể quên.
-  useEffect(() => { canvasesRef.current.clear(); }, [uploadedPDF?.filename]);
+  useEffect(() => {
+    resetViewerState();
+  }, [uploadedPDF?.filename, resetViewerState]);
 
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+  useEffect(() => {
+    if (uploadedPDF) setSidebarOpen(false);
+  }, [uploadedPDF]);
 
-  // ── Upload PDF ─────────────────────────────────────────────
+  useEffect(() => {
+    let cancelled = false;
+    if (!pdfProxy) {
+      setOutline([]);
+      return;
+    }
+
+    void resolvePdfOutline(pdfProxy).then((items) => {
+      if (!cancelled) setOutline(items);
+    }).catch(() => {
+      if (!cancelled) setOutline([]);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [pdfProxy]);
+
+  const onCanvasReady = useCallback((page: number, canvas: HTMLCanvasElement) => {
+    canvasesRef.current.set(page, canvas);
+  }, []);
+
+  const handleDocumentReady = useCallback((pdf: PDFDocumentProxy, pageCount: number) => {
+    setPdfProxy(pdf);
+    setTotalPages(pageCount);
+    setCurrentPage(1);
+  }, []);
+
+  const handleDocumentError = useCallback(() => {
+    setPdfProxy(null);
+    setOutline([]);
+    setSearchPages([]);
+  }, []);
+
   const handleUpload = async (file: File) => {
     if (!file || !file.name.toLowerCase().endsWith(".pdf")) {
-      alert("Chỉ chấp nhận file PDF"); return;
+      alert("Chỉ chấp nhận file PDF");
+      return;
     }
     if (file.size > 50 * 1024 * 1024) {
-      alert("File quá lớn (tối đa 50MB)"); return;
+      alert("File quá lớn (tối đa 50MB)");
+      return;
     }
+
     setUploading(true);
     try {
       const form = new FormData();
       form.append("file", file);
-      const res = await fetch(`${API}/api/pdf/upload`, { method: "POST", body: form });
-      if (!res.ok) { const e = await res.json(); throw new Error(e.detail); }
-      const data: UploadedPdf = await res.json();
+      const response = await fetch(`${API}/api/pdf/upload`, { method: "POST", body: form });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail);
+      }
+      const data: UploadedPdf = await response.json();
       setUploadedPDF(data);
       setMessages([]);
+      setPins([]);
       persistSessionId("pdf", sessionId);
-    } catch (e) {
-      alert("Upload lỗi: " + (e as Error).message);
-    } finally { setUploading(false); }
+    } catch (error) {
+      alert(`Upload lỗi: ${(error as Error).message}`);
+    } finally {
+      setUploading(false);
+    }
   };
 
-  // ── Summarize ──────────────────────────────────────────────
   const handleSummarize = async () => {
     if (!uploadedPDF || summarizing) return;
     setSummarizing(true);
-    const aiId = Date.now();
-    setMessages(p => [...p,
-      { role: "user",      content: "📋 Tóm tắt tài liệu", id: Date.now() - 1 },
+    const userId = nextMessageId();
+    const aiId = nextMessageId();
+    setMessages((current) => [
+      ...current,
+      { role: "user", content: "📋 Tóm tắt tài liệu", id: userId },
       { role: "assistant", content: "", id: aiId },
     ]);
+
     try {
-      const res = await fetch(`${API}/api/pdf/summarize`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
+      const response = await fetch(`${API}/api/pdf/summarize`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          filename: uploadedPDF.filename, session_id: sessionId,
-          provider: model?.provider ?? null, model: model?.model ?? null,
+          filename: uploadedPDF.filename,
+          session_id: sessionId,
+          provider: model?.provider ?? null,
+          model: model?.model ?? null,
         }),
       });
-      if (res.status === 409) {
-        setMessages(p => p.map(m => m.id === aiId ? { ...m, content: SESSION_BUSY_NOTICE } : m));
+      if (response.status === 409) {
+        setMessages((current) => current.map((message) => (
+          message.id === aiId ? { ...message, content: SESSION_BUSY_NOTICE } : message
+        )));
         return;
       }
-      if (!res.ok) {
-        const errMsg = await readErrorResponse(res);
-        setMessages(p => p.map(m => m.id === aiId ? { ...m, content: "⚠️ Lỗi: " + errMsg } : m));
+      if (!response.ok) {
+        const errorMessage = await readErrorResponse(response);
+        setMessages((current) => current.map((message) => (
+          message.id === aiId ? { ...message, content: `⚠️ Lỗi: ${errorMessage}` } : message
+        )));
         return;
       }
-      for await (const { data } of parseSSE(res.body!)) {
+
+      for await (const { data } of parseSSE(response.body!)) {
         try {
-          const ev = JSON.parse(data);
-          if (ev.type === "token")
-            setMessages(p => p.map(m => m.id === aiId ? { ...m, content: m.content + ev.content } : m));
-          if (ev.type === "pdf.summary_scope_rejected")
-            setMessages(p => p.map(m => m.id === aiId ? { ...m, content: ev.message } : m));
-        } catch {}
+          const event = JSON.parse(data) as {
+            type: string;
+            content?: string;
+            message?: string;
+          };
+          if (event.type === "token" && event.content) {
+            setMessages((current) => current.map((message) => (
+              message.id === aiId
+                ? { ...message, content: message.content + event.content }
+                : message
+            )));
+          }
+          if (event.type === "pdf.summary_scope_rejected" && event.message) {
+            setMessages((current) => current.map((message) => (
+              message.id === aiId ? { ...message, content: event.message! } : message
+            )));
+          }
+        } catch {
+          // Ignore malformed summarize events without aborting later valid events.
+        }
       }
-    } catch (e) {
-      setMessages(p => p.map(m => m.id === aiId ? { ...m, content: "⚠️ Lỗi: " + (e as Error).message } : m));
-    } finally { setSummarizing(false); }
+    } catch (error) {
+      setMessages((current) => current.map((message) => (
+        message.id === aiId
+          ? { ...message, content: `⚠️ Lỗi: ${(error as Error).message}` }
+          : message
+      )));
+    } finally {
+      setSummarizing(false);
+    }
   };
 
-  // ── Chat ───────────────────────────────────────────────────
+  const resetMissingPdf = useCallback(() => {
+    setUploadedPDF(null);
+    setMessages([]);
+    setPins([]);
+    setInput("");
+    setNotice("");
+    resetViewerState();
+    startFreshSession();
+  }, [resetViewerState, startFreshSession]);
+
   const handleSend = async (text?: string, pinsOverride: Pin[] | null = null) => {
     if (!text?.trim() || !uploadedPDF || streaming) return;
     setInput("");
     setStreaming(true);
-    const aiId = Date.now() + 1;
-    setMessages(p => {
-      // Lưu vào sidebar lịch sử khi tin đầu tiên
-      if (p.length === 0) addSession(sessionId, uploadedPDF.filename + ": " + text);
-      return [...p,
-        { role: "user",      content: text, id: Date.now() },
-        { role: "assistant", content: "",   id: aiId },
+    const userId = nextMessageId();
+    const aiId = nextMessageId();
+    setMessages((current) => {
+      if (current.length === 0) {
+        addSession(sessionId, `${uploadedPDF.filename}: ${text}`);
+      }
+      return [
+        ...current,
+        { role: "user", content: text, id: userId },
+        { role: "assistant", content: "", id: aiId },
       ];
     });
+
+    const pinsToSend = pinsOverride ?? pins;
+    let streamFailed = false;
     try {
-      const pinsToSend = pinsOverride ?? pins;
-      const res = await fetch(`${API}/api/pdf/stream`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
+      const response = await fetch(`${API}/api/pdf/stream`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          message: text, filename: uploadedPDF.filename, session_id: sessionId,
-          provider: model?.provider ?? null, model: model?.model ?? null, pins: pinsToSend,
+          message: text,
+          filename: uploadedPDF.filename,
+          session_id: sessionId,
+          provider: model?.provider ?? null,
+          model: model?.model ?? null,
+          pins: pinsToSend,
         }),
       });
-      if (res.status === 409) {
-        setMessages(p => p.map(m => m.id === aiId ? { ...m, content: SESSION_BUSY_NOTICE } : m));
+      if (response.status === 409) {
+        setMessages((current) => current.map((message) => (
+          message.id === aiId ? { ...message, content: SESSION_BUSY_NOTICE } : message
+        )));
         return;
       }
-      setPins([]);
-      if (!res.ok) {
-        const errMsg = await readErrorResponse(res);
-        setMessages(p => p.map(m => m.id === aiId ? { ...m, content: "⚠️ " + errMsg } : m));
+      if (!response.ok) {
+        const errorMessage = await readErrorResponse(response);
+        setMessages((current) => applyPdfStreamEvent(current, aiId, {
+          type: "error",
+          message: errorMessage,
+        }));
         return;
       }
-      for await (const { data } of parseSSE(res.body!)) {
+
+      for await (const { data } of parseSSE(response.body!)) {
         try {
-          const ev = JSON.parse(data);
-          if (ev.type === "token")
-            setMessages(p => p.map(m => m.id === aiId ? { ...m, content: m.content + ev.content } : m));
-          if (ev.type === "error")
-            setMessages(p => p.map(m => m.id === aiId ? { ...m, content: "⚠️ " + ev.message } : m));
-        } catch {}
+          const event = JSON.parse(data) as PdfStreamEvent;
+          if (event.type === "error" && event.code === "pdf_not_found") {
+            resetMissingPdf();
+            return;
+          }
+          if (event.type === "error") streamFailed = true;
+          setMessages((current) => applyPdfStreamEvent(current, aiId, event));
+          if (event.type === "done" && !streamFailed) setPins([]);
+        } catch {
+          // Ignore malformed chat events without discarding accumulated state.
+        }
       }
-    } catch (e) {
-      if ((e as Error).name !== "AbortError")
-        setMessages(p => p.map(m => m.id === aiId ? { ...m, content: "⚠️ Mất kết nối." } : m));
-    } finally { setStreaming(false); }
+    } catch (error) {
+      if ((error as Error).name !== "AbortError") {
+        setMessages((current) => applyPdfStreamEvent(current, aiId, {
+          type: "error",
+          message: "Mất kết nối.",
+        }));
+      }
+    } finally {
+      setStreaming(false);
+    }
   };
 
-  // pin từ SelectionLayer: explain/discuss/translate/pin
   const handlePin = (pin: Pin, action: string) => {
     const nextPins = [...pins, pin];
     setPins(nextPins);
-    if (action === "explain")   handleSend("Giải thích vùng vừa chọn.", nextPins);
-    if (action === "translate") handleSend("Dịch vùng vừa chọn sang tiếng Việt.", nextPins);
-    // "discuss" và "pin": chỉ ghim, chờ user gõ thêm
+    if (action === "explain") void handleSend("Giải thích vùng vừa chọn.", nextPins);
+    if (action === "translate") void handleSend("Dịch vùng vừa chọn sang tiếng Việt.", nextPins);
   };
-
-  // thanh kéo chia đôi màn hình
-  const startSplitDrag = () => { dragSplit.current = true; };
-  useEffect(() => {
-    const move = (e: MouseEvent) => {
-      if (!dragSplit.current) return;
-      const r = Math.min(0.7, Math.max(0.3, e.clientX / window.innerWidth));
-      setSplit(r);
-    };
-    const up = () => {
-      if (dragSplit.current) localStorage.setItem("pdf-split", String(splitRatio));
-      dragSplit.current = false;
-    };
-    window.addEventListener("mousemove", move);
-    window.addEventListener("mouseup", up);
-    return () => { window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up); };
-  }, [splitRatio]);
 
   const handleRemovePDF = async () => {
     if (!uploadedPDF) return;
     try {
       await fetch(pdfDeleteUrl(uploadedPDF.filename, sessionId), { method: "DELETE" });
-    } catch {}
-    setUploadedPDF(null); setMessages([]); setSessionId(SESSION_ID());
+    } catch {
+      // Local reset must still be available when deletion cannot reach the backend.
+    }
+    setUploadedPDF(null);
+    setMessages([]);
+    setPins([]);
+    setInput("");
+    setNotice("");
+    resetViewerState();
+    startFreshSession();
   };
 
   const handleNewPDF = () => {
-    setUploadedPDF(null); setMessages([]);
-    const newId = SESSION_ID();
-    setSessionId(newId);
-    persistSessionId("pdf", newId);
-    setActiveId(null);
+    setUploadedPDF(null);
+    setMessages([]);
+    setPins([]);
+    setInput("");
     setNotice("");
+    resetViewerState();
+    startFreshSession();
   };
 
-  // Chọn một phiên trong sidebar: tải lại lịch sử thật từ backend. Lưu ý:
-  // do backend chỉ lưu message role/content (không lưu filename PDF gắn với
-  // phiên), việc khôi phục chỉ áp dụng cho transcript — người dùng cần giữ
-  // nguyên file PDF đang mở để hỏi tiếp trên đúng ngữ cảnh.
-  const handleSelectSession = useCallback(async (s: { id: string }) => {
-    const result = await fetchSessionHistory("pdf", s.id);
+  const handleSelectSession = useCallback(async (session: { id: string }) => {
+    const result = await fetchSessionHistory("pdf", session.id);
     if (result.status === "not_found") {
-      removeSession(s.id);
+      removeSession(session.id);
       setNotice(SESSION_RECOVERY_NOTICE);
       return;
     }
     if (result.status === "error") return;
+
     setNotice("");
-    setActiveId(s.id);
-    setSessionId(s.id);
-    setMessages(result.data.messages.map((m, i): ChatMessage => ({
-      role: m.role === "assistant" ? "assistant" : "user",
-      content: typeof m.content === "string" ? m.content : JSON.stringify(m.content),
-      id: Date.now() + i,
+    setActiveId(session.id);
+    setSessionId(session.id);
+    const restoreBase = Date.now();
+    setMessages(result.data.messages.map((message, index): ChatMessage => ({
+      role: message.role === "assistant" ? "assistant" : "user",
+      content: typeof message.content === "string"
+        ? message.content
+        : JSON.stringify(message.content),
+      id: restoreBase + index,
     })));
+    nextMessageIdRef.current = restoreBase + result.data.messages.length;
   }, [removeSession, setActiveId]);
 
-  const pdfSidebarProps = {
-    open: sidebarOpen, onToggle: () => setSidebarOpen(o => !o),
-    sessions, activeId,
+  const navigateToPage = useCallback((page: number) => {
+    setCurrentPage(page);
+    viewerRef.current?.scrollToPage(page);
+  }, []);
+
+  const openSearchResult = useCallback((result: PdfSearchResult) => {
+    setCurrentPage(result.page);
+    viewerRef.current?.highlightExcerpt(result.page, result.matchText);
+  }, []);
+
+  const openSource = useCallback((source: PdfSource) => {
+    if (layoutMode === "narrow" && layout.assistantOpen) layout.toggleAssistant();
+    setCurrentPage(source.page);
+    viewerRef.current?.highlightExcerpt(source.page, source.excerpt);
+  }, [layout, layoutMode]);
+
+  const sidebarProps = {
+    open: sidebarOpen,
+    onToggle: () => setSidebarOpen((open) => !open),
+    sessions,
+    activeId,
     onSelect: handleSelectSession,
     onDelete: removeSession,
     onClearAll: clearAll,
@@ -243,133 +396,163 @@ export function PDFPage() {
   };
 
   return (
-    <AppShell {...pdfSidebarProps}>
-    <div className="page tool-page page-entered">
-      <header className="tool-header">
-        <div className="tool-title-wrap">
-          <span className="tool-title-icon" style={{ color: accentColor }}>📄</span>
-          <span className="tool-title-text">PDF Chat</span>
-        </div>
-        <ModelPicker tool="pdf" value={model} onChange={setModel} />
-        {uploadedPDF && (
-          <button className="clear-btn" onClick={handleRemovePDF}>Đổi file</button>
-        )}
-      </header>
+    <AppShell {...sidebarProps}>
+      <div className="page tool-page page-entered">
+        <header className="tool-header">
+          <div className="tool-title-wrap">
+            <span className="tool-title-icon" style={{ color: accentColor }}>📄</span>
+            <span className="tool-title-text">PDF Chat</span>
+          </div>
+          <ModelPicker tool="pdf" value={model} onChange={setModel} />
+          {uploadedPDF ? (
+            <button className="clear-btn" onClick={handleRemovePDF} type="button">Đổi file</button>
+          ) : null}
+        </header>
 
-      {notice && (
-        <div className="recovery-notice" style={{ padding: "10px 14px", margin: "8px 0", borderRadius: 8, background: "#5a3a1a22", color: "#e0a458", fontSize: 13 }}>
-          {notice}
-        </div>
-      )}
-
-      {/* Upload zone — hiện khi chưa có PDF */}
-      {!uploadedPDF && (
-        <div className="pdf-upload-wrap">
+        {notice ? (
           <div
-            className={`pdf-drop-zone ${uploading ? "pdf-drop-loading" : ""}`}
-            onClick={() => fileRef.current?.click()}
-            onDragOver={e => e.preventDefault()}
-            onDrop={e => { e.preventDefault(); handleUpload(e.dataTransfer.files[0]); }}
+            className="recovery-notice"
+            style={{
+              padding: "10px 14px",
+              margin: "8px 0",
+              borderRadius: 8,
+              background: "#5a3a1a22",
+              color: "#e0a458",
+              fontSize: 13,
+            }}
           >
-            <input ref={fileRef} type="file" accept=".pdf" hidden
-              onChange={e => e.target.files && handleUpload(e.target.files[0])} />
-            <div className="pdf-drop-icon">📄</div>
-            {uploading
-              ? <><p className="pdf-drop-title">Đang xử lý PDF...</p><span className="rp-spinner" /></>
-              : <>
-                  <p className="pdf-drop-title">Kéo thả file PDF vào đây</p>
-                  <p className="pdf-drop-sub">hoặc <span className="upload-link">click để chọn file</span> · Tối đa 50MB</p>
-                </>
-            }
+            {notice}
           </div>
-          {/* Suggestions khi chưa upload */}
-          <div className="tool-suggestions" style={{ marginTop: 16 }}>
-            <p className="tool-suggestions-label">Sau khi upload bạn có thể</p>
-            {["Tóm tắt toàn bộ tài liệu", "Tìm các điểm chính", "Hỏi về nội dung cụ thể", "Giải thích thuật ngữ trong tài liệu"].map(s => (
-              <div key={s} className="tool-suggestion-pill" style={{ borderColor: accentColor + "44", cursor: "default" }}>
-                <span style={{ color: accentColor }}>›</span> {s}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+        ) : null}
 
-      {/* Split-view: PDF bên trái, chat bên phải */}
-      {uploadedPDF && (
-        <div className="pdf-split">
-          <div className="pdf-pane-left" style={{ width: `${splitRatio * 100}%` }}>
-            <SelectionLayer canvases={canvasesRef.current} onPin={handlePin}>
-              <PdfViewer
-                file={pdfRawUrl(uploadedPDF.filename)}
-                onCanvasReady={onCanvasReady}
+        {!uploadedPDF ? (
+          <div className="pdf-upload-wrap">
+            <div
+              className={`pdf-drop-zone ${uploading ? "pdf-drop-loading" : ""}`}
+              onClick={() => fileRef.current?.click()}
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={(event) => {
+                event.preventDefault();
+                void handleUpload(event.dataTransfer.files[0]);
+              }}
+            >
+              <input
+                accept=".pdf"
+                hidden
+                onChange={(event) => {
+                  if (event.target.files) void handleUpload(event.target.files[0]);
+                }}
+                ref={fileRef}
+                type="file"
               />
-            </SelectionLayer>
-          </div>
-          <div className="pdf-divider" onMouseDown={startSplitDrag} />
-          <div className="pdf-pane-right" style={{ width: `${(1 - splitRatio) * 100}%` }}>
-            {/* File info bar */}
-            <div className="pdf-info-bar">
-              <div className="pdf-info-left">
-                <span className="pdf-info-icon">📄</span>
-                <div>
-                  <p className="pdf-info-name">{uploadedPDF.filename}</p>
-                  <p className="pdf-info-meta">{uploadedPDF.total_pages} trang · {(uploadedPDF.total_chars / 1000).toFixed(1)}K ký tự</p>
-                </div>
-              </div>
-              <button
-                className="pdf-summarize-btn"
-                onClick={handleSummarize}
-                disabled={summarizing || streaming}
-                style={{ borderColor: accentColor + "66", color: accentColor }}
-              >
-                {summarizing ? <><span className="rp-spinner" /> Đang tóm tắt...</> : "📋 Tóm tắt"}
-              </button>
-            </div>
-
-            <ContextPins pins={pins} onRemove={(i: number) => setPins((p) => p.filter((_, k) => k !== i))} />
-
-            {/* Messages */}
-            <div className="chat-area chat-active" style={{ paddingTop: 8 }}>
-              {messages.length === 0 && (
-                <div className="tool-suggestions">
-                  <p className="tool-suggestions-label">Thử hỏi ngay</p>
-                  {SUGGESTIONS.pdf.map(s => (
-                    <button key={s} className="tool-suggestion-pill"
-                      style={{ borderColor: accentColor + "44" }}
-                      onClick={() => handleSend(s)}>
-                      <span style={{ color: accentColor }}>›</span> {s}
-                    </button>
-                  ))}
-                </div>
+              <div className="pdf-drop-icon">📄</div>
+              {uploading ? (
+                <><p className="pdf-drop-title">Đang xử lý PDF...</p><span className="rp-spinner" /></>
+              ) : (
+                <>
+                  <p className="pdf-drop-title">Kéo thả file PDF vào đây</p>
+                  <p className="pdf-drop-sub">
+                    hoặc <span className="upload-link">click để chọn file</span> · Tối đa 50MB
+                  </p>
+                </>
               )}
-              <div className="messages">
-                {messages.map(m => <Message key={m.id} msg={m} accentColor={accentColor} />)}
-                <div ref={bottomRef} />
-              </div>
             </div>
-
-            {/* Input */}
-            <div className="input-wrap">
-              <div className="input-bar">
-                <textarea className="input-textarea" value={input}
-                  onChange={e => setInput(e.target.value)}
-                  onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(input); } }}
-                  placeholder="Hỏi về nội dung PDF…" rows={1}
-                  disabled={streaming || summarizing} />
-                <MicButton onTranscript={t => setInput(v => (v ? v + " " + t : t))} disabled={streaming || summarizing} />
-                <button className="input-send" onClick={() => handleSend(input)}
-                  disabled={streaming || summarizing || !input.trim()}
-                  style={{ background: (streaming || summarizing) ? "#2a2a2e" : accentColor }}>
-                  {streaming
-                    ? <span style={{ fontSize: 12, color: "#fff" }}>■</span>
-                    : <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M1 7.5h13M8 1.5l6 6-6 6" stroke="#000" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>}
-                </button>
-              </div>
+            <div className="tool-suggestions" style={{ marginTop: 16 }}>
+              <p className="tool-suggestions-label">Sau khi upload bạn có thể</p>
+              {[
+                "Tóm tắt toàn bộ tài liệu",
+                "Tìm các điểm chính",
+                "Hỏi về nội dung cụ thể",
+                "Giải thích thuật ngữ trong tài liệu",
+              ].map((suggestion) => (
+                <div
+                  className="tool-suggestion-pill"
+                  key={suggestion}
+                  style={{ borderColor: `${accentColor}44`, cursor: "default" }}
+                >
+                  <span style={{ color: accentColor }}>›</span> {suggestion}
+                </div>
+              ))}
             </div>
           </div>
-        </div>
-      )}
-    </div>
+        ) : (
+          <PdfWorkspace
+            mode={layoutMode}
+            outlineOpen={layout.outlineOpen}
+            assistantOpen={layout.assistantOpen}
+            onCloseOverlays={layout.closeOverlays}
+            toolbar={(
+              <>
+                <PdfToolbar
+                  filename={uploadedPDF.filename}
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  outlineOpen={layout.outlineOpen}
+                  assistantOpen={layout.assistantOpen}
+                  onNavigate={navigateToPage}
+                  onPrevious={() => navigateToPage(Math.max(1, currentPage - 1))}
+                  onNext={() => navigateToPage(Math.min(totalPages || 1, currentPage + 1))}
+                  onZoomIn={() => viewerRef.current?.zoomIn()}
+                  onZoomOut={() => viewerRef.current?.zoomOut()}
+                  onFitWidth={() => viewerRef.current?.fitWidth()}
+                  onToggleSearch={() => setSearchOpen((open) => !open)}
+                  onToggleOutline={layout.toggleOutline}
+                  onToggleAssistant={layout.toggleAssistant}
+                  onChangeFile={handleRemovePDF}
+                />
+                {searchOpen ? (
+                  <div className="pdf-search-anchor">
+                    <PdfSearch
+                      pages={searchPages}
+                      onOpenResult={openSearchResult}
+                      onClose={() => setSearchOpen(false)}
+                    />
+                  </div>
+                ) : null}
+              </>
+            )}
+            outline={(
+              <PdfOutline
+                items={outline}
+                totalPages={totalPages}
+                currentPage={currentPage}
+                onNavigate={navigateToPage}
+              />
+            )}
+            viewer={(
+              <SelectionLayer canvases={canvasesRef.current} onPin={handlePin}>
+                <PdfViewer
+                  file={pdfRawUrl(uploadedPDF.filename)}
+                  onCanvasReady={onCanvasReady}
+                  onCurrentPageChange={setCurrentPage}
+                  onDocumentError={handleDocumentError}
+                  onDocumentReady={handleDocumentReady}
+                  onSearchIndexReady={setSearchPages}
+                  ref={viewerRef}
+                />
+              </SelectionLayer>
+            )}
+            assistant={(
+              <PdfAssistantPanel
+                filename={uploadedPDF.filename}
+                totalPages={totalPages}
+                totalChars={uploadedPDF.total_chars}
+                messages={messages}
+                pins={pins}
+                input={input}
+                streaming={streaming}
+                summarizing={summarizing}
+                accentColor={accentColor}
+                onInputChange={setInput}
+                onSend={(value) => void handleSend(value)}
+                onSummarize={() => void handleSummarize()}
+                onRemovePin={(index) => setPins((current) => current.filter((_, itemIndex) => itemIndex !== index))}
+                onOpenSource={openSource}
+              />
+            )}
+          />
+        )}
+      </div>
     </AppShell>
   );
 }

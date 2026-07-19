@@ -13,6 +13,7 @@ from backend.app.features.pdf.processor import (
     PDFProcessor,
 )
 from backend.app.features.pdf.schemas import PDFChatRequest, PDFSummarizeRequest
+from backend.app.features.pdf.sources import serialize_sources
 from backend.app.shared.session_locks import KeyedLockRegistry, SessionBusyError
 
 __all__ = ["PdfService", "SessionBusyError"]
@@ -83,7 +84,14 @@ class PdfService:
         def run() -> None:
             try:
                 document = self._get_doc(request.filename)
-                context = self._processor.build_context(document, request.message)
+                retrieved = self._processor.retrieve(document, request.message)
+                sources = serialize_sources(retrieved)
+                if sources:
+                    loop.call_soon_threadsafe(
+                        queue.put_nowait,
+                        {"type": "sources", "sources": sources},
+                    )
+                context = self._processor.build_context_from_chunks(document, retrieved)
                 content = build_multimodal_content(request.message, context, request.pins)
                 history = self._conv_manager.get_history(request.session_id)
                 messages = [*history[-8:], {"role": "user", "content": content}]
@@ -111,6 +119,7 @@ class PdfService:
                     queue.put_nowait,
                     {
                         "type": "error",
+                        "code": "pdf_not_found",
                         "message": f"File '{request.filename}' không tìm thấy. Upload lại nhé.",
                     },
                 )

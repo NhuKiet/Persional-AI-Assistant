@@ -146,12 +146,11 @@ class PDFProcessor:
         scored.sort(key=lambda c: c.score, reverse=True)
         return scored[:top_k]
 
-    def build_context(self, doc: PDFDocument, query: str) -> str:
-        chunks = self.retrieve(doc, query)
-        chunks.sort(key=lambda c: (c.page, c.index))
+    def build_context_from_chunks(self, doc: PDFDocument, chunks: list[PDFChunk]) -> str:
+        ordered = sorted(chunks, key=lambda chunk: (chunk.page, chunk.index))
         parts = [f"[Tài liệu: {doc.filename} — {doc.total_pages} trang]\n"]
         total = len(parts[0])
-        for chunk in chunks:
+        for chunk in ordered:
             snippet = f"\n--- Trang {chunk.page} ---\n{chunk.text}\n"
             if total + len(snippet) > MAX_CONTEXT:
                 break
@@ -159,6 +158,9 @@ class PDFProcessor:
             total += len(snippet)
 
         return "".join(parts)
+
+    def build_context(self, doc: PDFDocument, query: str) -> str:
+        return self.build_context_from_chunks(doc, self.retrieve(doc, query))
 
     def exceeds_summary_scope(self, doc: PDFDocument) -> bool:
         """True if the document is too large to safely summarize whole in
