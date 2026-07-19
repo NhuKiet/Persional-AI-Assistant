@@ -353,7 +353,10 @@ def test_coding_stream_serializes_agent_error_events(monkeypatch):
 
 def test_pdf_stream_and_summary_serialize_token_then_done(monkeypatch):
     monkeypatch.setattr(pdf_router._service, "_get_doc", lambda _filename: object())
-    monkeypatch.setattr(pdf_router._service._processor, "build_context", lambda *_args: "context")
+    monkeypatch.setattr(pdf_router._service._processor, "retrieve", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(
+        pdf_router._service._processor, "build_context_from_chunks", lambda *_args: "context"
+    )
     monkeypatch.setattr(pdf_router._service._processor, "exceeds_summary_scope", lambda _doc: False)
     monkeypatch.setattr(pdf_router._service._processor, "map_chunks", lambda _doc: ["chunk"])
     monkeypatch.setattr(pdf_router._service, "_map_summarize", lambda *_args, **_kwargs: "map summary")
