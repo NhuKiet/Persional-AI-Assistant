@@ -18,6 +18,13 @@ function loadDocument(pdf: Pick<PDFDocumentProxy, "numPages" | "getPage">): void
   act(() => props?.onLoadSuccess?.(pdf as PDFDocumentProxy));
 }
 
+function markTextLayerReady(pageNumber = 1): void {
+  const call = [...vi.mocked(Page).mock.calls]
+    .reverse()
+    .find(([props]) => props.pageNumber === pageNumber);
+  act(() => call?.[0].onRenderTextLayerSuccess?.());
+}
+
 function deferred<Value>() {
   let resolve!: (value: Value) => void;
   const promise = new Promise<Value>((next) => {
@@ -179,6 +186,41 @@ it("invalidates pending search indexing when the file changes", async () => {
   expect(onSearchIndexReady).not.toHaveBeenCalled();
 });
 
+it("ignores an old document load callback after the file changes", async () => {
+  const onDocumentReady = vi.fn();
+  const onSearchIndexReady = vi.fn();
+  const { container, rerender } = render(
+    <PdfViewer
+      file="/old.pdf"
+      onDocumentReady={onDocumentReady}
+      onSearchIndexReady={onSearchIndexReady}
+    />,
+  );
+  const oldDocumentProps = lastProps(vi.mocked(Document).mock.calls);
+  rerender(
+    <PdfViewer
+      file="/new.pdf"
+      onDocumentReady={onDocumentReady}
+      onSearchIndexReady={onSearchIndexReady}
+    />,
+  );
+  const oldPdf = {
+    numPages: 2,
+    getPage: vi.fn(async () => ({
+      getTextContent: async () => ({ items: [{ str: "Tài liệu cũ" }] }),
+    })),
+  };
+
+  await act(async () => {
+    oldDocumentProps?.onLoadSuccess?.(oldPdf as never);
+    await Promise.resolve();
+  });
+
+  expect(onDocumentReady).not.toHaveBeenCalled();
+  expect(onSearchIndexReady).not.toHaveBeenCalled();
+  expect(container.querySelectorAll(".pdf-page-wrap")).toHaveLength(0);
+});
+
 it("contains search-index extraction errors", async () => {
   const onSearchIndexReady = vi.fn();
   render(<PdfViewer file="/doc.pdf" onSearchIndexReady={onSearchIndexReady} />);
@@ -208,48 +250,69 @@ it("reports document rendering failures without replacing the viewer parent", ()
   expect(getByText(/Vẫn có thể chat bằng text/)).toBeInTheDocument();
 });
 
-it("tracks visibility across partial observer batches and disconnects cleanly", () => {
+it("measures exact page geometry when visible ratios swap within one threshold bucket", () => {
   let observerCallback: IntersectionObserverCallback | undefined;
-  let observerOptions: IntersectionObserverInit | undefined;
   const disconnect = vi.fn();
   class IntersectionObserverMock {
-    constructor(callback: IntersectionObserverCallback, options?: IntersectionObserverInit) {
+    constructor(callback: IntersectionObserverCallback) {
       observerCallback = callback;
-      observerOptions = options;
     }
     observe() {}
     unobserve() {}
     disconnect = disconnect;
   }
   vi.stubGlobal("IntersectionObserver", IntersectionObserverMock);
+  let frameCallback: FrameRequestCallback | undefined;
+  let nextFrameId = 0;
+  const cancelAnimationFrame = vi.fn();
+  vi.stubGlobal("requestAnimationFrame", vi.fn((callback: FrameRequestCallback) => {
+    frameCallback = callback;
+    nextFrameId += 1;
+    return nextFrameId;
+  }));
+  vi.stubGlobal("cancelAnimationFrame", cancelAnimationFrame);
   const onCurrentPageChange = vi.fn();
   const { container, unmount } = render(
     <PdfViewer file="/doc.pdf" onCurrentPageChange={onCurrentPageChange} />,
   );
   loadDocument({ numPages: 2, getPage: vi.fn() as never });
   const pages = container.querySelectorAll<HTMLElement>(".pdf-page-wrap");
+  const host = container.querySelector<HTMLElement>(".pdf-viewer")!;
+  const rect = (top: number, bottom: number): DOMRect => ({
+    top, bottom, left: 0, right: 100, width: 100, height: bottom - top,
+    x: 0, y: top, toJSON: () => ({}),
+  });
+  vi.spyOn(host, "getBoundingClientRect").mockReturnValue(rect(0, 100));
+  const pageOneRect = vi.spyOn(pages[0], "getBoundingClientRect")
+    .mockReturnValue(rect(-44, 56));
+  const pageTwoRect = vi.spyOn(pages[1], "getBoundingClientRect")
+    .mockReturnValue(rect(46, 146));
+  const flushFrame = () => {
+    const callback = frameCallback;
+    frameCallback = undefined;
+    act(() => callback?.(performance.now()));
+  };
 
   act(() => {
     observerCallback?.([
-      { target: pages[0], isIntersecting: true, intersectionRatio: 0.9 },
-      { target: pages[1], isIntersecting: true, intersectionRatio: 0.8 },
+      { target: pages[0], isIntersecting: true, intersectionRatio: 0.56 },
+      { target: pages[1], isIntersecting: true, intersectionRatio: 0.54 },
     ] as unknown as IntersectionObserverEntry[], {} as IntersectionObserver);
   });
+  flushFrame();
+
+  pageOneRect.mockReturnValue(rect(-46, 54));
+  pageTwoRect.mockReturnValue(rect(44, 144));
   act(() => {
-    observerCallback?.([
-      { target: pages[1], isIntersecting: true, intersectionRatio: 0.85 },
-    ] as unknown as IntersectionObserverEntry[], {} as IntersectionObserver);
+    host.dispatchEvent(new Event("scroll"));
   });
-  act(() => {
-    observerCallback?.([
-      { target: pages[0], isIntersecting: true, intersectionRatio: 0.7 },
-    ] as unknown as IntersectionObserverEntry[], {} as IntersectionObserver);
-  });
+  flushFrame();
 
   expect(onCurrentPageChange.mock.calls).toEqual([[1], [2]]);
-  expect(observerOptions?.threshold).toEqual(expect.arrayContaining([0, 0.5, 1]));
+  act(() => host.dispatchEvent(new Event("scroll")));
   unmount();
   expect(disconnect).toHaveBeenCalledOnce();
+  expect(cancelAnimationFrame).toHaveBeenCalled();
 });
 
 it("maps collapsed whitespace offsets to the correct text-layer spans", () => {
@@ -266,6 +329,7 @@ it("maps collapsed whitespace offsets to the correct text-layer spans", () => {
     return span;
   });
   page.appendChild(textLayer);
+  markTextLayerReady();
 
   act(() => ref.current?.highlightExcerpt(1, "embeddings"));
 
@@ -274,29 +338,29 @@ it("maps collapsed whitespace offsets to the correct text-layer spans", () => {
   expect(spans[2]).not.toHaveClass("pdf-source-highlight");
 });
 
-it("falls back to temporary page-level focus when an excerpt is not found", () => {
-  vi.useFakeTimers();
+it("clears an active source highlight when the PDF file changes", () => {
   const ref = createRef<PdfViewerHandle>();
-  const { container, unmount } = render(<PdfViewer ref={ref} file="/doc.pdf" />);
+  const { container, rerender } = render(
+    <PdfViewer ref={ref} file="/old.pdf" />,
+  );
   loadDocument({ numPages: 1, getPage: vi.fn() as never });
   const page = container.querySelector<HTMLElement>(".pdf-page-wrap")!;
+  const textLayer = document.createElement("div");
+  textLayer.className = "textLayer";
+  const span = document.createElement("span");
+  span.textContent = "Alpha Embeddings";
+  textLayer.appendChild(span);
+  page.appendChild(textLayer);
+  markTextLayerReady();
+  act(() => ref.current?.highlightExcerpt(1, "embeddings"));
+  expect(span).toHaveClass("pdf-source-highlight");
 
-  act(() => ref.current?.highlightExcerpt(1, "missing excerpt"));
-  expect(page).not.toHaveClass("pdf-source-page-target");
+  rerender(<PdfViewer ref={ref} file="/new.pdf" />);
 
-  act(() => vi.advanceTimersByTime(999));
-  expect(page).not.toHaveClass("pdf-source-page-target");
-
-  act(() => vi.advanceTimersByTime(1));
-  expect(page).toHaveClass("pdf-source-page-target");
-
-  act(() => vi.advanceTimersByTime(4000));
-  expect(page).not.toHaveClass("pdf-source-page-target");
-  unmount();
-  vi.useRealTimers();
+  expect(span).not.toHaveClass("pdf-source-highlight");
 });
 
-it("retries excerpt matching while the text layer is still rendering", () => {
+it("waits beyond one second for text-layer readiness before highlighting", () => {
   vi.useFakeTimers();
   const ref = createRef<PdfViewerHandle>();
   const { container, unmount } = render(<PdfViewer ref={ref} file="/doc.pdf" />);
@@ -304,7 +368,8 @@ it("retries excerpt matching while the text layer is still rendering", () => {
   const page = container.querySelector<HTMLElement>(".pdf-page-wrap")!;
 
   act(() => ref.current?.highlightExcerpt(1, "embeddings"));
-  act(() => vi.advanceTimersByTime(200));
+  act(() => vi.advanceTimersByTime(1500));
+  expect(page).not.toHaveClass("pdf-source-page-target");
   const textLayer = document.createElement("div");
   textLayer.className = "textLayer";
   const span = document.createElement("span");
@@ -312,9 +377,33 @@ it("retries excerpt matching while the text layer is still rendering", () => {
   textLayer.appendChild(span);
   page.appendChild(textLayer);
 
-  act(() => vi.advanceTimersByTime(50));
+  markTextLayerReady();
 
   expect(span).toHaveClass("pdf-source-highlight");
+  expect(page).not.toHaveClass("pdf-source-page-target");
+  unmount();
+  vi.useRealTimers();
+});
+
+it("uses page fallback only after a ready text layer has no match", () => {
+  vi.useFakeTimers();
+  const ref = createRef<PdfViewerHandle>();
+  const { container, unmount } = render(<PdfViewer ref={ref} file="/doc.pdf" />);
+  loadDocument({ numPages: 1, getPage: vi.fn() as never });
+  const page = container.querySelector<HTMLElement>(".pdf-page-wrap")!;
+  const textLayer = document.createElement("div");
+  textLayer.className = "textLayer";
+  const span = document.createElement("span");
+  span.textContent = "Alpha";
+  textLayer.appendChild(span);
+  page.appendChild(textLayer);
+
+  act(() => ref.current?.highlightExcerpt(1, "missing excerpt"));
+  expect(page).not.toHaveClass("pdf-source-page-target");
+  markTextLayerReady();
+
+  expect(page).toHaveClass("pdf-source-page-target");
+  act(() => vi.advanceTimersByTime(4000));
   expect(page).not.toHaveClass("pdf-source-page-target");
   unmount();
   vi.useRealTimers();

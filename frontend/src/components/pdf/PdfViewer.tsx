@@ -32,9 +32,6 @@ const PAGE_GUTTER = 16; // chừa chỗ cho padding/scrollbar dọc
 const MIN_SCALE = 0.5;
 const MAX_SCALE = 2.5;
 const SCALE_STEP = 0.15;
-const VISIBILITY_THRESHOLDS = Array.from({ length: 11 }, (_, index) => index / 10);
-const HIGHLIGHT_RETRY_MS = 50;
-const HIGHLIGHT_LOOKUP_TIMEOUT_MS = 1000;
 const HIGHLIGHT_DISPLAY_MS = 4000;
 
 /** Bề rộng khả dụng của khung chứa; cập nhật khi kéo thanh chia hoặc resize. */
@@ -73,6 +70,7 @@ export interface PdfViewerHandle {
 }
 
 interface SourceHighlight {
+  file: string;
   page: number;
   excerpt: string;
   key: number;
@@ -94,14 +92,18 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function PdfViewer
   const [manualScale, setManualScale] = useState(1);
   const [viewMode, setViewMode] = useState<"fit-width" | "manual">("fit-width");
   const [sourceHighlight, setSourceHighlight] = useState<SourceHighlight | null>(null);
+  const [readyTextLayers, setReadyTextLayers] = useState<Set<number>>(() => new Set());
   const hostRef                 = useRef<HTMLDivElement>(null);
   const currentPageRef          = useRef<number | null>(null);
   const searchGenerationRef     = useRef(0);
+  const activeDocumentLoadRef   = useRef<((pdf: PDFDocumentProxy) => void) | null>(null);
   // Vừa khít bề rộng pane thay vì scale cố định — pane co giãn được nên
   // scale cứng làm trang tràn ngang.
   const fitWidth                = useFitWidth(hostRef);
 
-  const onLoad = useCallback((pdf: PDFDocumentProxy) => {
+  const onLoad = useCallback(function handleDocumentLoad(pdf: PDFDocumentProxy) {
+    if (activeDocumentLoadRef.current !== handleDocumentLoad) return;
+    setReadyTextLayers(new Set());
     setNumPages(pdf.numPages);
     onDocumentReady?.(pdf, pdf.numPages);
     const generation = ++searchGenerationRef.current;
@@ -114,11 +116,35 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function PdfViewer
         // Search indexing is optional; document rendering remains usable on extraction failure.
       });
     }
-  }, [onDocumentReady, onSearchIndexReady]);
+  }, [file, onDocumentReady, onSearchIndexReady]);
+
+  useLayoutEffect(() => {
+    activeDocumentLoadRef.current = onLoad;
+    return () => {
+      if (activeDocumentLoadRef.current === onLoad) {
+        activeDocumentLoadRef.current = null;
+      }
+    };
+  }, [onLoad]);
 
   useEffect(() => () => {
     searchGenerationRef.current += 1;
   }, [file]);
+
+  useEffect(() => {
+    setSourceHighlight(null);
+    setReadyTextLayers(new Set());
+  }, [file]);
+
+  const handleTextLayerReady = useCallback((loadOwner: (pdf: PDFDocumentProxy) => void, page: number) => {
+    if (activeDocumentLoadRef.current !== loadOwner) return;
+    setReadyTextLayers((readyPages) => {
+      if (readyPages.has(page)) return readyPages;
+      const nextReadyPages = new Set(readyPages);
+      nextReadyPages.add(page);
+      return nextReadyPages;
+    });
+  }, []);
 
   const handleDocumentError = useCallback((loadError: Error) => {
     setError(loadError);
@@ -129,91 +155,97 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function PdfViewer
     const host = hostRef.current;
     if (!host || numPages < 1 || !onCurrentPageChange) return;
 
-    const visibility = new Map<Element, number>();
-    const pages = Array.from(host.querySelectorAll(".pdf-page-wrap"));
-    pages.forEach((page) => visibility.set(page, 0));
+    const pages = Array.from(host.querySelectorAll<HTMLElement>(".pdf-page-wrap"));
+    let frameId: number | null = null;
 
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach((entry) => {
-        visibility.set(entry.target, entry.isIntersecting ? entry.intersectionRatio : 0);
-      });
-      const mostVisible = Array.from(visibility.entries()).reduce<
-        [Element, number] | null
-      >((best, candidate) => (
-        candidate[1] > 0 && (!best || candidate[1] > best[1]) ? candidate : best
-      ), null);
-      const page = Number((mostVisible?.[0] as HTMLElement | undefined)?.dataset.pageNumber);
+    const measureCurrentPage = () => {
+      frameId = null;
+      const hostRect = host.getBoundingClientRect();
+      const mostVisible = pages.reduce<{ page: number; ratio: number } | null>((best, page) => {
+        const pageRect = page.getBoundingClientRect();
+        const visibleWidth = Math.max(
+          0,
+          Math.min(hostRect.right, pageRect.right) - Math.max(hostRect.left, pageRect.left),
+        );
+        const visibleHeight = Math.max(
+          0,
+          Math.min(hostRect.bottom, pageRect.bottom) - Math.max(hostRect.top, pageRect.top),
+        );
+        const pageArea = pageRect.width * pageRect.height;
+        const ratio = pageArea > 0 ? (visibleWidth * visibleHeight) / pageArea : 0;
+        const pageNumber = Number(page.dataset.pageNumber);
+        return ratio > 0 && Number.isInteger(pageNumber) && (!best || ratio > best.ratio)
+          ? { page: pageNumber, ratio }
+          : best;
+      }, null);
 
-      if (!Number.isInteger(page) || page === currentPageRef.current) return;
-      currentPageRef.current = page;
-      onCurrentPageChange(page);
-    }, { threshold: VISIBILITY_THRESHOLDS });
+      if (!mostVisible || mostVisible.page === currentPageRef.current) return;
+      currentPageRef.current = mostVisible.page;
+      onCurrentPageChange(mostVisible.page);
+    };
 
-    pages.forEach((page) => observer.observe(page));
+    const scheduleMeasurement = () => {
+      if (frameId !== null) return;
+      frameId = requestAnimationFrame(measureCurrentPage);
+    };
+
+    const observer = new IntersectionObserver(scheduleMeasurement);
+    const resizeObserver = new ResizeObserver(scheduleMeasurement);
+    pages.forEach((page) => {
+      observer.observe(page);
+      resizeObserver.observe(page);
+    });
+    resizeObserver.observe(host);
+    host.addEventListener("scroll", scheduleMeasurement, { passive: true });
+    window.addEventListener("resize", scheduleMeasurement);
+    scheduleMeasurement();
+
     return () => {
+      host.removeEventListener("scroll", scheduleMeasurement);
+      window.removeEventListener("resize", scheduleMeasurement);
       observer.disconnect();
-      visibility.clear();
+      resizeObserver.disconnect();
+      if (frameId !== null) {
+        cancelAnimationFrame(frameId);
+        frameId = null;
+      }
     };
   }, [numPages, onCurrentPageChange]);
 
   useEffect(() => {
-    if (!sourceHighlight) return;
+    if (!sourceHighlight || sourceHighlight.file !== file) return;
+    if (!readyTextLayers.has(sourceHighlight.page)) return;
 
-    let wrapper: HTMLElement | null = null;
-    let retryTimeout: number | undefined;
-    let clearTimeout: number | undefined;
-    const highlightedSpans = new Set<HTMLElement>();
-    const startedAt = Date.now();
+    const wrapper = hostRef.current?.querySelector<HTMLElement>(
+      `[data-page-number="${sourceHighlight.page}"]`,
+    );
+    if (!wrapper) return;
+    const spans = Array.from(wrapper.querySelectorAll<HTMLElement>(".textLayer span"));
+    const matchingSpanIndexes = findExcerptSpanIndexes(
+      spans.map((span) => span.textContent ?? ""),
+      sourceHighlight.excerpt,
+    );
+    const highlightedSpans = matchingSpanIndexes
+      .map((spanIndex) => spans[spanIndex])
+      .filter((span): span is HTMLElement => Boolean(span));
 
-    const clearDecorations = () => {
+    if (highlightedSpans.length > 0) {
+      highlightedSpans.forEach((span) => span.classList.add("pdf-source-highlight"));
+    } else {
+      wrapper.classList.add("pdf-source-page-target");
+    }
+
+    const clearTimeout = window.setTimeout(() => {
       highlightedSpans.forEach((span) => span.classList.remove("pdf-source-highlight"));
-      wrapper?.classList.remove("pdf-source-page-target");
-    };
-
-    const scheduleClear = () => {
-      clearTimeout = window.setTimeout(clearDecorations, HIGHLIGHT_DISPLAY_MS);
-    };
-
-    const tryHighlight = () => {
-      wrapper = hostRef.current?.querySelector<HTMLElement>(
-        `[data-page-number="${sourceHighlight.page}"]`,
-      ) ?? null;
-      const spans = wrapper
-        ? Array.from(wrapper.querySelectorAll<HTMLElement>(".textLayer span"))
-        : [];
-      const matchingSpanIndexes = findExcerptSpanIndexes(
-        spans.map((span) => span.textContent ?? ""),
-        sourceHighlight.excerpt,
-      );
-
-      if (matchingSpanIndexes.length > 0) {
-        matchingSpanIndexes.forEach((spanIndex) => {
-          const span = spans[spanIndex];
-          if (!span) return;
-          highlightedSpans.add(span);
-          span.classList.add("pdf-source-highlight");
-        });
-        scheduleClear();
-        return;
-      }
-
-      if (Date.now() - startedAt >= HIGHLIGHT_LOOKUP_TIMEOUT_MS) {
-        wrapper?.classList.add("pdf-source-page-target");
-        scheduleClear();
-        return;
-      }
-
-      retryTimeout = window.setTimeout(tryHighlight, HIGHLIGHT_RETRY_MS);
-    };
-
-    tryHighlight();
+      wrapper.classList.remove("pdf-source-page-target");
+    }, HIGHLIGHT_DISPLAY_MS);
 
     return () => {
-      if (retryTimeout !== undefined) window.clearTimeout(retryTimeout);
-      if (clearTimeout !== undefined) window.clearTimeout(clearTimeout);
-      clearDecorations();
+      window.clearTimeout(clearTimeout);
+      highlightedSpans.forEach((span) => span.classList.remove("pdf-source-highlight"));
+      wrapper.classList.remove("pdf-source-page-target");
     };
-  }, [sourceHighlight]);
+  }, [file, readyTextLayers, sourceHighlight]);
 
   useImperativeHandle(ref, () => ({
     scrollToPage(page) {
@@ -235,13 +267,13 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function PdfViewer
     },
     highlightExcerpt(page, excerpt) {
       const targetPage = clampPage(page, numPages);
-      setSourceHighlight({ page: targetPage, excerpt, key: Date.now() });
+      setSourceHighlight({ file, page: targetPage, excerpt, key: Date.now() });
       const target = hostRef.current?.querySelector<HTMLElement>(
         `[data-page-number="${targetPage}"]`,
       );
       target?.scrollIntoView({ behavior: "smooth", block: "start" });
     },
-  }), [numPages]);
+  }), [file, numPages]);
 
   const handleRender = useCallback((pageNum: number) => {
     // react-pdf render canvas với class .react-pdf__Page__canvas trong wrapper trang
@@ -273,6 +305,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function PdfViewer
               renderTextLayer
               renderAnnotationLayer={false}
               onRenderSuccess={() => handleRender(i + 1)}
+              onRenderTextLayerSuccess={() => handleTextLayerReady(onLoad, i + 1)}
             />
           </div>
         ))}
