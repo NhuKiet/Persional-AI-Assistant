@@ -34,6 +34,11 @@ const MIN_SCALE = 0.5;
 const MAX_SCALE = 2.5;
 const SCALE_STEP = 0.15;
 const HIGHLIGHT_DISPLAY_MS = 4000;
+// react-pdf's onRenderTextLayerSuccess can fire before pdf.js has actually
+// appended span elements to the DOM (observed live: the readiness map recorded
+// the current render owner while `.textLayer` still had zero children). Bound
+// how long the highlight effect waits for real content before giving up.
+const TEXT_LAYER_WAIT_MS = 1500;
 
 function resolveScrollHost(viewer: HTMLElement): HTMLElement {
   let candidate: HTMLElement | null = viewer;
@@ -267,31 +272,77 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function PdfViewer
       `[data-page-number="${sourceHighlight.page}"]`,
     );
     if (!wrapper) return;
-    const spans = Array.from(wrapper.querySelectorAll<HTMLElement>(".textLayer span"));
-    const matchingSpanIndexes = findExcerptSpanIndexes(
-      spans.map((span) => span.textContent ?? ""),
-      sourceHighlight.excerpt,
-    );
-    const highlightedSpans = matchingSpanIndexes
-      .map((spanIndex) => spans[spanIndex])
-      .filter((span): span is HTMLElement => Boolean(span));
 
-    if (highlightedSpans.length > 0) {
-      highlightedSpans.forEach((span) => span.classList.add("pdf-source-highlight"));
+    let highlightedSpans: HTMLElement[] = [];
+    let observer: MutationObserver | null = null;
+    let waitTimeoutId: number | null = null;
+    let displayTimeoutId: number | null = null;
+
+    const clearHighlight = () => {
+      highlightedSpans.forEach((span) => span.classList.remove("pdf-source-highlight"));
+      wrapper.classList.remove("pdf-source-page-target");
+    };
+
+    const scheduleClear = () => {
+      displayTimeoutId = window.setTimeout(() => {
+        clearHighlight();
+        setSourceHighlight((current) => current?.key === sourceHighlight.key ? null : current);
+      }, HIGHLIGHT_DISPLAY_MS);
+    };
+
+    // Returns true once the text layer has real content to judge — either a
+    // match was applied, or a genuine no-match fallback was applied. Returns
+    // false only when the text layer is still empty, meaning the caller
+    // should keep waiting rather than treat "no spans yet" as "no match".
+    const attemptMatch = (): boolean => {
+      const spans = Array.from(wrapper.querySelectorAll<HTMLElement>(".textLayer span"));
+      if (spans.length === 0) return false;
+      const matchingSpanIndexes = findExcerptSpanIndexes(
+        spans.map((span) => span.textContent ?? ""),
+        sourceHighlight.excerpt,
+      );
+      highlightedSpans = matchingSpanIndexes
+        .map((spanIndex) => spans[spanIndex])
+        .filter((span): span is HTMLElement => Boolean(span));
+
+      if (highlightedSpans.length > 0) {
+        highlightedSpans.forEach((span) => span.classList.add("pdf-source-highlight"));
+      } else {
+        wrapper.classList.add("pdf-source-page-target");
+      }
+      return true;
+    };
+
+    if (attemptMatch()) {
+      scheduleClear();
     } else {
-      wrapper.classList.add("pdf-source-page-target");
+      observer = new MutationObserver(() => {
+        if (attemptMatch()) {
+          observer?.disconnect();
+          observer = null;
+          if (waitTimeoutId !== null) {
+            window.clearTimeout(waitTimeoutId);
+            waitTimeoutId = null;
+          }
+          scheduleClear();
+        }
+      });
+      observer.observe(wrapper, { childList: true, subtree: true });
+      waitTimeoutId = window.setTimeout(() => {
+        observer?.disconnect();
+        observer = null;
+        // The text layer never populated in time — fall back to page-only
+        // rather than silently doing nothing.
+        wrapper.classList.add("pdf-source-page-target");
+        scheduleClear();
+      }, TEXT_LAYER_WAIT_MS);
     }
 
-    const clearTimeout = window.setTimeout(() => {
-      highlightedSpans.forEach((span) => span.classList.remove("pdf-source-highlight"));
-      wrapper.classList.remove("pdf-source-page-target");
-      setSourceHighlight((current) => current?.key === sourceHighlight.key ? null : current);
-    }, HIGHLIGHT_DISPLAY_MS);
-
     return () => {
-      window.clearTimeout(clearTimeout);
-      highlightedSpans.forEach((span) => span.classList.remove("pdf-source-highlight"));
-      wrapper.classList.remove("pdf-source-page-target");
+      observer?.disconnect();
+      if (waitTimeoutId !== null) window.clearTimeout(waitTimeoutId);
+      if (displayTimeoutId !== null) window.clearTimeout(displayTimeoutId);
+      clearHighlight();
     };
   }, [file, sourceHighlight, targetReadinessRevision, textRenderOwner]);
 

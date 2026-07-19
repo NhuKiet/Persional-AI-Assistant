@@ -561,3 +561,52 @@ it("does not use stale text readiness while the target page rerenders", () => {
   expect(newSpan).toHaveClass("pdf-source-highlight");
   expect(page).not.toHaveClass("pdf-source-page-target");
 });
+
+it("retries the match once the text layer populates after readiness already fired", async () => {
+  // Real react-pdf can call onRenderTextLayerSuccess before pdf.js has actually
+  // appended the span elements to the DOM (observed in a live browser: the
+  // readiness map recorded the current owner while `.textLayer` still had zero
+  // children). The effect must not treat that transient empty state as "no
+  // match" — it should keep watching until content actually appears.
+  const ref = createRef<PdfViewerHandle>();
+  const { container } = render(<PdfViewer ref={ref} file="/doc.pdf" />);
+  loadDocument({ numPages: 1, getPage: vi.fn() as never });
+  const page = container.querySelector<HTMLElement>(".pdf-page-wrap")!;
+
+  markTextLayerReady(); // readiness fires while the text layer is still empty
+  act(() => ref.current?.highlightExcerpt(1, "embeddings"));
+
+  expect(page).not.toHaveClass("pdf-source-page-target");
+
+  const textLayer = document.createElement("div");
+  textLayer.className = "textLayer";
+  const span = document.createElement("span");
+  span.textContent = "Alpha Embeddings";
+  textLayer.appendChild(span);
+  act(() => {
+    page.appendChild(textLayer); // pdf.js finishes populating the DOM moments later
+  });
+
+  await waitFor(() => expect(span).toHaveClass("pdf-source-highlight"));
+  expect(page).not.toHaveClass("pdf-source-page-target");
+});
+
+it("falls back to the page target if the text layer never populates", async () => {
+  vi.useFakeTimers();
+  const ref = createRef<PdfViewerHandle>();
+  const { container, unmount } = render(<PdfViewer ref={ref} file="/doc.pdf" />);
+  loadDocument({ numPages: 1, getPage: vi.fn() as never });
+  const page = container.querySelector<HTMLElement>(".pdf-page-wrap")!;
+
+  markTextLayerReady(); // readiness fires while the text layer is still empty
+  act(() => ref.current?.highlightExcerpt(1, "embeddings"));
+  expect(page).not.toHaveClass("pdf-source-page-target");
+
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(2000);
+  });
+
+  expect(page).toHaveClass("pdf-source-page-target");
+  unmount();
+  vi.useRealTimers();
+});
