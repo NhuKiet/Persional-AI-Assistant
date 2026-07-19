@@ -39,12 +39,9 @@ function resolveScrollHost(viewer: HTMLElement): HTMLElement {
   let candidate: HTMLElement | null = viewer;
   while (candidate) {
     const style = window.getComputedStyle(candidate);
-    const permitsScrolling = /(auto|scroll|overlay)/.test(
-      `${style.overflow} ${style.overflowX} ${style.overflowY}`,
-    );
-    const hasScrollableContent = candidate.scrollHeight > candidate.clientHeight
-      || candidate.scrollWidth > candidate.clientWidth;
-    if (permitsScrolling && hasScrollableContent) return candidate;
+    const verticalOverflow = style.overflowY || style.overflow;
+    const permitsVerticalScrolling = /^(auto|scroll|overlay)$/.test(verticalOverflow);
+    if (permitsVerticalScrolling) return candidate;
     candidate = candidate.parentElement;
   }
   return viewer;

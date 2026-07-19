@@ -302,7 +302,7 @@ it("resets a document error when switching to a new file", () => {
   expect(lastProps(vi.mocked(Document).mock.calls)?.file).toBe("/new.pdf");
 });
 
-it("measures page geometry against the nearest production scroll ancestor", () => {
+it("resolves the production scroll ancestor before page content overflows", () => {
   let observerCallback: IntersectionObserverCallback | undefined;
   const disconnect = vi.fn();
   class IntersectionObserverMock {
@@ -331,9 +331,14 @@ it("measures page geometry against the nearest production scroll ancestor", () =
   );
   const viewer = container.querySelector<HTMLElement>(".pdf-viewer")!;
   const scrollHost = container.querySelector<HTMLElement>("[data-testid='scroll-host']")!;
+  let scrollHeight = 100;
   Object.defineProperty(scrollHost, "clientHeight", { configurable: true, value: 100 });
-  Object.defineProperty(scrollHost, "scrollHeight", { configurable: true, value: 200 });
+  Object.defineProperty(scrollHost, "scrollHeight", {
+    configurable: true,
+    get: () => scrollHeight,
+  });
   loadDocument({ numPages: 2, getPage: vi.fn() as never });
+  scrollHeight = 200;
   const pages = container.querySelectorAll<HTMLElement>(".pdf-page-wrap");
   const rect = (top: number, bottom: number): DOMRect => ({
     top, bottom, left: 0, right: 100, width: 100, height: bottom - top,
