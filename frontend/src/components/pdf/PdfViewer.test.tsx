@@ -186,6 +186,30 @@ it("invalidates pending search indexing when the file changes", async () => {
   expect(onSearchIndexReady).not.toHaveBeenCalled();
 });
 
+it("rejects a pending index when its committed load owner becomes stale", async () => {
+  const pendingPage = deferred<{ getTextContent(): Promise<{ items: { str: string }[] }> }>();
+  const oldIndexReady = vi.fn();
+  const newIndexReady = vi.fn();
+  const { rerender } = render(
+    <PdfViewer file="/doc.pdf" onSearchIndexReady={oldIndexReady} />,
+  );
+  loadDocument({
+    numPages: 1,
+    getPage: vi.fn(() => pendingPage.promise),
+  } as never);
+
+  rerender(<PdfViewer file="/doc.pdf" onSearchIndexReady={newIndexReady} />);
+  await act(async () => {
+    pendingPage.resolve({
+      getTextContent: async () => ({ items: [{ str: "Stale owner" }] }),
+    });
+    await Promise.resolve();
+  });
+
+  expect(oldIndexReady).not.toHaveBeenCalled();
+  expect(newIndexReady).not.toHaveBeenCalled();
+});
+
 it("ignores an old document load callback after the file changes", async () => {
   const onDocumentReady = vi.fn();
   const onSearchIndexReady = vi.fn();
@@ -250,7 +274,35 @@ it("reports document rendering failures without replacing the viewer parent", ()
   expect(getByText(/Vẫn có thể chat bằng text/)).toBeInTheDocument();
 });
 
-it("measures exact page geometry when visible ratios swap within one threshold bucket", () => {
+it("ignores an old document error callback after the file changes", () => {
+  const onDocumentError = vi.fn();
+  const { queryByText, rerender } = render(
+    <PdfViewer file="/old.pdf" onDocumentError={onDocumentError} />,
+  );
+  const oldDocumentProps = lastProps(vi.mocked(Document).mock.calls);
+  rerender(<PdfViewer file="/new.pdf" onDocumentError={onDocumentError} />);
+
+  act(() => oldDocumentProps?.onLoadError?.(new Error("old worker failed")));
+
+  expect(onDocumentError).not.toHaveBeenCalled();
+  expect(queryByText(/Không render được PDF/)).not.toBeInTheDocument();
+});
+
+it("resets a document error when switching to a new file", () => {
+  const { getByText, queryByText, rerender } = render(
+    <PdfViewer file="/old.pdf" />,
+  );
+  const oldDocumentProps = lastProps(vi.mocked(Document).mock.calls);
+  act(() => oldDocumentProps?.onLoadError?.(new Error("worker failed")));
+  expect(getByText(/Không render được PDF/)).toBeInTheDocument();
+
+  rerender(<PdfViewer file="/new.pdf" />);
+
+  expect(queryByText(/Không render được PDF/)).not.toBeInTheDocument();
+  expect(lastProps(vi.mocked(Document).mock.calls)?.file).toBe("/new.pdf");
+});
+
+it("measures page geometry against the nearest production scroll ancestor", () => {
   let observerCallback: IntersectionObserverCallback | undefined;
   const disconnect = vi.fn();
   class IntersectionObserverMock {
@@ -273,16 +325,22 @@ it("measures exact page geometry when visible ratios swap within one threshold b
   vi.stubGlobal("cancelAnimationFrame", cancelAnimationFrame);
   const onCurrentPageChange = vi.fn();
   const { container, unmount } = render(
-    <PdfViewer file="/doc.pdf" onCurrentPageChange={onCurrentPageChange} />,
+    <div data-testid="scroll-host" style={{ overflowY: "auto" }}>
+      <PdfViewer file="/doc.pdf" onCurrentPageChange={onCurrentPageChange} />
+    </div>,
   );
+  const viewer = container.querySelector<HTMLElement>(".pdf-viewer")!;
+  const scrollHost = container.querySelector<HTMLElement>("[data-testid='scroll-host']")!;
+  Object.defineProperty(scrollHost, "clientHeight", { configurable: true, value: 100 });
+  Object.defineProperty(scrollHost, "scrollHeight", { configurable: true, value: 200 });
   loadDocument({ numPages: 2, getPage: vi.fn() as never });
   const pages = container.querySelectorAll<HTMLElement>(".pdf-page-wrap");
-  const host = container.querySelector<HTMLElement>(".pdf-viewer")!;
   const rect = (top: number, bottom: number): DOMRect => ({
     top, bottom, left: 0, right: 100, width: 100, height: bottom - top,
     x: 0, y: top, toJSON: () => ({}),
   });
-  vi.spyOn(host, "getBoundingClientRect").mockReturnValue(rect(0, 100));
+  vi.spyOn(viewer, "getBoundingClientRect").mockReturnValue(rect(0, 200));
+  vi.spyOn(scrollHost, "getBoundingClientRect").mockReturnValue(rect(0, 100));
   const pageOneRect = vi.spyOn(pages[0], "getBoundingClientRect")
     .mockReturnValue(rect(-44, 56));
   const pageTwoRect = vi.spyOn(pages[1], "getBoundingClientRect")
@@ -304,12 +362,12 @@ it("measures exact page geometry when visible ratios swap within one threshold b
   pageOneRect.mockReturnValue(rect(-46, 54));
   pageTwoRect.mockReturnValue(rect(44, 144));
   act(() => {
-    host.dispatchEvent(new Event("scroll"));
+    scrollHost.dispatchEvent(new Event("scroll"));
   });
   flushFrame();
 
   expect(onCurrentPageChange.mock.calls).toEqual([[1], [2]]);
-  act(() => host.dispatchEvent(new Event("scroll")));
+  act(() => scrollHost.dispatchEvent(new Event("scroll")));
   unmount();
   expect(disconnect).toHaveBeenCalledOnce();
   expect(cancelAnimationFrame).toHaveBeenCalled();
@@ -407,4 +465,94 @@ it("uses page fallback only after a ready text layer has no match", () => {
   expect(page).not.toHaveClass("pdf-source-page-target");
   unmount();
   vi.useRealTimers();
+});
+
+it("does not restart a page highlight when an unrelated page becomes ready", () => {
+  vi.useFakeTimers();
+  const ref = createRef<PdfViewerHandle>();
+  const { container, unmount } = render(<PdfViewer ref={ref} file="/doc.pdf" />);
+  loadDocument({ numPages: 2, getPage: vi.fn() as never });
+  const firstPage = container.querySelector<HTMLElement>("[data-page-number='1']")!;
+  const textLayer = document.createElement("div");
+  textLayer.className = "textLayer";
+  const span = document.createElement("span");
+  span.textContent = "Alpha Embeddings";
+  textLayer.appendChild(span);
+  firstPage.appendChild(textLayer);
+  markTextLayerReady(1);
+  act(() => ref.current?.highlightExcerpt(1, "embeddings"));
+
+  act(() => vi.advanceTimersByTime(3000));
+  markTextLayerReady(2);
+  act(() => vi.advanceTimersByTime(1000));
+
+  expect(span).not.toHaveClass("pdf-source-highlight");
+  unmount();
+  vi.useRealTimers();
+});
+
+it("reapplies an active highlight only after the zoomed text layer is ready", () => {
+  const ref = createRef<PdfViewerHandle>();
+  const { container } = render(<PdfViewer ref={ref} file="/doc.pdf" />);
+  loadDocument({ numPages: 1, getPage: vi.fn() as never });
+  const page = container.querySelector<HTMLElement>(".pdf-page-wrap")!;
+  const oldTextLayer = document.createElement("div");
+  oldTextLayer.className = "textLayer";
+  const oldSpan = document.createElement("span");
+  oldSpan.textContent = "Alpha Embeddings";
+  oldTextLayer.appendChild(oldSpan);
+  page.appendChild(oldTextLayer);
+  markTextLayerReady();
+  act(() => ref.current?.highlightExcerpt(1, "embeddings"));
+  expect(oldSpan).toHaveClass("pdf-source-highlight");
+
+  act(() => ref.current?.zoomIn());
+
+  expect(oldSpan).not.toHaveClass("pdf-source-highlight");
+  oldTextLayer.remove();
+  const newTextLayer = document.createElement("div");
+  newTextLayer.className = "textLayer";
+  const newSpan = document.createElement("span");
+  newSpan.textContent = "Alpha Embeddings";
+  newTextLayer.appendChild(newSpan);
+  page.appendChild(newTextLayer);
+  expect(newSpan).not.toHaveClass("pdf-source-highlight");
+
+  markTextLayerReady();
+
+  expect(newSpan).toHaveClass("pdf-source-highlight");
+});
+
+it("does not use stale text readiness while the target page rerenders", () => {
+  const ref = createRef<PdfViewerHandle>();
+  const { container } = render(<PdfViewer ref={ref} file="/doc.pdf" />);
+  loadDocument({ numPages: 1, getPage: vi.fn() as never });
+  const page = container.querySelector<HTMLElement>(".pdf-page-wrap")!;
+  const oldTextLayer = document.createElement("div");
+  oldTextLayer.className = "textLayer";
+  oldTextLayer.appendChild(document.createElement("span")).textContent = "Alpha";
+  page.appendChild(oldTextLayer);
+  markTextLayerReady();
+  const staleTextLayerReady = [...vi.mocked(Page).mock.calls]
+    .reverse()
+    .find(([props]) => props.pageNumber === 1)?.[0].onRenderTextLayerSuccess;
+
+  act(() => ref.current?.zoomIn());
+  oldTextLayer.remove();
+  act(() => staleTextLayerReady?.());
+  act(() => ref.current?.highlightExcerpt(1, "embeddings"));
+
+  expect(page).not.toHaveClass("pdf-source-page-target");
+  const newTextLayer = document.createElement("div");
+  newTextLayer.className = "textLayer";
+  const newSpan = document.createElement("span");
+  newSpan.textContent = "Alpha Embeddings";
+  newTextLayer.appendChild(newSpan);
+  page.appendChild(newTextLayer);
+  expect(newSpan).not.toHaveClass("pdf-source-highlight");
+
+  markTextLayerReady();
+
+  expect(newSpan).toHaveClass("pdf-source-highlight");
+  expect(page).not.toHaveClass("pdf-source-page-target");
 });

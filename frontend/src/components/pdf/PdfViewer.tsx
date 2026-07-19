@@ -6,6 +6,7 @@ import {
   useImperativeHandle,
   useRef,
   useLayoutEffect,
+  useMemo,
   type RefObject,
 } from "react";
 import type { PDFDocumentProxy } from "pdfjs-dist";
@@ -33,6 +34,21 @@ const MIN_SCALE = 0.5;
 const MAX_SCALE = 2.5;
 const SCALE_STEP = 0.15;
 const HIGHLIGHT_DISPLAY_MS = 4000;
+
+function resolveScrollHost(viewer: HTMLElement): HTMLElement {
+  let candidate: HTMLElement | null = viewer;
+  while (candidate) {
+    const style = window.getComputedStyle(candidate);
+    const permitsScrolling = /(auto|scroll|overlay)/.test(
+      `${style.overflow} ${style.overflowX} ${style.overflowY}`,
+    );
+    const hasScrollableContent = candidate.scrollHeight > candidate.clientHeight
+      || candidate.scrollWidth > candidate.clientWidth;
+    if (permitsScrolling && hasScrollableContent) return candidate;
+    candidate = candidate.parentElement;
+  }
+  return viewer;
+}
 
 /** Bề rộng khả dụng của khung chứa; cập nhật khi kéo thanh chia hoặc resize. */
 function useFitWidth(hostRef: RefObject<HTMLDivElement | null>): number {
@@ -92,7 +108,8 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function PdfViewer
   const [manualScale, setManualScale] = useState(1);
   const [viewMode, setViewMode] = useState<"fit-width" | "manual">("fit-width");
   const [sourceHighlight, setSourceHighlight] = useState<SourceHighlight | null>(null);
-  const [readyTextLayers, setReadyTextLayers] = useState<Set<number>>(() => new Set());
+  const [targetReadinessRevision, setTargetReadinessRevision] = useState(0);
+  const [documentRenderRevision, setDocumentRenderRevision] = useState(0);
   const hostRef                 = useRef<HTMLDivElement>(null);
   const currentPageRef          = useRef<number | null>(null);
   const searchGenerationRef     = useRef(0);
@@ -100,16 +117,28 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function PdfViewer
   // Vừa khít bề rộng pane thay vì scale cố định — pane co giãn được nên
   // scale cứng làm trang tràn ngang.
   const fitWidth                = useFitWidth(hostRef);
+  const textRenderOwner = useMemo(() => Symbol("pdf-text-render"), [
+    documentRenderRevision,
+    file,
+    fitWidth,
+    manualScale,
+    viewMode,
+  ]);
+  const activeTextRenderOwnerRef = useRef<symbol | null>(null);
+  const readyTextLayerOwnersRef = useRef<Map<number, symbol>>(new Map());
 
   const onLoad = useCallback(function handleDocumentLoad(pdf: PDFDocumentProxy) {
     if (activeDocumentLoadRef.current !== handleDocumentLoad) return;
-    setReadyTextLayers(new Set());
+    setDocumentRenderRevision((revision) => revision + 1);
     setNumPages(pdf.numPages);
     onDocumentReady?.(pdf, pdf.numPages);
     const generation = ++searchGenerationRef.current;
     if (onSearchIndexReady) {
       void buildPdfSearchPages(pdf).then((pages) => {
-        if (searchGenerationRef.current === generation) {
+        if (
+          activeDocumentLoadRef.current === handleDocumentLoad
+          && searchGenerationRef.current === generation
+        ) {
           onSearchIndexReady(pages);
         }
       }).catch(() => {
@@ -127,26 +156,46 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function PdfViewer
     };
   }, [onLoad]);
 
+  useLayoutEffect(() => {
+    activeTextRenderOwnerRef.current = textRenderOwner;
+    readyTextLayerOwnersRef.current.clear();
+    setTargetReadinessRevision((revision) => revision + 1);
+    return () => {
+      if (activeTextRenderOwnerRef.current === textRenderOwner) {
+        activeTextRenderOwnerRef.current = null;
+      }
+    };
+  }, [textRenderOwner]);
+
   useEffect(() => () => {
     searchGenerationRef.current += 1;
   }, [file]);
 
   useEffect(() => {
+    setError(null);
     setSourceHighlight(null);
-    setReadyTextLayers(new Set());
   }, [file]);
 
-  const handleTextLayerReady = useCallback((loadOwner: (pdf: PDFDocumentProxy) => void, page: number) => {
-    if (activeDocumentLoadRef.current !== loadOwner) return;
-    setReadyTextLayers((readyPages) => {
-      if (readyPages.has(page)) return readyPages;
-      const nextReadyPages = new Set(readyPages);
-      nextReadyPages.add(page);
-      return nextReadyPages;
-    });
-  }, []);
+  const handleTextLayerReady = useCallback((
+    loadOwner: (pdf: PDFDocumentProxy) => void,
+    renderOwner: symbol,
+    page: number,
+  ) => {
+    if (
+      activeDocumentLoadRef.current !== loadOwner
+      || activeTextRenderOwnerRef.current !== renderOwner
+    ) return;
+    readyTextLayerOwnersRef.current.set(page, renderOwner);
+    if (sourceHighlight?.page === page) {
+      setTargetReadinessRevision((revision) => revision + 1);
+    }
+  }, [sourceHighlight?.page]);
 
-  const handleDocumentError = useCallback((loadError: Error) => {
+  const handleDocumentError = useCallback((
+    loadOwner: (pdf: PDFDocumentProxy) => void,
+    loadError: Error,
+  ) => {
+    if (activeDocumentLoadRef.current !== loadOwner) return;
     setError(loadError);
     onDocumentError?.(loadError);
   }, [onDocumentError]);
@@ -155,12 +204,13 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function PdfViewer
     const host = hostRef.current;
     if (!host || numPages < 1 || !onCurrentPageChange) return;
 
+    const scrollHost = resolveScrollHost(host);
     const pages = Array.from(host.querySelectorAll<HTMLElement>(".pdf-page-wrap"));
     let frameId: number | null = null;
 
     const measureCurrentPage = () => {
       frameId = null;
-      const hostRect = host.getBoundingClientRect();
+      const hostRect = scrollHost.getBoundingClientRect();
       const mostVisible = pages.reduce<{ page: number; ratio: number } | null>((best, page) => {
         const pageRect = page.getBoundingClientRect();
         const visibleWidth = Math.max(
@@ -189,19 +239,19 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function PdfViewer
       frameId = requestAnimationFrame(measureCurrentPage);
     };
 
-    const observer = new IntersectionObserver(scheduleMeasurement);
+    const observer = new IntersectionObserver(scheduleMeasurement, { root: scrollHost });
     const resizeObserver = new ResizeObserver(scheduleMeasurement);
     pages.forEach((page) => {
       observer.observe(page);
       resizeObserver.observe(page);
     });
-    resizeObserver.observe(host);
-    host.addEventListener("scroll", scheduleMeasurement, { passive: true });
+    resizeObserver.observe(scrollHost);
+    scrollHost.addEventListener("scroll", scheduleMeasurement, { passive: true });
     window.addEventListener("resize", scheduleMeasurement);
     scheduleMeasurement();
 
     return () => {
-      host.removeEventListener("scroll", scheduleMeasurement);
+      scrollHost.removeEventListener("scroll", scheduleMeasurement);
       window.removeEventListener("resize", scheduleMeasurement);
       observer.disconnect();
       resizeObserver.disconnect();
@@ -214,7 +264,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function PdfViewer
 
   useEffect(() => {
     if (!sourceHighlight || sourceHighlight.file !== file) return;
-    if (!readyTextLayers.has(sourceHighlight.page)) return;
+    if (readyTextLayerOwnersRef.current.get(sourceHighlight.page) !== textRenderOwner) return;
 
     const wrapper = hostRef.current?.querySelector<HTMLElement>(
       `[data-page-number="${sourceHighlight.page}"]`,
@@ -238,6 +288,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function PdfViewer
     const clearTimeout = window.setTimeout(() => {
       highlightedSpans.forEach((span) => span.classList.remove("pdf-source-highlight"));
       wrapper.classList.remove("pdf-source-page-target");
+      setSourceHighlight((current) => current?.key === sourceHighlight.key ? null : current);
     }, HIGHLIGHT_DISPLAY_MS);
 
     return () => {
@@ -245,7 +296,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function PdfViewer
       highlightedSpans.forEach((span) => span.classList.remove("pdf-source-highlight"));
       wrapper.classList.remove("pdf-source-page-target");
     };
-  }, [file, readyTextLayers, sourceHighlight]);
+  }, [file, sourceHighlight, targetReadinessRevision, textRenderOwner]);
 
   useImperativeHandle(ref, () => ({
     scrollToPage(page) {
@@ -291,7 +342,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function PdfViewer
       <Document
         file={file}
         onLoadSuccess={onLoad}
-        onLoadError={handleDocumentError}
+        onLoadError={(loadError) => handleDocumentError(onLoad, loadError)}
         loading="Đang tải PDF…"
       >
         {Array.from({ length: numPages }, (_, i) => (
@@ -305,7 +356,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function PdfViewer
               renderTextLayer
               renderAnnotationLayer={false}
               onRenderSuccess={() => handleRender(i + 1)}
-              onRenderTextLayerSuccess={() => handleTextLayerReady(onLoad, i + 1)}
+              onRenderTextLayerSuccess={() => handleTextLayerReady(onLoad, textRenderOwner, i + 1)}
             />
           </div>
         ))}
