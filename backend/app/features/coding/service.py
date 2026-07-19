@@ -1,4 +1,5 @@
 import asyncio
+import ast
 import json
 import logging
 import re
@@ -8,13 +9,18 @@ import threading
 from collections.abc import AsyncIterator, Callable, Generator, Iterator
 from pathlib import Path
 
+from fastapi import HTTPException
+
 from backend.app.core.config import settings
 from backend.app.core.llm import invoke_chat, stream_chat
-from backend.app.features.coding.artifacts import ARTIFACT_EXTS, ArtifactService
+from backend.app.features.coding.artifacts import ARTIFACT_EXTS, ArtifactService, emit_path_rejected, validate_relative_path
 from backend.app.features.coding.execution import CodeExecutor, SANDBOX_DIR, detect_missing_packages, install_packages
 from backend.app.features.coding.prompts import CHAT_SYSTEM, CODE_PROMPT, DEBUG_PROMPT, PLAN_PROMPT, REVIEW_PROMPT, SYSTEM_PROMPT, TEST_PROMPT
 from backend.app.features.coding.schemas import CodingRequest
 from backend.app.features.coding.uploads import session_sandbox
+from backend.app.shared.session_locks import KeyedLockRegistry, SessionBusyError
+
+__all__ = ["CodingAgent", "CodingConversationManager", "CodingService", "SessionBusyError"]
 
 
 logger = logging.getLogger(__name__)
@@ -43,9 +49,16 @@ class _CodingSessionStore:
                 """CREATE TABLE IF NOT EXISTS sessions (
                     key TEXT PRIMARY KEY,
                     messages TEXT NOT NULL DEFAULT '[]',
-                    updated_at REAL NOT NULL
+                    updated_at REAL NOT NULL,
+                    revision INTEGER NOT NULL DEFAULT 0
                 )"""
             )
+            try:
+                connection.execute(
+                    "ALTER TABLE sessions ADD COLUMN revision INTEGER NOT NULL DEFAULT 0"
+                )
+            except sqlite3.OperationalError:
+                pass  # column already exists (fresh table already has it above)
             connection.commit()
 
     def _connect(self) -> sqlite3.Connection:
@@ -54,20 +67,31 @@ class _CodingSessionStore:
         return connection
 
     def load(self, key: str) -> list[dict]:
+        return self.load_with_revision(key)[0]
+
+    def load_with_revision(self, key: str) -> tuple[list[dict], int]:
         with self._lock, self._connect() as connection:
-            row = connection.execute("SELECT messages FROM sessions WHERE key = ?", (key,)).fetchone()
+            row = connection.execute(
+                "SELECT messages, revision FROM sessions WHERE key = ?", (key,)
+            ).fetchone()
+            if row is None:
+                return [], 0
             try:
-                return [] if row is None else json.loads(row["messages"])
+                messages = json.loads(row["messages"])
             except json.JSONDecodeError:
-                return []
+                messages = []
+            return messages, row["revision"]
 
     def save(self, key: str, messages: list[dict]) -> None:
         import time
 
         with self._lock, self._connect() as connection:
             connection.execute(
-                """INSERT INTO sessions (key, messages, updated_at) VALUES (?, ?, ?)
-                ON CONFLICT(key) DO UPDATE SET messages = excluded.messages, updated_at = excluded.updated_at""",
+                """INSERT INTO sessions (key, messages, updated_at, revision) VALUES (?, ?, ?, 1)
+                ON CONFLICT(key) DO UPDATE SET
+                    messages = excluded.messages,
+                    updated_at = excluded.updated_at,
+                    revision = sessions.revision + 1""",
                 (key, json.dumps(messages, ensure_ascii=False), time.time()),
             )
             connection.commit()
@@ -90,6 +114,9 @@ class CodingConversationManager:
 
     def get_history(self, session_id: str) -> list[dict]:
         return _sessions.load(self._key(session_id))
+
+    def get_history_with_revision(self, session_id: str) -> tuple[list[dict], int]:
+        return _sessions.load_with_revision(self._key(session_id))
 
     def add_turn(self, session_id: str, role: str, content: str) -> None:
         history = self.get_history(session_id)
@@ -123,13 +150,57 @@ def _extract_code(text: str) -> str | None:
     return files[0]["code"] if files else None
 
 
+def _split_preamble_safe_prefix(code: str) -> tuple[str, str]:
+    """Split ``code`` into ``(prefix, rest)`` where ``prefix`` is the leading
+    module docstring (if any) followed by any consecutive
+    ``from __future__ import ...`` statements — both of which Python
+    requires to precede every other statement in the file — and ``rest`` is
+    everything after. Preamble injection must land inside ``rest``, never
+    ahead of ``prefix``, or a `from __future__ import` after other code
+    raises ``SyntaxError: from __future__ imports must occur at the
+    beginning of the file``.
+
+    Falls back to ``("", code)`` when the code doesn't parse — same
+    behaviour as before this split existed, since a malformed snippet was
+    already going to fail execution and go through the debug loop anyway.
+    """
+    try:
+        tree = ast.parse(code)
+    except SyntaxError:
+        return "", code
+
+    body = tree.body
+    idx = 0
+    cut_line = 0
+
+    if (
+        body
+        and isinstance(body[0], ast.Expr)
+        and isinstance(getattr(body[0], "value", None), ast.Constant)
+        and isinstance(body[0].value.value, str)
+    ):
+        cut_line = body[0].end_lineno
+        idx = 1
+
+    while idx < len(body) and isinstance(body[idx], ast.ImportFrom) and body[idx].module == "__future__":
+        cut_line = body[idx].end_lineno
+        idx += 1
+
+    if cut_line == 0:
+        return "", code
+
+    lines = code.splitlines(keepends=True)
+    return "".join(lines[:cut_line]), "".join(lines[cut_line:])
+
+
 def _inject_preamble(code: str, sandbox_path: str) -> str:
-    uses_mpl = any(keyword in code for keyword in ("matplotlib", "pyplot", "plt.", "seaborn", "sns."))
+    prefix, body = _split_preamble_safe_prefix(code)
+    uses_mpl = any(keyword in body for keyword in ("matplotlib", "pyplot", "plt.", "seaborn", "sns."))
     chdir_line = f"import os; os.chdir(r'{sandbox_path}')\n"
     if not uses_mpl:
-        return chdir_line + code
+        return prefix + chdir_line + body
 
-    code = re.sub(r'matplotlib\.use\s*\(["\'].*?["\']\)\s*\n?', "", code)
+    body = re.sub(r'matplotlib\.use\s*\(["\'].*?["\']\)\s*\n?', "", body)
     counter = [0]
 
     def replace_show(match):
@@ -138,12 +209,12 @@ def _inject_preamble(code: str, sandbox_path: str) -> str:
         indent = match.group(1)
         return f"{indent}plt.savefig('{filename}', dpi=150, bbox_inches='tight')\n{indent}plt.close()\n{indent}print('Plot saved: {filename}')"
 
-    code = re.sub(r"^(\s*)plt\.show\(\).*$", replace_show, code, flags=re.MULTILINE)
-    code = re.sub(r"plt\.show\([^)]*\)", "plt.savefig('plot.png', dpi=150, bbox_inches='tight')", code)
-    code = re.sub(r"^import matplotlib\.pyplot as plt\s*\n", "", code, flags=re.MULTILINE)
-    code = re.sub(r"^from matplotlib import pyplot as plt\s*\n", "", code, flags=re.MULTILINE)
-    code = re.sub(r"^import matplotlib\s*\n", "", code, flags=re.MULTILINE)
-    return chdir_line + "import matplotlib\nmatplotlib.use('Agg')\nimport matplotlib.pyplot as plt\n" + code
+    body = re.sub(r"^(\s*)plt\.show\(\).*$", replace_show, body, flags=re.MULTILINE)
+    body = re.sub(r"plt\.show\([^)]*\)", "plt.savefig('plot.png', dpi=150, bbox_inches='tight')", body)
+    body = re.sub(r"^import matplotlib\.pyplot as plt\s*\n", "", body, flags=re.MULTILINE)
+    body = re.sub(r"^from matplotlib import pyplot as plt\s*\n", "", body, flags=re.MULTILINE)
+    body = re.sub(r"^import matplotlib\s*\n", "", body, flags=re.MULTILINE)
+    return prefix + chdir_line + "import matplotlib\nmatplotlib.use('Agg')\nimport matplotlib.pyplot as plt\n" + body
 
 
 def _session_sandbox(session_id: str) -> Path:
@@ -204,15 +275,31 @@ def _stream_ollama(prompt: str, system: str = SYSTEM_PROMPT, provider: str | Non
     yield from stream_chat([{"role": "user", "content": prompt}], system=system, provider=provider, model=model)
 
 
+_CANCELLED_EVENT = {"type": "cancelled", "message": "Đã hủy theo yêu cầu."}
+
+
 class CodingAgent:
     def __init__(self, executor: CodeExecutor | None = None):
         self.executor = executor or CodeExecutor()
+
+    @staticmethod
+    def _cancelled(cancel_event: "threading.Event | None") -> bool:
+        return cancel_event is not None and cancel_event.is_set()
 
     def chat(self, message: str, history: list[dict], provider: str | None = None, model: str | None = None) -> Iterator[str]:
         prompt = f"Conversation history:\n{_history_str(history)}\n\nUser: {message}"
         yield from _stream_ollama(prompt, system=CHAT_SYSTEM, provider=provider, model=model)
 
-    def run(self, request: str, history: list[dict], session_id: str, uploaded_files: list[dict] | None = None, provider: str | None = None, model: str | None = None) -> Generator[dict, None, None]:
+    def run(
+        self,
+        request: str,
+        history: list[dict],
+        session_id: str,
+        uploaded_files: list[dict] | None = None,
+        provider: str | None = None,
+        model: str | None = None,
+        cancel_event: "threading.Event | None" = None,
+    ) -> Generator[dict, None, None]:
         history_str = _history_str(history)
         file_context = _build_file_context(uploaded_files or [])
         plot_hint = _build_plot_hint(request)
@@ -229,6 +316,9 @@ class CodingAgent:
         plan_tokens: list[str] = []
         try:
             for token in _stream_ollama(PLAN_PROMPT.format(request=request, file_context=file_context, history=history_str), system="You are a senior Python developer. Return only valid JSON arrays.", provider=provider, model=model):
+                if self._cancelled(cancel_event):
+                    yield _CANCELLED_EVENT
+                    return
                 plan_tokens.append(token)
                 yield {"type": "plan_thinking", "content": token}
             plan = self._parse_plan("".join(plan_tokens))
@@ -241,11 +331,18 @@ class CodingAgent:
             ]
         yield {"type": "plan", "steps": plan}
 
+        if self._cancelled(cancel_event):
+            yield _CANCELLED_EVENT
+            return
+
         yield {"type": "generating", "message": "Đang viết code..."}
         plan_text = "\n".join(f"{step['step']}. {step['title']}: {step['description']}" for step in plan)
         raw_tokens: list[str] = []
         try:
             for token in _stream_ollama(CODE_PROMPT.format(request=request, file_context=file_context, plan=plan_text, history=history_str, plot_hint=plot_hint), provider=provider, model=model):
+                if self._cancelled(cancel_event):
+                    yield _CANCELLED_EVENT
+                    return
                 raw_tokens.append(token)
                 yield {"type": "code_token", "content": token}
         except RuntimeError as exc:
@@ -259,25 +356,61 @@ class CodingAgent:
 
         processed: list[dict] = []
         for index, file_block in enumerate(file_blocks):
-            code = _inject_preamble(file_block["code"], sandbox_str)
             filename = file_block["filename"]
-            (sandbox / filename).write_text(code, encoding="utf-8")
+            try:
+                target = validate_relative_path(filename, sandbox, {".py"})
+            except HTTPException as exc:
+                emit_path_rejected(session_id, str(exc.detail))
+                continue
+            code = _inject_preamble(file_block["code"], sandbox_str)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(code, encoding="utf-8")
             processed.append({"filename": filename, "code": code})
             yield {"type": "code", "language": "python", "filename": filename, "content": code, "is_multifile": len(file_blocks) > 1, "file_index": index, "total_files": len(file_blocks)}
 
-        current_code = processed[0]["code"]
+        if not processed:
+            yield {"type": "error", "message": "LLM không tạo ra file .py hợp lệ trong sandbox. Thử diễn đạt lại."}
+            return
+
+        if len(processed) == 1:
+            entry = processed[0]
+        else:
+            # Multi-file output requires an explicit, declared entry point —
+            # silently running file index 0 previously meant "main.py" (the
+            # file most likely to be the real entry point, by convention)
+            # could go unexecuted while a helper module ran instead.
+            entry = next((f for f in processed if f["filename"].lower() == "main.py"), None)
+            if entry is None:
+                yield {
+                    "type": "done",
+                    "success": False,
+                    "message": "Nhiều file được tạo nhưng không có file main.py làm entry point rõ ràng. Vui lòng mô tả lại yêu cầu và chỉ định file khởi chạy chính (main.py).",
+                    "iterations": 0,
+                    "final_code": "",
+                    "artifacts": [],
+                }
+                return
+
+        current_code = entry["code"]
         iteration = 0
         auto_installed: list[str] = []
         result = None
         while iteration <= MAX_DEBUG_ITER:
+            if self._cancelled(cancel_event):
+                yield _CANCELLED_EVENT
+                return
+
             if iteration == 0:
                 yield {"type": "executing", "message": "Đang chạy code..."}
             else:
                 yield {"type": "debugging", "iteration": iteration, "message": f"Debug lần {iteration}/{MAX_DEBUG_ITER}..."}
 
             snapshot_before = _sandbox_snapshot(sandbox)
-            result = self.executor.run(current_code, sandbox=sandbox)
+            result = self.executor.run(current_code, sandbox=sandbox, session_id=session_id)
             artifacts = _collect_artifacts(snapshot_before, sandbox, session_id)
+            if result.unavailable:
+                yield {"type": "done", "success": False, "message": "Trình thực thi code hiện không khả dụng. Vui lòng thử lại sau.", "iterations": iteration, "final_code": current_code, "artifacts": artifacts}
+                return
             yield {"type": "output", "stdout": result.stdout, "stderr": result.stderr, "exit_code": result.exit_code, "duration": round(result.duration, 2), "timed_out": result.timed_out, "artifacts": artifacts}
             if result.success:
                 break
@@ -313,21 +446,30 @@ class CodingAgent:
 
             current_code = _inject_preamble(fixed_blocks[0]["code"], sandbox_str)
             filename_fix = f"solution_v{iteration + 1}.py"
-            (sandbox / filename_fix).write_text(current_code, encoding="utf-8")
+            try:
+                fix_target = validate_relative_path(filename_fix, sandbox, {".py"})
+            except HTTPException as exc:
+                emit_path_rejected(session_id, str(exc.detail))
+                yield {"type": "done", "success": False, "message": "Không thể ghi file sửa lỗi vào sandbox.", "iterations": iteration, "final_code": current_code, "artifacts": []}
+                return
+            fix_target.write_text(current_code, encoding="utf-8")
             yield {"type": "code", "language": "python", "filename": filename_fix, "content": current_code, "is_fix": True, "iteration": iteration}
 
         all_artifacts = _collect_artifacts(set(), sandbox, session_id)
         test_results = None
         if ENABLE_TESTS and result and result.success:
+            if self._cancelled(cancel_event):
+                yield _CANCELLED_EVENT
+                return
             yield {"type": "testing", "message": "Đang sinh test cases..."}
             try:
                 test_raw = _call_ollama(TEST_PROMPT.format(code=current_code[:4000], stdout=(result.stdout or "")[:500]), provider=provider, model=model)
                 test_code = _extract_code(test_raw)
                 if test_code:
                     test_full = f"import os; os.chdir(r'{sandbox_str}')\nimport pytest, sys\n\n" + test_code + "\n\nif __name__ == '__main__':\n    pytest.main([__file__, '-v', '--tb=short'])\n"
-                    (sandbox / "test_solution.py").write_text(test_full, encoding="utf-8")
+                    validate_relative_path("test_solution.py", sandbox, {".py"}).write_text(test_full, encoding="utf-8")
                     yield {"type": "code", "language": "python", "filename": "test_solution.py", "content": test_full, "is_test": True}
-                    test_result = self.executor.run(test_full, sandbox=sandbox)
+                    test_result = self.executor.run(test_full, sandbox=sandbox, session_id=session_id)
                     test_results = {"stdout": test_result.stdout, "stderr": test_result.stderr, "exit_code": test_result.exit_code, "success": test_result.success}
                     yield {"type": "test_output", **test_results}
             except Exception as exc:
@@ -335,6 +477,9 @@ class CodingAgent:
 
         has_review = False
         if ENABLE_REVIEW and result and result.success:
+            if self._cancelled(cancel_event):
+                yield _CANCELLED_EVENT
+                return
             yield {"type": "reviewing", "message": "Đang review code..."}
             try:
                 review = _call_ollama(REVIEW_PROMPT.format(code=current_code[:4000], stdout=(result.stdout or "")[:500]), provider=provider, model=model)
@@ -356,34 +501,68 @@ class CodingService:
     def __init__(self, agent_factory: Callable[..., CodingAgent] | None = None, conversations: CodingConversationManager | None = None):
         self._agent = (agent_factory or CodingAgent)()
         self._conversations = conversations or CodingConversationManager()
+        # Single-worker only — see backend/app/shared/session_locks.py.
+        self._locks = KeyedLockRegistry()
+
+    def begin_session(self, session_id: str):
+        """Reserve exclusive mutation rights for a session for the lifetime of
+        one stream. Raises SessionBusyError if another stream already holds it."""
+        lock = self._locks.try_acquire(session_id)
+        if lock is None:
+            raise SessionBusyError(session_id)
+        return lock
+
+    def end_session(self, lock) -> None:
+        self._locks.release(lock)
 
     async def stream(self, request: CodingRequest) -> AsyncIterator[dict]:
         loop = asyncio.get_running_loop()
         queue: asyncio.Queue[dict] = asyncio.Queue()
+        cancel_event = threading.Event()
 
         def run_agent() -> None:
             try:
                 history = self._conversations.get_history(request.session_id)
+
+                def _persist(assistant_content: str) -> None:
+                    self._conversations.add_turn(request.session_id, role="user", content=request.message)
+                    self._conversations.add_turn(request.session_id, role="assistant", content=assistant_content)
+
                 if request.chat_only:
+                    response_parts: list[str] = []
                     for token in self._agent.chat(request.message, history, provider=request.provider, model=request.model):
+                        if cancel_event.is_set():
+                            loop.call_soon_threadsafe(queue.put_nowait, {"type": "cancelled", "message": "Đã hủy theo yêu cầu."})
+                            return
+                        response_parts.append(token)
                         loop.call_soon_threadsafe(queue.put_nowait, {"type": "token", "content": token})
+                    _persist("".join(response_parts))
                     loop.call_soon_threadsafe(queue.put_nowait, {"type": "done", "success": True, "message": "", "iterations": 0})
                 else:
-                    for event in self._agent.run(request.message, history, request.session_id, request.uploaded_files, provider=request.provider, model=request.model):
+                    assistant_content = "[agent run]"
+                    for event in self._agent.run(request.message, history, request.session_id, request.uploaded_files, provider=request.provider, model=request.model, cancel_event=cancel_event):
+                        if event.get("type") == "done":
+                            assistant_content = event.get("message") or assistant_content
+                            _persist(assistant_content)
                         loop.call_soon_threadsafe(queue.put_nowait, event)
-                self._conversations.add_turn(request.session_id, role="user", content=request.message)
-                self._conversations.add_turn(request.session_id, role="assistant", content="[agent run]")
             except Exception as exc:
                 logger.error("Coding agent error: %s", exc, exc_info=True)
                 loop.call_soon_threadsafe(queue.put_nowait, {"type": "error", "message": str(exc)})
 
         threading.Thread(target=run_agent, daemon=True).start()
-        while True:
-            try:
-                event = await asyncio.wait_for(queue.get(), timeout=600)
-                yield event
-                if event.get("type") in ("done", "error"):
+        try:
+            while True:
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=600)
+                    yield event
+                    if event.get("type") in ("done", "error", "cancelled"):
+                        break
+                except asyncio.TimeoutError:
+                    yield {"type": "error", "message": "Coding agent timed out (10 min)"}
                     break
-            except asyncio.TimeoutError:
-                yield {"type": "error", "message": "Coding agent timed out (10 min)"}
-                break
+        finally:
+            # Client disconnect (GeneratorExit via aclose()) or normal
+            # completion — either way, tell the background agent thread to
+            # stop instead of letting an abandoned run keep burning
+            # LLM/executor work after nobody is listening.
+            cancel_event.set()

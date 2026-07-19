@@ -1,14 +1,7 @@
 """tools/search/query.py — phan loai query, chon k dong, mo rong query."""
 import logging
 
-import httpx
-
-from backend.app.core.config import settings
-
 logger = logging.getLogger(__name__)
-
-_OLLAMA_URL   = settings.OLLAMA_URL
-_OLLAMA_MODEL = settings.OLLAMA_MODEL
 
 
 _ACADEMIC_KW = {
@@ -83,19 +76,29 @@ def get_dynamic_k(query: str) -> dict[str, int]:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def expand_query(query: str) -> list[str]:
+def expand_query(query: str, provider: str | None = None, model: str | None = None) -> list[str]:
     """
-    Use LLM to generate 2-3 alternative query formulations.
-    Returns [original_query, expansion1, expansion2, ...].
-    Falls back to [original_query] on any error.
+    Use an LLM to generate 2-3 alternative query formulations. Returns
+    [original_query, expansion1, expansion2, ...].
 
-    Note: this call is deliberately pinned to the local Ollama model (cheap
-    and fast) rather than the user-selected multi-model provider — query
-    expansion is an internal, high-frequency helper call, not a user-facing
-    generation. Out of scope for multi-model selection per the plan.
+    `provider`/`model` default to None, which resolves to
+    settings.DEFAULT_PROVIDER inside invoke_chat/get_llm — but callers that
+    know the user's per-request selection (e.g. run_streaming's provider/
+    model params) should pass it through so expansion actually uses the
+    provider the user picked in the UI, not just whatever's globally
+    configured.
+
+    Falls back to [original_query] on ANY error — a missing API key, an
+    unreachable local Ollama server, a malformed response, a network
+    timeout. Query expansion is a nice-to-have helper call, never a hard
+    dependency: a provider outage here must degrade to "search the
+    original query" rather than fail the whole research run.
     """
     try:
         import json
+
+        from backend.app.core.llm import invoke_chat
+
         prompt = (
             f"Generate 2 alternative search queries for: \"{query}\"\n"
             f"Rules:\n"
@@ -104,13 +107,7 @@ def expand_query(query: str) -> list[str]:
             f"- Use academic/technical terms when appropriate\n"
             f'Return ONLY a JSON array: ["query1", "query2"]'
         )
-        resp = httpx.post(
-            f"{_OLLAMA_URL}/api/generate",
-            json={"model": _OLLAMA_MODEL, "prompt": prompt, "stream": False},
-            timeout=30,
-        )
-        resp.raise_for_status()
-        raw = resp.json().get("response", "").strip()
+        raw = invoke_chat(prompt, provider=provider, model=model, temperature=0.3).strip()
         raw = raw.replace("```json", "").replace("```", "").strip()
 
         # Find JSON array
@@ -122,11 +119,11 @@ def expand_query(query: str) -> list[str]:
                 valid = [q for q in expansions if isinstance(q, str) and len(q) > 3]
                 if valid:
                     result = [query] + valid[:2]
-                    logger.info("Query expansion: %s → %s", query[:50], valid)
+                    logger.info("Query expansion: %d alternative(s) generated", len(valid))
                     return result
 
     except Exception as e:
-        logger.warning("Query expansion failed (non-fatal): %s", e)
+        logger.warning("Query expansion failed (non-fatal, provider unavailable?): %s", e)
 
     return [query]
 

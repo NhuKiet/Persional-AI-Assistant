@@ -1,11 +1,15 @@
 import json
+import logging
 import os
 
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 
-from backend.app.features.research.schemas import DeepDiveRequest, ResearchRequest
-from backend.app.features.research.service import ResearchService
+from backend.app.features.research.schemas import DeepDiveRequest, ResearchRequest, SessionHistoryResponse
+from backend.app.features.research.service import ResearchService, SessionBusyError
+from backend.app.shared.session_locks import log_concurrent_rejection
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["research"])
 
@@ -36,9 +40,19 @@ async def research_stream(req: ResearchRequest):
     if not req.query.strip():
         raise HTTPException(status_code=400, detail="Query required")
 
+    service = get_service()
+    try:
+        lock = service.begin_session(req.session_id)
+    except SessionBusyError:
+        log_concurrent_rejection(logger, "research", req.session_id)
+        return JSONResponse(status_code=409, content={"detail": "session_busy"})
+
     async def generate():
-        async for event in get_service().stream_events(req):
-            yield sse(event)
+        try:
+            async for event in service.stream_events(req):
+                yield sse(event)
+        finally:
+            service.end_session(lock)
 
     return StreamingResponse(
         generate(),
@@ -53,14 +67,35 @@ async def deep_dive(req: DeepDiveRequest):
     if not req.question.strip():
         raise HTTPException(status_code=400, detail="Question required")
 
+    service = get_service()
+    try:
+        lock = service.begin_session(req.session_id)
+    except SessionBusyError:
+        log_concurrent_rejection(logger, "research", req.session_id)
+        return JSONResponse(status_code=409, content={"detail": "session_busy"})
+
     async def generate():
-        async for event in get_service().deep_dive_events(req, DEEP_DIVE_SYSTEM):
-            yield sse(event)
+        try:
+            async for event in service.deep_dive_events(req, DEEP_DIVE_SYSTEM):
+                yield sse(event)
+        finally:
+            service.end_session(lock)
 
     return StreamingResponse(
         generate(),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@router.get("/api/research/sessions/{session_id}", response_model=SessionHistoryResponse)
+async def get_research_session_history(session_id: str):
+    """Read-only session history restore. Never touches the session lock."""
+    messages, revision = get_service().get_history_with_revision(session_id)
+    if not messages:
+        raise HTTPException(status_code=404, detail="session_not_found")
+    return SessionHistoryResponse(
+        session_id=session_id, feature="research", revision=revision, messages=messages
     )
 
 

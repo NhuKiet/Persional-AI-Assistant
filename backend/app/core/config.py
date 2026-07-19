@@ -8,6 +8,7 @@ from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _VALID_PROVIDERS = {"ollama", "anthropic", "openai"}
+_VALID_EXECUTOR_MODES = {"docker"}
 
 
 class Settings(BaseSettings):
@@ -81,23 +82,19 @@ class Settings(BaseSettings):
     ENABLE_AUTO_INSTALL: bool = False
 
     # ── Executor sandbox ────────────────────────────────────────────
-    # "subprocess" (mặc định): chạy code trong tiến trình con của backend —
-    #   nhanh, không cần Docker, nhưng KHÔNG cách ly filesystem/network.
-    # "docker": mỗi lần chạy tạo một container ephemeral, --network none +
-    #   giới hạn CPU/RAM/pids, chỉ mount thư mục sandbox. Cách ly thật sự.
-    #   Cần Docker daemon chạy và đã build image EXECUTOR_IMAGE
-    #   (xem Dockerfile.executor). Nếu chọn "docker" mà daemon không sẵn sàng,
-    #   executor tự fallback về subprocess và ghi cảnh báo.
-    EXECUTOR_MODE: str = "subprocess"
+    # Docker là chế độ DUY NHẤT được hỗ trợ: mỗi lần chạy tạo một container
+    # ephemeral, --network none + --read-only + --cap-drop ALL +
+    # no-new-privileges + giới hạn CPU/RAM/pids, chỉ mount thư mục sandbox.
+    # Cần Docker daemon chạy và đã build image EXECUTOR_IMAGE (xem
+    # Dockerfile.executor). Nếu daemon không sẵn sàng, executor trả về một
+    # ExecutionResult typed với unavailable=True — KHÔNG bao giờ chạy code
+    # do LLM sinh trực tiếp trên host bằng subprocess. Bất kỳ giá trị nào
+    # khác "docker" bị từ chối ngay khi load settings.
+    EXECUTOR_MODE: str = "docker"
     EXECUTOR_IMAGE: str = "king-executor:latest"
     EXECUTOR_MEMORY: str = "512m"
     EXECUTOR_CPUS: str = "1.0"
     EXECUTOR_PIDS: int = 128
-    # Tên biến môi trường (phân tách bằng dấu phẩy) muốn lộ THÊM cho code do
-    # LLM sinh chạy trong sandbox. Mặc định rỗng: sandbox KHÔNG kế thừa secret
-    # của server (xem _safe_env trong backend/app/features/coding/execution.py).
-    # Chỉ thêm biến ở đây nếu một tác vụ hợp lệ thật sự cần, ví dụ "MPLBACKEND".
-    CODE_ENV_EXTRA: str = ""
 
     # ── PDF ─────────────────────────────────────────────────────────
     PDF_UPLOAD_DIR: str = "data/pdfs"
@@ -112,6 +109,16 @@ class Settings(BaseSettings):
             raise ValueError(
                 f"DEFAULT_PROVIDER '{v}' không hợp lệ. "
                 f"Chọn một trong: {sorted(_VALID_PROVIDERS)}"
+            )
+        return v
+
+    @field_validator("EXECUTOR_MODE")
+    @classmethod
+    def _check_executor_mode(cls, v: str) -> str:
+        if v not in _VALID_EXECUTOR_MODES:
+            raise ValueError(
+                f"EXECUTOR_MODE '{v}' không hợp lệ — chỉ hỗ trợ chạy code "
+                f"trong Docker cách ly. Chọn một trong: {sorted(_VALID_EXECUTOR_MODES)}"
             )
         return v
 

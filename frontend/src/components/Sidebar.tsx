@@ -32,7 +32,7 @@ export function Sidebar({ open, onToggle, sessions, activeId, onSelect, onDelete
             <img src={mainlogo} alt="logo" style={{ width: 22, height: 22, objectFit: "contain" }} />
             <span className="logo-name-sm" style={{ color: accentColor }}>KiNg</span>
           </div>
-          <button className="sb-icon-btn" onClick={onToggle} title="Đóng sidebar">
+          <button className="sb-icon-btn" onClick={onToggle} title="Đóng sidebar" aria-label="Đóng sidebar">
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
               <path d="M10 3L5 8l5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>

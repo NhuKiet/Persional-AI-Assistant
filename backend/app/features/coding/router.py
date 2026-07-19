@@ -1,13 +1,14 @@
 import logging
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from backend.app.core.config import settings
-from backend.app.features.coding.artifacts import ArtifactService, MIME_MAP
-from backend.app.features.coding.schemas import CodingRequest
-from backend.app.features.coding.service import CodingConversationManager, CodingService
+from backend.app.features.coding.artifacts import ArtifactService, artifact_response
+from backend.app.features.coding.schemas import CodingRequest, SessionHistoryResponse
+from backend.app.features.coding.service import CodingConversationManager, CodingService, SessionBusyError
 from backend.app.features.coding.uploads import UploadService
+from backend.app.shared.session_locks import log_concurrent_rejection
 from backend.app.shared.sse import sse
 
 
@@ -41,9 +42,18 @@ async def coding_stream(req: CodingRequest):
 
     req.message = req.message.strip()
 
+    try:
+        lock = _service.begin_session(req.session_id)
+    except SessionBusyError:
+        log_concurrent_rejection(logger, "coding", req.session_id)
+        return JSONResponse(status_code=409, content={"detail": "session_busy"})
+
     async def generate():
-        async for event in _service.stream(req):
-            yield sse(event)
+        try:
+            async for event in _service.stream(req):
+                yield sse(event)
+        finally:
+            _service.end_session(lock)
 
     return StreamingResponse(
         generate(),
@@ -55,13 +65,13 @@ async def coding_stream(req: CodingRequest):
 @router.get("/api/coding/artifact/{session_id}/{filename}")
 async def serve_session_artifact(session_id: str, filename: str):
     path = _artifacts.resolve(session_id, filename)
-    return FileResponse(str(path), media_type=MIME_MAP.get(path.suffix.lower(), "application/octet-stream"))
+    return artifact_response(path)
 
 
 @router.get("/api/coding/artifact/{filename}")
 async def serve_artifact(filename: str):
     path = _artifacts.resolve_root(filename)
-    return FileResponse(str(path), media_type=MIME_MAP.get(path.suffix.lower(), "application/octet-stream"))
+    return artifact_response(path)
 
 
 @router.delete("/api/coding/session/{session_id}")
@@ -70,6 +80,12 @@ async def clear_coding_session(session_id: str):
     return {"cleared": session_id}
 
 
-@router.get("/api/coding/session/{session_id}")
-async def get_coding_session(session_id: str):
-    return {"history": _conv_manager.get_history(session_id)}
+@router.get("/api/coding/sessions/{session_id}", response_model=SessionHistoryResponse)
+async def get_coding_session_history(session_id: str):
+    """Read-only session history restore. Never touches the session lock."""
+    messages, revision = _conv_manager.get_history_with_revision(session_id)
+    if not messages:
+        raise HTTPException(status_code=404, detail="session_not_found")
+    return SessionHistoryResponse(
+        session_id=session_id, feature="coding", revision=revision, messages=messages
+    )

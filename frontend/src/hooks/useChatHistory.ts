@@ -1,5 +1,36 @@
 import { useState, useCallback } from "react";
+import { API } from "../lib/api";
 import { historyKey, loadHistory, saveHistory, type Session } from "../lib/storage";
+
+/** Vietnamese notice shown when a sidebar entry points at a session the
+ *  backend no longer has (deleted, expired, or from a previous data reset). */
+export const SESSION_RECOVERY_NOTICE =
+  "Phiên hội thoại này không còn tồn tại trên máy chủ và đã được gỡ khỏi danh sách lịch sử.";
+
+export interface RestoredSession {
+  session_id: string;
+  feature: string;
+  revision: number;
+  messages: { role: string; content: unknown }[];
+}
+
+export type RestoreResult =
+  | { status: "ok"; data: RestoredSession }
+  | { status: "not_found" }
+  | { status: "error" };
+
+/** GET /api/<feature>/sessions/{session_id} — read-only, never locks. */
+export async function fetchSessionHistory(feature: string, sessionId: string): Promise<RestoreResult> {
+  try {
+    const res = await fetch(`${API}/api/${feature}/sessions/${encodeURIComponent(sessionId)}`);
+    if (res.status === 404) return { status: "not_found" };
+    if (!res.ok) return { status: "error" };
+    const data: RestoredSession = await res.json();
+    return { status: "ok", data };
+  } catch {
+    return { status: "error" };
+  }
+}
 
 /** Lịch sử phiên chat của một tool (lưu localStorage). */
 export function useChatHistory(tool?: string) {

@@ -15,3 +15,12 @@ class PDFSummarizeRequest(BaseModel):
     session_id: str = "default"
     provider: str | None = None
     model: str | None = None
+
+
+class SessionHistoryResponse(BaseModel):
+    """Response shape for GET /api/<feature>/sessions/{session_id}."""
+
+    session_id: str
+    feature: str
+    revision: int
+    messages: list[dict]

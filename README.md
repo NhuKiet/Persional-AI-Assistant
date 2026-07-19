@@ -107,25 +107,15 @@ git clone https://github.com/NhuKiet/Persional-AI-Assistant.git
 cd Persional-AI-Assistant
 ```
 
-### 2. Tạo môi trường Python
+### 2. Cài đặt dependency Python bằng uv
 
-Windows PowerShell:
-
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-pip install -r requirements.txt
-```
-
-macOS/Linux:
+Dự án dùng [uv](https://docs.astral.sh/uv/) để quản lý virtual environment và dependency qua `pyproject.toml`/`uv.lock`. Cài `uv` theo hướng dẫn chính thức, sau đó từ thư mục gốc:
 
 ```bash
-python3.11 -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-pip install -r requirements.txt
+uv sync --dev
 ```
+
+Lệnh này tự tạo `.venv` và cài cả dependency runtime lẫn dev (pytest, ...). Không cần tự tạo virtual environment hay có `requirements.txt`.
 
 ### 3. Tạo file cấu hình
 
@@ -163,7 +153,7 @@ Nếu Ollama đã chạy như service thì không cần chạy lại `ollama ser
 Từ thư mục gốc:
 
 ```bash
-python -m uvicorn main:app --reload --port 8000
+uv run uvicorn main:app --reload --port 8000
 ```
 
 Kiểm tra backend tại `http://localhost:8000/health`. OpenAPI UI của FastAPI có tại `http://localhost:8000/docs`.
@@ -402,7 +392,7 @@ data: {"type":"token","content":"..."}
 Backend:
 
 ```bash
-pytest -q
+uv run pytest -q
 ```
 
 Frontend:
@@ -416,17 +406,19 @@ npm run build
 
 GitHub Actions chạy các bước sau cho mỗi push và pull request:
 
-- Python 3.11: cài `requirements.txt` và chạy pytest.
-- Node 20: `npm ci`, typecheck, Vitest và Vite production build.
+- Python: `astral-sh/setup-uv`, `uv sync --dev`, sau đó `uv run pytest -q`.
+- Node 20: `npm ci`, typecheck, Vitest (`npm run test`) và Vite production build.
 
 ## Bảo mật Coding Executor
 
-Code do LLM sinh là code không đáng tin cậy. KiNg có hai chế độ thực thi:
-
-| `EXECUTOR_MODE` | Đặc điểm |
-|---|---|
-| `subprocess` | Mặc định; lọc biến môi trường và kill process tree khi timeout, nhưng vẫn dùng filesystem/network của máy backend |
-| `docker` | Container tạm thời, `--network none`, root filesystem read-only, giới hạn RAM/CPU/PID và chỉ mount sandbox của session |
+Code do LLM sinh là code không đáng tin cậy. KiNg chỉ hỗ trợ MỘT chế độ thực
+thi: `EXECUTOR_MODE=docker` (giá trị mặc định và duy nhất — Settings từ chối
+mọi giá trị khác lúc khởi động). Mỗi lần chạy tạo một container tạm thời với
+`--network none`, root filesystem read-only (`/tmp` là tmpfs 64m), giới hạn
+RAM/CPU/PID, `--cap-drop ALL`, `--security-opt no-new-privileges:true`, chạy
+dưới UID/GID không phải root, và chỉ mount sandbox của session. Nếu Docker
+daemon không sẵn sàng, executor trả về kết quả "unavailable" — KHÔNG BAO GIỜ
+chạy code do LLM sinh trực tiếp trên host bằng subprocess.
 
 Build image executor:
 
@@ -447,36 +439,32 @@ EXECUTOR_PIDS=128
 Lưu ý:
 
 - Backend phải gọi được Docker CLI/daemon. Backend chạy trong Compose hiện không mount Docker socket và image backend không cài Docker CLI; muốn dùng Docker executor trong mô hình đó phải cấu hình thêm hạ tầng phù hợp.
-- Nếu chọn `docker` nhưng Docker không khả dụng, code hiện fallback về `subprocess` và ghi warning.
+- Nếu Docker không khả dụng, chạy code sẽ báo lỗi "không khả dụng" cho người dùng thay vì thực thi trên host — không có fallback.
 - Giữ `ENABLE_AUTO_INSTALL=false`. Tùy chọn hiện tại gọi `pip install` từ tiến trình backend, vì vậy có thể thay đổi môi trường Python của backend.
-- Không thêm secret vào `CODE_ENV_EXTRA` trừ khi thực sự chấp nhận để code sinh đọc được biến đó.
 - Docker executor giảm rủi ro nhưng không thay thế authentication, authorization, audit log và các biện pháp hardening khi triển khai nhiều người dùng.
 
 ## Cấu trúc dự án
 
 ```text
 Persional-AI-Assistant/
-├── main.py                    # FastAPI app, CORS, lifespan, health check
-├── api_chat.py                # Chat SSE và các assistant mode
-├── api_research.py            # Research SSE, deep dive, cache, paper
-├── api_coding.py              # Coding SSE, upload, artifact, session
-├── api_pdf.py                 # PDF upload/view/chat/summarize
-├── api_models.py              # Model registry cho frontend
-├── core/
-│   ├── settings.py            # Nguồn cấu hình từ .env
-│   ├── llm.py                 # LLM factory đa provider
-│   └── pdf_context.py         # Context text/ảnh cho PDF
-├── tools/
-│   ├── research_agent.py      # Orchestrator Research
-│   ├── search/                # 7 searcher và pipeline ranking/crawl/query
-│   ├── knowledge_store.py     # Weaviate hybrid retrieval
-│   ├── embeddings.py          # OpenAI embeddings
-│   ├── reranker.py            # Cohere/BGE rerank
-│   ├── synthesizer.py         # Research synthesis
-│   ├── coding_agent.py        # Plan/generate/execute/debug
-│   ├── code_executor.py       # Subprocess/Docker executor
-│   ├── pdf_processor.py       # PDF extraction/chunk/retrieval
-│   └── conversation.py        # SQLite conversation store
+├── main.py                        # Re-export backend.app.main:app cho uvicorn
+├── backend/app/
+│   ├── main.py                    # FastAPI app, CORS, router include, health check
+│   ├── core/
+│   │   ├── config.py              # Nguồn cấu hình từ .env
+│   │   ├── llm.py                 # LLM factory đa provider
+│   │   └── lifespan.py            # Startup/shutdown (dọn session cũ, ...)
+│   ├── shared/
+│   │   ├── conversation_store.py  # SQLite conversation store dùng chung
+│   │   ├── session_locks.py       # Khóa mutation theo session
+│   │   ├── sse.py                 # Parser/encoder SSE dùng chung
+│   │   └── files.py                # Tiện ích file/path an toàn
+│   └── features/
+│       ├── chat/                  # Router, service, prompts, schemas cho Chat
+│       ├── research/              # Agent, search/, synthesizer, security, knowledge store
+│       ├── coding/                # Router, service, execution, artifacts, uploads
+│       ├── pdf/                   # Router, service, processor, context
+│       └── models/                # Model registry cho frontend
 ├── frontend/
 │   ├── src/
 │   │   ├── App.tsx            # Router, lazy routes, route boundaries
@@ -493,7 +481,8 @@ Persional-AI-Assistant/
 ├── Dockerfile                 # Backend image
 ├── Dockerfile.executor        # Coding sandbox image
 ├── docker-compose.yml         # Backend + frontend
-├── requirements.txt
+├── pyproject.toml             # Dependency và tool config (dùng với uv)
+├── uv.lock                    # Lockfile cho uv sync
 └── .env.example
 ```
 

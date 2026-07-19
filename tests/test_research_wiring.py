@@ -1,4 +1,9 @@
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
 import backend.app.features.research.agent as ra_mod
+import backend.app.features.research.router as research_router
+import backend.app.shared.conversation_store as conv_mod
 
 
 def test_run_streaming_done_includes_grounding_keys(monkeypatch):
@@ -45,7 +50,7 @@ def test_run_streaming_done_includes_grounding_keys(monkeypatch):
     monkeypatch.setattr(ra_mod, "get_store", lambda: type(
         "K", (), {"retrieve": lambda self, q: [], "add_results": lambda self, q, s: 0},
     )())
-    monkeypatch.setattr(ra_mod, "expand_query", lambda q: [q])
+    monkeypatch.setattr(ra_mod, "expand_query", lambda q, **_kw: [q])
     monkeypatch.setattr(ra_mod, "get_dynamic_k", lambda q: {})
 
     # nhánh pipeline sau search — giữ nguyên danh sách để không cần logic thật
@@ -193,7 +198,7 @@ def test_run_streaming_iterates_once_when_first_result_weak(monkeypatch):
     # tắt knowledge + search inline của run_streaming
     monkeypatch.setattr(ra, "get_store", lambda: type("K", (), {
         "retrieve": lambda self, q: [], "add_results": lambda self, q, s: 0})())
-    monkeypatch.setattr(ra, "expand_query", lambda q: [q])
+    monkeypatch.setattr(ra, "expand_query", lambda q, **_kw: [q])
     monkeypatch.setattr(ra, "get_dynamic_k", lambda q: {})
     monkeypatch.setattr(ra, "_enrich_web_results", lambda r: r)
     monkeypatch.setattr(ra, "deduplicate_results", lambda r, threshold=0.92: r)
@@ -229,7 +234,7 @@ def test_run_streaming_no_iteration_when_first_result_strong(monkeypatch):
     agent._process_pipeline = lambda q, raw, **k: raw
     monkeypatch.setattr(ra, "get_store", lambda: type("K", (), {
         "retrieve": lambda self, q: [], "add_results": lambda self, q, s: 0})())
-    monkeypatch.setattr(ra, "expand_query", lambda q: [q])
+    monkeypatch.setattr(ra, "expand_query", lambda q, **_kw: [q])
     monkeypatch.setattr(ra, "get_dynamic_k", lambda q: {})
     monkeypatch.setattr(ra, "_enrich_web_results", lambda r: r)
     monkeypatch.setattr(ra, "deduplicate_results", lambda r, threshold=0.92: r)
@@ -275,7 +280,7 @@ def test_run_iterates_once_when_first_result_weak(monkeypatch):
 
     monkeypatch.setattr(ra, "get_store", lambda: type("K", (), {
         "retrieve": lambda self, q: [], "add_results": lambda self, q, s: 0})())
-    monkeypatch.setattr(ra, "expand_query", lambda q: [q])
+    monkeypatch.setattr(ra, "expand_query", lambda q, **_kw: [q])
     monkeypatch.setattr(ra, "get_dynamic_k", lambda q: {})
     monkeypatch.setattr(ra, "_enrich_web_results", lambda r: r)
     monkeypatch.setattr(ra, "deduplicate_results", lambda r, threshold=0.92: r)
@@ -332,7 +337,7 @@ def test_run_streaming_stops_early_when_cancelled(monkeypatch):
     # tắt knowledge + search inline
     monkeypatch.setattr(ra, "get_store", lambda: type("K", (), {
         "retrieve": lambda self, q: [], "add_results": lambda self, q, s: 0})())
-    monkeypatch.setattr(ra, "expand_query", lambda q: [q])
+    monkeypatch.setattr(ra, "expand_query", lambda q, **_kw: [q])
     monkeypatch.setattr(ra, "get_dynamic_k", lambda q: {})
     monkeypatch.setattr(ra, "_enrich_web_results", lambda r: r)
     monkeypatch.setattr(ra, "deduplicate_results", lambda r, threshold=0.92: r)
@@ -366,7 +371,7 @@ def test_run_streaming_normal_when_not_cancelled(monkeypatch):
     agent._process_pipeline = lambda q, raw, **k: raw
     monkeypatch.setattr(ra, "get_store", lambda: type("K", (), {
         "retrieve": lambda self, q: [], "add_results": lambda self, q, s: 0})())
-    monkeypatch.setattr(ra, "expand_query", lambda q: [q])
+    monkeypatch.setattr(ra, "expand_query", lambda q, **_kw: [q])
     monkeypatch.setattr(ra, "get_dynamic_k", lambda q: {})
     monkeypatch.setattr(ra, "_enrich_web_results", lambda r: r)
     monkeypatch.setattr(ra, "deduplicate_results", lambda r, threshold=0.92: r)
@@ -377,3 +382,70 @@ def test_run_streaming_normal_when_not_cancelled(monkeypatch):
     events = list(agent.run_streaming("q"))
     assert any(e.get("type") == "done" for e in events)
     assert not any(e.get("type") == "cancelled" for e in events)
+
+
+# ── History restore + concurrency lock (router-level) ───────────────────────
+
+def _client():
+    app = FastAPI()
+    app.include_router(research_router.router)
+    return TestClient(app)
+
+
+def test_get_research_session_history_returns_expected_shape(monkeypatch, tmp_path):
+    monkeypatch.setattr(conv_mod, "_store", conv_mod._SessionStore(tmp_path / "s.db"))
+    svc = research_router.get_service()
+    svc._conv_manager.add_turn("hist-1", role="user", content="q")
+    svc._conv_manager.add_turn("hist-1", role="assistant", content={"summary_short": "s"})
+
+    r = _client().get("/api/research/sessions/hist-1")
+
+    assert r.status_code == 200
+    body = r.json()
+    assert body == {
+        "session_id": "hist-1",
+        "feature": "research",
+        "revision": 2,
+        "messages": [
+            {"role": "user", "content": "q"},
+            {"role": "assistant", "content": {"summary_short": "s"}},
+        ],
+    }
+
+
+def test_get_research_session_history_404_when_unknown(monkeypatch, tmp_path):
+    monkeypatch.setattr(conv_mod, "_store", conv_mod._SessionStore(tmp_path / "s.db"))
+    r = _client().get("/api/research/sessions/never-existed")
+    assert r.status_code == 404
+
+
+def test_research_second_stream_while_active_returns_409():
+    svc = research_router.get_service()
+    lock = svc.begin_session("race-1")
+    try:
+        r = _client().post(
+            "/api/research/stream",
+            json={"query": "hi", "session_id": "race-1"},
+        )
+        assert r.status_code == 409
+        assert r.json() == {"detail": "session_busy"}
+    finally:
+        svc.end_session(lock)
+
+
+def test_research_deep_dive_while_stream_active_returns_409():
+    svc = research_router.get_service()
+    lock = svc.begin_session("race-2")
+    try:
+        r = _client().post(
+            "/api/research/deep-dive",
+            json={
+                "question": "what?",
+                "source_content": "src",
+                "session_id": "race-2",
+            },
+        )
+        assert r.status_code == 409
+        assert r.json() == {"detail": "session_busy"}
+    finally:
+        svc.end_session(lock)

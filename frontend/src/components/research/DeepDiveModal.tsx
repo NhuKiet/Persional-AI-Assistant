@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { Markdown } from "../../components/Markdown";
 import { API } from "../../lib/api";
+import { parseSSE, readErrorResponse } from "../../lib/sse";
 import type { ModelSelection } from "../../types";
 
 /** Superset of the shapes DeepDiveModal is opened with — a `Paper` (via
@@ -55,25 +56,20 @@ export function DeepDiveModal({ source, onClose, model }: DeepDiveModalProps) {
           provider: model?.provider ?? null, model: model?.model ?? null,
         }),
       });
-      if (!res.ok) { setAnswer("Backend error " + res.status); setLoading(false); return; }
-      const reader = res.body!.getReader();
-      const decoder = new TextDecoder();
-      while (true) {
-        const { done, value } = await reader.read(); if (done) break;
-        for (const line of decoder.decode(value, { stream: true }).split("\n")) {
-          if (!line.startsWith("data:")) continue;
-          try {
-            const ev = JSON.parse(line.slice(5).trim());
-            if (ev.type === "token") {
-              setAnswer(p => p + ev.content);
-              answerRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-            }
-            if (ev.type === "done" || ev.type === "error") setLoading(false);
-          } catch {}
-        }
+      if (!res.ok) { setAnswer(await readErrorResponse(res)); return; }
+      for await (const { data } of parseSSE(res.body!)) {
+        try {
+          const ev = JSON.parse(data);
+          if (ev.type === "token") {
+            setAnswer(p => p + ev.content);
+            answerRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+          }
+          if (ev.type === "error") setAnswer(ev.message || "Unknown error");
+        } catch {}
       }
     } catch(e) {
       if ((e as Error).name !== "AbortError") setAnswer("Connection lost.");
+    } finally {
       setLoading(false);
     }
   };

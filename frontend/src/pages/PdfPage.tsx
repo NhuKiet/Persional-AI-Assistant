@@ -2,11 +2,13 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import ModelPicker from "../components/ModelPicker";
 import { MicButton } from "../components/MicButton";
 import { Message } from "../components/Message";
-import { Sidebar } from "../components/Sidebar";
+import { AppShell } from "../components/AppShell";
 import { SUGGESTIONS } from "../config/tools";
-import { useChatHistory } from "../hooks/useChatHistory";
+import { fetchSessionHistory, SESSION_RECOVERY_NOTICE, useChatHistory } from "../hooks/useChatHistory";
 import { API, SESSION_ID } from "../lib/api";
+import { parseSSE, readErrorResponse } from "../lib/sse";
 import { getPersistedSessionId, persistSessionId } from "../lib/storage";
+import { pdfDeleteUrl, pdfRawUrl } from "../lib/pdfUrls";
 import ContextPins from "../components/pdf/ContextPins";
 import PdfViewer from "../components/pdf/PdfViewer";
 import SelectionLayer, { type Pin } from "../components/pdf/SelectionLayer";
@@ -17,6 +19,8 @@ interface UploadedPdf {
   total_pages: number;
   total_chars: number;
 }
+
+const SESSION_BUSY_NOTICE = "⚠️ Phiên đang bận (một tab/luồng khác đang gửi tin). Thử lại sau vài giây.";
 
 export function PDFPage() {
   const accentColor = "#FF8C69";
@@ -29,7 +33,8 @@ export function PDFPage() {
   const [summarizing, setSummarizing]   = useState(false);
   const [input,       setInput]         = useState("");
   const [model,       setModel]         = useState<ModelSelection | null>(null);
-  const sessionId  = useRef(getPersistedSessionId("pdf") || SESSION_ID());
+  const [notice,      setNotice]        = useState("");
+  const [sessionId, setSessionId] = useState(() => getPersistedSessionId("pdf") || SESSION_ID());
   const bottomRef  = useRef<HTMLDivElement>(null);
   const fileRef    = useRef<HTMLInputElement>(null);
 
@@ -67,7 +72,7 @@ export function PDFPage() {
       const data: UploadedPdf = await res.json();
       setUploadedPDF(data);
       setMessages([]);
-      persistSessionId("pdf", sessionId.current);
+      persistSessionId("pdf", sessionId);
     } catch (e) {
       alert("Upload lỗi: " + (e as Error).message);
     } finally { setUploading(false); }
@@ -79,28 +84,34 @@ export function PDFPage() {
     setSummarizing(true);
     const aiId = Date.now();
     setMessages(p => [...p,
-      { role: "user",      content: "📋 Tóm tắt toàn bộ tài liệu", id: Date.now() - 1 },
+      { role: "user",      content: "📋 Tóm tắt tài liệu", id: Date.now() - 1 },
       { role: "assistant", content: "", id: aiId },
     ]);
     try {
       const res = await fetch(`${API}/api/pdf/summarize`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          filename: uploadedPDF.filename, session_id: sessionId.current,
+          filename: uploadedPDF.filename, session_id: sessionId,
           provider: model?.provider ?? null, model: model?.model ?? null,
         }),
       });
-      const reader = res.body!.getReader(); const decoder = new TextDecoder();
-      while (true) {
-        const { done, value } = await reader.read(); if (done) break;
-        for (const line of decoder.decode(value, { stream: true }).split("\n")) {
-          if (!line.startsWith("data:")) continue;
-          try {
-            const ev = JSON.parse(line.slice(5).trim());
-            if (ev.type === "token")
-              setMessages(p => p.map(m => m.id === aiId ? { ...m, content: m.content + ev.content } : m));
-          } catch {}
-        }
+      if (res.status === 409) {
+        setMessages(p => p.map(m => m.id === aiId ? { ...m, content: SESSION_BUSY_NOTICE } : m));
+        return;
+      }
+      if (!res.ok) {
+        const errMsg = await readErrorResponse(res);
+        setMessages(p => p.map(m => m.id === aiId ? { ...m, content: "⚠️ Lỗi: " + errMsg } : m));
+        return;
+      }
+      for await (const { data } of parseSSE(res.body!)) {
+        try {
+          const ev = JSON.parse(data);
+          if (ev.type === "token")
+            setMessages(p => p.map(m => m.id === aiId ? { ...m, content: m.content + ev.content } : m));
+          if (ev.type === "pdf.summary_scope_rejected")
+            setMessages(p => p.map(m => m.id === aiId ? { ...m, content: ev.message } : m));
+        } catch {}
       }
     } catch (e) {
       setMessages(p => p.map(m => m.id === aiId ? { ...m, content: "⚠️ Lỗi: " + (e as Error).message } : m));
@@ -115,7 +126,7 @@ export function PDFPage() {
     const aiId = Date.now() + 1;
     setMessages(p => {
       // Lưu vào sidebar lịch sử khi tin đầu tiên
-      if (p.length === 0) addSession(sessionId.current, uploadedPDF.filename + ": " + text);
+      if (p.length === 0) addSession(sessionId, uploadedPDF.filename + ": " + text);
       return [...p,
         { role: "user",      content: text, id: Date.now() },
         { role: "assistant", content: "",   id: aiId },
@@ -126,24 +137,28 @@ export function PDFPage() {
       const res = await fetch(`${API}/api/pdf/stream`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          message: text, filename: uploadedPDF.filename, session_id: sessionId.current,
+          message: text, filename: uploadedPDF.filename, session_id: sessionId,
           provider: model?.provider ?? null, model: model?.model ?? null, pins: pinsToSend,
         }),
       });
+      if (res.status === 409) {
+        setMessages(p => p.map(m => m.id === aiId ? { ...m, content: SESSION_BUSY_NOTICE } : m));
+        return;
+      }
       setPins([]);
-      const reader = res.body!.getReader(); const decoder = new TextDecoder();
-      while (true) {
-        const { done, value } = await reader.read(); if (done) break;
-        for (const line of decoder.decode(value, { stream: true }).split("\n")) {
-          if (!line.startsWith("data:")) continue;
-          try {
-            const ev = JSON.parse(line.slice(5).trim());
-            if (ev.type === "token")
-              setMessages(p => p.map(m => m.id === aiId ? { ...m, content: m.content + ev.content } : m));
-            if (ev.type === "error")
-              setMessages(p => p.map(m => m.id === aiId ? { ...m, content: "⚠️ " + ev.message } : m));
-          } catch {}
-        }
+      if (!res.ok) {
+        const errMsg = await readErrorResponse(res);
+        setMessages(p => p.map(m => m.id === aiId ? { ...m, content: "⚠️ " + errMsg } : m));
+        return;
+      }
+      for await (const { data } of parseSSE(res.body!)) {
+        try {
+          const ev = JSON.parse(data);
+          if (ev.type === "token")
+            setMessages(p => p.map(m => m.id === aiId ? { ...m, content: m.content + ev.content } : m));
+          if (ev.type === "error")
+            setMessages(p => p.map(m => m.id === aiId ? { ...m, content: "⚠️ " + ev.message } : m));
+        } catch {}
       }
     } catch (e) {
       if ((e as Error).name !== "AbortError")
@@ -179,21 +194,47 @@ export function PDFPage() {
 
   const handleRemovePDF = async () => {
     if (!uploadedPDF) return;
-    try { await fetch(`${API}/api/pdf/file/${uploadedPDF.filename}`, { method: "DELETE" }); } catch {}
-    setUploadedPDF(null); setMessages([]); sessionId.current = SESSION_ID();
+    try {
+      await fetch(pdfDeleteUrl(uploadedPDF.filename, sessionId), { method: "DELETE" });
+    } catch {}
+    setUploadedPDF(null); setMessages([]); setSessionId(SESSION_ID());
   };
 
   const handleNewPDF = () => {
     setUploadedPDF(null); setMessages([]);
-    sessionId.current = SESSION_ID();
-    persistSessionId("pdf", sessionId.current);
+    const newId = SESSION_ID();
+    setSessionId(newId);
+    persistSessionId("pdf", newId);
     setActiveId(null);
+    setNotice("");
   };
+
+  // Chọn một phiên trong sidebar: tải lại lịch sử thật từ backend. Lưu ý:
+  // do backend chỉ lưu message role/content (không lưu filename PDF gắn với
+  // phiên), việc khôi phục chỉ áp dụng cho transcript — người dùng cần giữ
+  // nguyên file PDF đang mở để hỏi tiếp trên đúng ngữ cảnh.
+  const handleSelectSession = useCallback(async (s: { id: string }) => {
+    const result = await fetchSessionHistory("pdf", s.id);
+    if (result.status === "not_found") {
+      removeSession(s.id);
+      setNotice(SESSION_RECOVERY_NOTICE);
+      return;
+    }
+    if (result.status === "error") return;
+    setNotice("");
+    setActiveId(s.id);
+    setSessionId(s.id);
+    setMessages(result.data.messages.map((m, i): ChatMessage => ({
+      role: m.role === "assistant" ? "assistant" : "user",
+      content: typeof m.content === "string" ? m.content : JSON.stringify(m.content),
+      id: Date.now() + i,
+    })));
+  }, [removeSession, setActiveId]);
 
   const pdfSidebarProps = {
     open: sidebarOpen, onToggle: () => setSidebarOpen(o => !o),
     sessions, activeId,
-    onSelect: (s: { id: string }) => setActiveId(s.id),
+    onSelect: handleSelectSession,
     onDelete: removeSession,
     onClearAll: clearAll,
     onNewChat: handleNewPDF,
@@ -202,9 +243,7 @@ export function PDFPage() {
   };
 
   return (
-    <div className="app-layout">
-    <Sidebar {...pdfSidebarProps} />
-    <div className="app-main">
+    <AppShell {...pdfSidebarProps}>
     <div className="page tool-page page-entered">
       <header className="tool-header">
         <div className="tool-title-wrap">
@@ -216,6 +255,12 @@ export function PDFPage() {
           <button className="clear-btn" onClick={handleRemovePDF}>Đổi file</button>
         )}
       </header>
+
+      {notice && (
+        <div className="recovery-notice" style={{ padding: "10px 14px", margin: "8px 0", borderRadius: 8, background: "#5a3a1a22", color: "#e0a458", fontSize: 13 }}>
+          {notice}
+        </div>
+      )}
 
       {/* Upload zone — hiện khi chưa có PDF */}
       {!uploadedPDF && (
@@ -255,7 +300,7 @@ export function PDFPage() {
           <div className="pdf-pane-left" style={{ width: `${splitRatio * 100}%` }}>
             <SelectionLayer canvases={canvasesRef.current} onPin={handlePin}>
               <PdfViewer
-                file={`${API}/api/pdf/raw/${encodeURIComponent(uploadedPDF.filename)}`}
+                file={pdfRawUrl(uploadedPDF.filename)}
                 onCanvasReady={onCanvasReady}
               />
             </SelectionLayer>
@@ -325,7 +370,6 @@ export function PDFPage() {
         </div>
       )}
     </div>
-    </div>
-    </div>
+    </AppShell>
   );
 }

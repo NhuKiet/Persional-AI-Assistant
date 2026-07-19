@@ -1,13 +1,18 @@
 import { useState, useRef, useCallback } from "react";
-import { API, SESSION_ID } from "../lib/api";
-import { getPersistedSessionId, persistSessionId } from "../lib/storage";
+import { API } from "../lib/api";
+import { parseSSE, readErrorResponse } from "../lib/sse";
 import type { ChatMessage, ModelSelection } from "../types";
 
-/** Chat streaming (SSE) cho HomePage và các ToolPage. */
-export function useChat(tool = "chat") {
+const SESSION_BUSY_NOTICE = "⚠️ Phiên đang bận (một tab/luồng khác đang gửi tin). Thử lại sau vài giây.";
+
+/** Chat streaming (SSE) cho HomePage và các ToolPage.
+ *
+ * `sessionId` is owned by the calling page (not generated inside the hook) —
+ * this keeps the id shown in the sidebar in sync with the id actually used
+ * for backend session storage, so "restore history on select" works. */
+export function useChat(tool = "chat", sessionId: string) {
   const [messages, setMessages]   = useState<ChatMessage[]>([]);
   const [streaming, setStreaming] = useState(false);
-  const sessionId = useRef(getPersistedSessionId(tool) || SESSION_ID());
   const abortRef  = useRef<AbortController | null>(null);
 
   const send = useCallback(async (
@@ -32,39 +37,42 @@ export function useChat(tool = "chat") {
         headers: { "Content-Type": "application/json" },
         signal:  abortRef.current.signal,
         body: JSON.stringify({
-          message: text, session_id: sessionId.current, tool, context, rag_session_id: ragSessionId,
+          message: text, session_id: sessionId, tool, context, rag_session_id: ragSessionId,
           provider: model?.provider ?? null, model: model?.model ?? null,
         }),
       });
-      const reader  = res.body!.getReader();
-      const decoder = new TextDecoder();
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        for (const line of decoder.decode(value).split("\n")) {
-          if (!line.startsWith("data:")) continue;
-          try {
-            const ev = JSON.parse(line.slice(5));
-            if (ev.type === "token") {
-              setMessages(p => p.map(m => m.id === aiMsg.id ? { ...m, content: m.content + ev.content } : m));
-            }
-          } catch {}
-        }
+      if (res.status === 409) {
+        // Another mutation is already in flight for this session — surface
+        // the conflict without wiping out the existing transcript.
+        setMessages(p => p.map(m => m.id === aiMsg.id ? { ...m, content: SESSION_BUSY_NOTICE } : m));
+        return;
+      }
+      if (!res.ok) {
+        const errMsg = await readErrorResponse(res);
+        setMessages(p => p.map(m => m.id === aiMsg.id ? { ...m, content: "⚠️ " + errMsg } : m));
+        return;
+      }
+      for await (const { data } of parseSSE(res.body!)) {
+        try {
+          const ev = JSON.parse(data);
+          if (ev.type === "token") {
+            setMessages(p => p.map(m => m.id === aiMsg.id ? { ...m, content: m.content + ev.content } : m));
+          }
+        } catch {}
       }
     } catch (e) {
       if ((e as Error).name !== "AbortError") {
         setMessages(p => p.map(m => m.id === aiMsg.id ? { ...m, content: "⚠️ Không kết nối được backend." } : m));
       }
     } finally { setStreaming(false); }
-  }, [streaming, tool]);
+  }, [streaming, tool, sessionId]);
 
   const clear = useCallback(() => {
-    const oldId = sessionId.current;
-    sessionId.current = SESSION_ID();
-    persistSessionId(tool, sessionId.current);
     setMessages([]);
-    fetch(`${API}/api/chat/session/${oldId}`, { method: "DELETE" }).catch(() => {});
-  }, [tool]);
+    fetch(`${API}/api/chat/session/${sessionId}`, { method: "DELETE" }).catch(() => {});
+  }, [sessionId]);
+
   const stop = useCallback(() => abortRef.current?.abort(), []);
-  return { messages, streaming, send, clear, stop };
+
+  return { messages, streaming, send, clear, stop, setMessages };
 }

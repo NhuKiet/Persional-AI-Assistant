@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import ModelPicker from "../components/ModelPicker";
+import { AppShell } from "../components/AppShell";
 import { InputBar } from "../components/InputBar";
-import { Sidebar } from "../components/Sidebar";
 import { ResearchProgress } from "../components/research/ResearchProgress";
 import { ResearchResult, type ResearchResultData } from "../components/research/ResearchResult";
 import { SUGGESTIONS } from "../config/tools";
-import { useChatHistory } from "../hooks/useChatHistory";
+import { fetchSessionHistory, SESSION_RECOVERY_NOTICE, useChatHistory } from "../hooks/useChatHistory";
 import { useResearch, type ResearchProgressItem } from "../hooks/useResearch";
+import { SESSION_ID } from "../lib/api";
 import type { ModelSelection } from "../types";
 
 interface ResearchMessage {
@@ -23,12 +24,14 @@ interface ResearchMessage {
 const EMPTY_MSG = (): ResearchMessage => ({ id: Math.random().toString(36).slice(2), query: "", phase: "searching", progress: [], result: null, errMsg: "" });
 
 export function ResearchPage() {
+  const [sessionId, setSessionId] = useState(() => SESSION_ID());
   const { runSearch, abort } = useResearch();
   const { sessions, activeId, setActiveId, addSession, removeSession, clearAll } = useChatHistory("research");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [model, setModel]             = useState<ModelSelection | null>(null);
   const [messages, setMessages]       = useState<ResearchMessage[]>([]);
   const [followUps, setFollowUps]     = useState<string[]>([]);
+  const [notice, setNotice]           = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
   const accentColor = "#7C9EFF";
 
@@ -62,20 +65,23 @@ export function ResearchPage() {
     abort();
     setFollowUps([]);
     setMessages([]);
-    const sid = Math.random().toString(36).slice(2);
+    setNotice("");
+    const sid = SESSION_ID();
+    setSessionId(sid);
     addSession(sid, text);
     const msg = { ...EMPTY_MSG(), query: text };
     setMessages([msg]);
-    runSearch(text, patch => updateMsg(msg.id, patch), model);
+    runSearch(text, sid, patch => updateMsg(msg.id, patch), model);
   };
 
   // Follow-up: appends a new result below the previous ones, keeps history
+  // (same session — turns append to the same server-side conversation)
   const handleFollowUp = (q: string) => {
     if (!q.trim()) return;
     setFollowUps([]);
     const msg = { ...EMPTY_MSG(), query: q };
     setMessages(prev => [...prev, msg]);
-    runSearch(q, patch => updateMsg(msg.id, patch), model);
+    runSearch(q, sessionId, patch => updateMsg(msg.id, patch), model);
   };
 
   // InputBar: new search if no history yet, follow-up otherwise
@@ -94,13 +100,44 @@ export function ResearchPage() {
 
   const handleNewResearch = () => {
     abort(); setFollowUps([]); setMessages([]);
+    setSessionId(SESSION_ID());
     setActiveId(null);
+    setNotice("");
   };
+
+  // Chọn một phiên trong sidebar: tải lại đúng lịch sử thật từ backend.
+  // Mỗi lượt lưu trong lịch sử là một cặp {query, result} — dựng lại thành
+  // các ResearchMessage đã "done" để hiển thị y như lúc chạy xong.
+  const handleSelectSession = useCallback(async (s: { id: string }) => {
+    const result = await fetchSessionHistory("research", s.id);
+    if (result.status === "not_found") {
+      removeSession(s.id);
+      setNotice(SESSION_RECOVERY_NOTICE);
+      return;
+    }
+    if (result.status === "error") return;
+    setNotice("");
+    abort();
+    setFollowUps([]);
+    setActiveId(s.id);
+    setSessionId(s.id);
+    const restored: ResearchMessage[] = [];
+    for (const m of result.data.messages) {
+      if (m.role === "user") {
+        restored.push({ ...EMPTY_MSG(), query: typeof m.content === "string" ? m.content : "" });
+      } else if (restored.length > 0) {
+        restored[restored.length - 1] = {
+          ...restored[restored.length - 1], phase: "done", result: m.content,
+        };
+      }
+    }
+    setMessages(restored);
+  }, [removeSession, setActiveId, abort]);
 
   const sidebarProps = {
     open: sidebarOpen, onToggle: () => setSidebarOpen(o => !o),
     sessions, activeId,
-    onSelect: (s: { id: string }) => setActiveId(s.id),
+    onSelect: handleSelectSession,
     onDelete: removeSession,
     onClearAll: clearAll,
     onNewChat: handleNewResearch,
@@ -109,9 +146,7 @@ export function ResearchPage() {
   };
 
   return (
-    <div className="app-layout">
-    <Sidebar {...sidebarProps} />
-    <div className="app-main">
+    <AppShell {...sidebarProps}>
     <div className="page tool-page page-entered">
       <header className="tool-header">
         <div className="tool-title-wrap">
@@ -121,6 +156,12 @@ export function ResearchPage() {
         <ModelPicker tool="research" value={model} onChange={setModel} />
         <button className="clear-btn" onClick={handleNewResearch}>Reset</button>
       </header>
+
+      {notice && (
+        <div className="recovery-notice" style={{ padding: "10px 14px", margin: "8px 0", borderRadius: 8, background: "#5a3a1a22", color: "#e0a458", fontSize: 13 }}>
+          {notice}
+        </div>
+      )}
 
       <div className="input-wrap" style={{ paddingBottom: 12 }}>
         <InputBar
@@ -176,7 +217,7 @@ export function ResearchPage() {
               <div className="rp-error">
                 <div>⚠️ {msg.errMsg || "Research thất bại."}</div>
                 <button className="clear-btn" style={{ marginTop: 10 }}
-                  onClick={() => runSearch(msg.query, patch => updateMsg(msg.id, patch), model)}>
+                  onClick={() => runSearch(msg.query, sessionId, patch => updateMsg(msg.id, patch), model)}>
                   Thử lại
                 </button>
               </div>
@@ -206,7 +247,6 @@ export function ResearchPage() {
         </div>
       )}
     </div>
-    </div>
-    </div>
+    </AppShell>
   );
 }

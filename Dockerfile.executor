@@ -1,4 +1,4 @@
-# Ảnh sandbox để chạy code do LLM sinh (EXECUTOR_MODE=docker).
+# Ảnh sandbox để chạy code do LLM sinh (EXECUTOR_MODE=docker, bắt buộc).
 # Build: docker build -f Dockerfile.executor -t king-executor:latest .
 #
 # Container chạy với --network none nên KHÔNG cài package lúc runtime được —
@@ -16,8 +16,24 @@ RUN pip install --no-cache-dir \
         openpyxl \
         tabulate
 
-# Không có ENTRYPOINT: executor gọi `docker run ... python /work/<script>.py`.
-# Không tạo user riêng ở đây để tránh vướng quyền ghi trên volume mount khi
-# chạy Docker Desktop trên Windows; cách ly chính đến từ --network none +
-# --read-only + giới hạn tài nguyên ở phía `docker run`.
+# UID/GID cố định, không phải root. `docker run` phía executor đã tự set
+# --cap-drop ALL + --security-opt no-new-privileges:true + --read-only +
+# --network none (xem backend/app/features/coding/execution.py); chạy dưới
+# user thường loại bỏ luôn khả năng leo quyền root bên trong container nếu
+# một trong các giới hạn trên bị bypass. Đây là default AN TOÀN khi không có
+# override nào khác — nhưng trên host POSIX, executor tự override bằng
+# `--user <host-uid>:<host-gid>` (xem _host_user_docker_args() trong
+# execution.py) để UID bên trong container khớp với chủ sở hữu thư mục
+# sandbox trên host, tránh phải nới quyền ghi thư mục đó. Trên Windows
+# không có override tương ứng (không có UID kiểu POSIX) nên UID 10001 ở
+# đây vẫn là UID thực sự chạy, và CodeExecutor.run() dùng chmod(0o777) làm
+# phương án dự phòng chỉ cho nhánh Windows.
+RUN groupadd --gid 10001 executor \
+        && useradd --uid 10001 --gid executor --no-create-home --shell /usr/sbin/nologin executor
+
 WORKDIR /work
+
+# Không có ENTRYPOINT: executor gọi `docker run ... python /work/<script>.py`.
+# USER phải đứng trước CMD/ENTRYPOINT — ở đây không có CMD nên đây là dòng
+# cuối, áp dụng cho lệnh `python ...` mà `docker run` truyền vào.
+USER 10001:10001

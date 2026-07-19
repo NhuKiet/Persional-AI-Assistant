@@ -57,3 +57,16 @@ def test_rerank_defaults():
     assert s.RERANK_ENABLED is True
     assert s.RERANK_GATE_THRESHOLD == 0.5
     assert s.RERANK_CANDIDATES == 30
+
+
+def test_executor_mode_defaults_to_docker():
+    s = Settings(_env_file=None)
+    assert s.EXECUTOR_MODE == "docker"
+
+
+def test_executor_mode_rejects_non_docker_values():
+    import pytest
+    with pytest.raises(ValueError):
+        Settings(_env_file=None, EXECUTOR_MODE="subprocess")
+    with pytest.raises(ValueError):
+        Settings(_env_file=None, EXECUTOR_MODE="host")

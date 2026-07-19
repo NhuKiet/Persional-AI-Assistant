@@ -38,6 +38,11 @@ _SOURCES = [
     ("wiki",        "wiki",      2),
 ]
 
+# Overall deadline for a round of parallel source search. A hung/slow source
+# must never crash the whole run — a timeout here degrades to "whatever
+# completed" rather than propagating TimeoutError up through run()/run_streaming().
+_SEARCH_TIMEOUT_SECONDS = 60
+
 _SSE_STATUS = {
     "web":         "Searching web sources…",
     "arxiv":       "Searching Arxiv papers…",
@@ -155,15 +160,21 @@ class ResearchAgent:
                     for eq in queries[1:]:
                         futures[ex.submit(_run_search, name, attr, eq)] = (name, eq)
 
-            for future in as_completed(futures, timeout=60):
-                name, q = futures[future]
-                try:
-                    batch = future.result()
-                    with collect_lock:
-                        all_results.extend(batch)
-                    logger.info("  %s [%s] → %d results", name, q[:30], len(batch))
-                except Exception as e:
-                    logger.warning("Source '%s' failed: %s", name, e)
+            try:
+                for future in as_completed(futures, timeout=_SEARCH_TIMEOUT_SECONDS):
+                    name, q = futures[future]
+                    try:
+                        batch = future.result()
+                        with collect_lock:
+                            all_results.extend(batch)
+                        logger.info("  %s [%s] → %d results", name, q[:30], len(batch))
+                    except Exception as e:
+                        logger.warning("Source '%s' failed: %s", name, e)
+            except TimeoutError:
+                logger.warning(
+                    "[SEARCH] _search_all timed out after %ss — %d results collected so far",
+                    _SEARCH_TIMEOUT_SECONDS, len(all_results),
+                )
 
         _cache.set(query, all_results)
         return all_results
@@ -309,9 +320,12 @@ class ResearchAgent:
 
                 logger.info("[SEARCH] TRIGGERED")
 
-                # Query expansion (non-blocking yield)
+                # Query expansion (non-blocking yield) — use the user's
+                # per-request provider/model selection when given, so
+                # expansion actually reflects what they picked in the UI
+                # rather than only settings.DEFAULT_PROVIDER.
                 yield {"type": "status", "message": "Expanding query…", "source": "llm"}
-                expansions = expand_query(query)
+                expansions = expand_query(query, provider=provider, model=model)
                 if len(expansions) > 1:
                     yield {
                         "type":    "status",
@@ -343,17 +357,29 @@ class ResearchAgent:
                                     getattr(getattr(self, attr), "search"), eq, max(2, k // 2)
                                 )] = f"{name}[exp]"
 
-                    for future in as_completed(futures, timeout=60):
-                        name = futures[future]
-                        try:
-                            batch = future.result()
-                            with collect_lock:
-                                raw_results.extend(batch)
-                            yield {"type": "source_done", "source": name, "count": len(batch)}
-                            logger.info("Streaming '%s' → %d results", name, len(batch))
-                        except Exception as e:
-                            logger.warning("Streaming '%s' failed: %s", name, e)
-                            yield {"type": "source_done", "source": name, "count": 0}
+                    try:
+                        for future in as_completed(futures, timeout=_SEARCH_TIMEOUT_SECONDS):
+                            name = futures[future]
+                            try:
+                                batch = future.result()
+                                with collect_lock:
+                                    raw_results.extend(batch)
+                                yield {"type": "source_done", "source": name, "count": len(batch)}
+                                logger.info("Streaming '%s' → %d results", name, len(batch))
+                            except Exception as e:
+                                logger.warning("Streaming '%s' failed: %s", name, e)
+                                yield {"type": "source_done", "source": name, "count": 0}
+                    except TimeoutError:
+                        logger.warning(
+                            "[SEARCH] streaming search timed out after %ss — %d raw results collected so far",
+                            _SEARCH_TIMEOUT_SECONDS, len(raw_results),
+                        )
+                        yield {
+                            "type":    "status",
+                            "message": "Một số nguồn tìm kiếm quá thời gian — tiếp tục với kết quả đã có.",
+                            "source":  "pipeline",
+                            "degraded": True,
+                        }
 
                 logger.info("[SEARCH] Raw: %d results (%.1fs)", len(raw_results), time.time() - t0)
                 _cache.set(query, raw_results)

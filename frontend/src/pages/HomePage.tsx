@@ -1,34 +1,36 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import ModelPicker from "../components/ModelPicker";
 import mainlogo from "../assets/mainlogo.png";
+import { AppShell } from "../components/AppShell";
 import { InputBar } from "../components/InputBar";
 import { Message } from "../components/Message";
-import { Sidebar } from "../components/Sidebar";
 import { ToolDock } from "../components/ToolDock";
 import { SUGGESTIONS, toolPath } from "../config/tools";
 import { ACCENT } from "../config/theme";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useChat } from "../hooks/useChat";
-import { useChatHistory } from "../hooks/useChatHistory";
+import { fetchSessionHistory, SESSION_RECOVERY_NOTICE, useChatHistory } from "../hooks/useChatHistory";
 import { SESSION_ID } from "../lib/api";
-import type { ModelSelection } from "../types";
+import type { ChatMessage, ModelSelection } from "../types";
 
 export function HomePage() {
-  const { messages, streaming, send, clear, stop } = useChat("chat");
+  const [sessionId, setSessionId] = useState(() => SESSION_ID());
+  const { messages, streaming, send, clear, stop, setMessages } = useChat("chat", sessionId);
   const { sessions, activeId, setActiveId, addSession, removeSession, clearAll } = useChatHistory("chat");
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [model, setModel] = useState<ModelSelection | null>(null);
+  const [notice, setNotice] = useState("");
   const chatActive = messages.length > 0;
   const bottomRef  = useRef<HTMLDivElement>(null);
-  const sessionId  = useRef(SESSION_ID());
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
   const handleSend = useCallback((text: string, context = "") => {
-    send(text, context, (firstMsg) => addSession(sessionId.current, firstMsg), "", model);
-  }, [send, addSession, model]);
+    setNotice("");
+    send(text, context, (firstMsg) => addSession(sessionId, firstMsg), "", model);
+  }, [send, addSession, model, sessionId]);
 
   // LandingPage điều hướng tới đây kèm state.prefill khi người dùng gõ ngay ở
   // ô nhập trên trang chủ rồi bấm gửi. Gửi đúng một lần khi mount, sau đó xoá
@@ -44,31 +46,50 @@ export function HomePage() {
   }, []);
 
   const handleNewChat = useCallback(() => {
-    clear(); sessionId.current = SESSION_ID(); setActiveId(null);
+    clear(); setSessionId(SESSION_ID()); setActiveId(null); setNotice("");
   }, [clear, setActiveId]);
+
+  // Chọn một phiên trong sidebar: tải lại đúng lịch sử thật từ backend thay
+  // vì chỉ đổi highlight. 404 (phiên cũ không còn trên server) → gỡ khỏi
+  // danh sách + hiện thông báo khôi phục, KHÔNG đụng vào transcript hiện tại.
+  const handleSelectSession = useCallback(async (s: { id: string }) => {
+    const result = await fetchSessionHistory("chat", s.id);
+    if (result.status === "not_found") {
+      removeSession(s.id);
+      setNotice(SESSION_RECOVERY_NOTICE);
+      return;
+    }
+    if (result.status === "error") return;
+    setNotice("");
+    setActiveId(s.id);
+    setSessionId(s.id);
+    setMessages(result.data.messages.map((m, i): ChatMessage => ({
+      role: m.role === "assistant" ? "assistant" : "user",
+      content: typeof m.content === "string" ? m.content : JSON.stringify(m.content),
+      id: Date.now() + i,
+    })));
+  }, [removeSession, setActiveId, setMessages]);
 
   const sidebarProps = {
     open: sidebarOpen, onToggle: () => setSidebarOpen(o => !o),
-    sessions, activeId, onSelect: (s: { id: string }) => setActiveId(s.id),
+    sessions, activeId, onSelect: handleSelectSession,
     onDelete: removeSession, onClearAll: clearAll, onNewChat: handleNewChat,
   };
 
   return (
-    <div className="app-layout">
-      <Sidebar {...sidebarProps} />
-      <div className="app-main">
+    <AppShell {...sidebarProps}>
         <div className="page">
 
-          {/* Nút mở sidebar khi đã đóng */}
+          {/* Lối tắt về trang chủ khi sidebar đã đóng (sidebar cũng có nút
+              này, nhưng chỉ thấy được khi mở) */}
           {!sidebarOpen && (
-            <>
-              <button className="sb-open-btn" onClick={() => setSidebarOpen(true)} title="Mở sidebar">
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                  <path d="M6 3l5 5-5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              </button>
-              <button className="workspace-home-link" onClick={() => navigate("/")}>Trang chủ</button>
-            </>
+            <button className="workspace-home-link" onClick={() => navigate("/")}>Trang chủ</button>
+          )}
+
+          {notice && (
+            <div className="recovery-notice" style={{ padding: "10px 14px", margin: "8px 16px", borderRadius: 8, background: "#5a3a1a22", color: "#e0a458", fontSize: 13 }}>
+              {notice}
+            </div>
           )}
 
           {/* Compact header khi đang chat */}
@@ -137,7 +158,6 @@ export function HomePage() {
           )}
 
         </div>
-      </div>
-    </div>
+    </AppShell>
   );
 }

@@ -81,6 +81,7 @@
   flex-shrink: 0;
 }
 .sb-icon-btn:hover { background: var(--bg3); color: var(--text); }
+.sb-icon-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* ── New chat ──────────────────────────────────────────────── */
 
@@ -244,5 +245,6 @@
   transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
 }
 .sb-open-btn:hover { background: var(--bg3); color: var(--text); }
+.sb-open-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 

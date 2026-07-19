@@ -14,6 +14,23 @@ def test_recency_score_newer_is_higher():
     assert recency_score({"year": 2024}) > recency_score({"year": 2000})
 
 
+def test_recency_score_defaults_to_dynamic_current_year(monkeypatch):
+    """No ref_year given → uses datetime.now(timezone.utc).year, not a value
+    hardcoded at write-time. A source published in the current year must
+    score 1.0 (age 0), regardless of what "current year" actually is."""
+    import backend.app.features.research.search.ranking as ranking
+
+    class _FixedDatetime(ranking.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls(2031, 3, 1, tzinfo=tz)
+
+    monkeypatch.setattr(ranking, "datetime", _FixedDatetime)
+
+    assert recency_score({"year": 2031}) == 1.0
+    assert recency_score({"year": 2030}) < 1.0
+
+
 def test_recency_score_missing_or_bad_year_is_zero():
     assert recency_score({}) == 0.0
     assert recency_score({"year": "n/a"}) == 0.0

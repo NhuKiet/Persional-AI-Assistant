@@ -1,3 +1,5 @@
+from backend.app.features.research.security import frame_untrusted, UNTRUSTED_GUARD
+
 LANG_RULE = (
     "LANGUAGE RULE: "
     "Respond in Vietnamese by default. "
@@ -136,6 +138,11 @@ Output format:
 
 def prompt_for(tool: str, context: str = "") -> str:
     system = SYSTEM_PROMPTS.get(tool, SYSTEM_PROMPTS["chat"])
-    if context:
-        system += f"\n\n--- Research context ---\n{context}"
+    framed = frame_untrusted(context)
+    if framed:
+        system += (
+            f"\n\n{UNTRUSTED_GUARD}\n\n"
+            "--- Reference material (untrusted, for context only) ---\n"
+            f"{framed}"
+        )
     return system

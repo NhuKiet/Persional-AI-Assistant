@@ -2,29 +2,31 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import ModelPicker from "../components/ModelPicker";
 import { MicButton } from "../components/MicButton";
 import { Message } from "../components/Message";
-import { Sidebar } from "../components/Sidebar";
+import { AppShell } from "../components/AppShell";
 import { CodingResult } from "../components/coding/CodingResult";
 import { EventRow } from "../components/coding/EventRow";
 import { FileUploadZone, type UploadedFile } from "../components/coding/FileUploadZone";
 import { PhaseBar } from "../components/coding/PhaseBar";
 import { SUGGESTIONS } from "../config/tools";
-import { useChatHistory } from "../hooks/useChatHistory";
-import { useCoding } from "../hooks/useCoding";
+import { fetchSessionHistory, SESSION_RECOVERY_NOTICE, useChatHistory } from "../hooks/useChatHistory";
+import { isBusyPhase, useCoding } from "../hooks/useCoding";
 import { useDragResize } from "../hooks/useDragResize";
-import { API } from "../lib/api";
-import type { ModelSelection } from "../types";
+import { API, SESSION_ID } from "../lib/api";
+import type { ChatMessage, ModelSelection } from "../types";
 
 export function CodingPage() {
-  const { phase, events, plan, codes, output, artifacts, finalMsg, success, heartbeat, chatMsgs, planStream, codeStream, installing, testOutput, review, sessionId, run, reset, clearChat } = useCoding();
+  const [sessionId, setSessionId] = useState(() => SESSION_ID());
+  const { phase, events, plan, codes, output, artifacts, finalMsg, success, heartbeat, chatMsgs, planStream, codeStream, installing, testOutput, review, run, reset, clearChat, setChatMsgs } = useCoding(sessionId);
   const { sessions, activeId, setActiveId, addSession, removeSession, clearAll } = useChatHistory("coding");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [input, setInput]     = useState("");
   const [mode, setMode]       = useState<"agent" | "chat">("agent");
   const [model, setModel]     = useState<ModelSelection | null>(null);
+  const [notice, setNotice]   = useState("");
   const bottomRef  = useRef<HTMLDivElement>(null);
   const inputRef   = useRef<HTMLTextAreaElement>(null);
   const accentColor = "#A8E6A3";
-  const isRunning  = ["thinking", "planning", "generating", "executing", "debugging"].includes(phase);
+  const isRunning  = isBusyPhase(phase);
   const { pct, containerRef, onMouseDown } = useDragResize();
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [showUpload, setShowUpload] = useState(false);
@@ -43,9 +45,9 @@ export function CodingPage() {
 
   const handleSend = (text?: string) => {
     if (!text?.trim() || isRunning) return;
+    setNotice("");
     if (!plan && codes.length === 0 && chatMsgs.length === 0) {
-      const sid = Math.random().toString(36).slice(2);
-      addSession(sid, text.trim());
+      addSession(sessionId, text.trim());
     }
     run(text.trim(), mode === "chat", uploadedFiles, model);
     setInput("");
@@ -53,12 +55,30 @@ export function CodingPage() {
 
   const hasResult = plan || planStream || codes.length > 0 || output || artifacts.length > 0;
 
-  const handleNewCoding = () => { reset(); clearChat(); setActiveId(null); };
+  const handleNewCoding = () => { reset(); clearChat(); setSessionId(SESSION_ID()); setActiveId(null); setNotice(""); };
+
+  const handleSelectSession = useCallback(async (s: { id: string }) => {
+    const result = await fetchSessionHistory("coding", s.id);
+    if (result.status === "not_found") {
+      removeSession(s.id);
+      setNotice(SESSION_RECOVERY_NOTICE);
+      return;
+    }
+    if (result.status === "error") return;
+    setNotice("");
+    setActiveId(s.id);
+    setSessionId(s.id);
+    setChatMsgs(result.data.messages.map((m, i): ChatMessage => ({
+      role: m.role === "assistant" ? "assistant" : "user",
+      content: typeof m.content === "string" ? m.content : JSON.stringify(m.content),
+      id: Date.now() + i,
+    })));
+  }, [removeSession, setActiveId, setChatMsgs]);
 
   const codingSidebarProps = {
     open: sidebarOpen, onToggle: () => setSidebarOpen(o => !o),
     sessions, activeId,
-    onSelect: (s: { id: string }) => setActiveId(s.id),
+    onSelect: handleSelectSession,
     onDelete: removeSession,
     onClearAll: clearAll,
     onNewChat: handleNewCoding,
@@ -67,9 +87,7 @@ export function CodingPage() {
   };
 
   return (
-    <div className="app-layout">
-    <Sidebar {...codingSidebarProps} />
-    <div className="app-main">
+    <AppShell {...codingSidebarProps}>
     <div className="page tool-page page-entered coding-layout">
       {/* Header */}
       <header className="tool-header">
@@ -80,6 +98,12 @@ export function CodingPage() {
         <ModelPicker tool="coding" value={model} onChange={setModel} />
         <button className="clear-btn" onClick={handleNewCoding}>Reset</button>
       </header>
+
+      {notice && (
+        <div className="recovery-notice" style={{ padding: "10px 14px", margin: "8px 0", borderRadius: 8, background: "#5a3a1a22", color: "#e0a458", fontSize: 13 }}>
+          {notice}
+        </div>
+      )}
 
       {/* Mode toggle */}
       <div className="coding-mode-bar">
@@ -217,7 +241,6 @@ export function CodingPage() {
         </div>
       </div>
     </div>
-    </div>
-    </div>
+    </AppShell>
   );
 }

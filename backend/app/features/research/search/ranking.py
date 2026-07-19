@@ -4,6 +4,7 @@ BGE reranker KHONG load o day: uy quyen ve backend/app/features/research/reranke
 """
 import logging
 import math
+from datetime import datetime, timezone
 
 from backend.app.features.research.models import SearchResult
 from backend.app.features.research.reranker import _bge_reranker, _CREDIBILITY
@@ -11,17 +12,22 @@ from backend.app.features.research.reranker import _bge_reranker, _CREDIBILITY
 logger = logging.getLogger(__name__)
 
 
-def recency_score(extra: dict, ref_year: int = 2025) -> float:
+def recency_score(extra: dict, ref_year: int | None = None) -> float:
     """Pure scoring function for recency using exponential decay.
 
     Args:
         extra: dict with optional 'year' or 'published' fields
-        ref_year: reference year for age calculation (default 2025)
+        ref_year: reference year for age calculation. Defaults to the
+            current UTC year (`datetime.now(timezone.utc).year`) — a fixed
+            year would drift stale as time passes and eventually penalize
+            genuinely current sources.
 
     Returns:
         float in [0.0, 1.0]: exp(-age/5) where age = max(0, ref_year - year).
         Returns 0.0 if year is missing or unparseable.
     """
+    if ref_year is None:
+        ref_year = datetime.now(timezone.utc).year
     # A falsy-but-present "year" (0 or "") intentionally falls through to "published".
     year = extra.get("year") or extra.get("published", "")
     if not year:

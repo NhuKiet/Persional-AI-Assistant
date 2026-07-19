@@ -54,25 +54,30 @@ def _enrich_web_results(results: list[SearchResult], max_workers: int = 6) -> li
     enriched = list(results)  # shallow copy
     with ThreadPoolExecutor(max_workers=max_workers) as ex:
         futures = {ex.submit(_fetch, i): i for i in web_indices}
-        for future in as_completed(futures, timeout=20):
-            try:
-                idx, full_text = future.result()
-                if full_text and len(full_text) > len(enriched[idx].content):
-                    # Cap at 8000 chars to avoid overwhelming LLM context
-                    enriched[idx] = SearchResult(
-                        source=enriched[idx].source,
-                        title=enriched[idx].title,
-                        url=enriched[idx].url,
-                        content=full_text[:8000],
-                        score=enriched[idx].score,
-                        extra=enriched[idx].extra,
-                    )
-                    logger.debug(
-                        "Enriched '%s': %d → %d chars",
-                        enriched[idx].title[:40], len(results[idx].content), len(full_text),
-                    )
-            except Exception as e:
-                logger.debug("Crawl future error: %s", e)
+        try:
+            for future in as_completed(futures, timeout=20):
+                try:
+                    idx, full_text = future.result()
+                    if full_text and len(full_text) > len(enriched[idx].content):
+                        # Cap at 8000 chars to avoid overwhelming LLM context
+                        enriched[idx] = SearchResult(
+                            source=enriched[idx].source,
+                            title=enriched[idx].title,
+                            url=enriched[idx].url,
+                            content=full_text[:8000],
+                            score=enriched[idx].score,
+                            extra=enriched[idx].extra,
+                        )
+                        logger.debug(
+                            "Enriched '%s': %d → %d chars",
+                            enriched[idx].title[:40], len(results[idx].content), len(full_text),
+                        )
+                except Exception as e:
+                    logger.debug("Crawl future error: %s", e)
+        except TimeoutError:
+            # Overall crawl deadline hit — keep whatever got enriched so far
+            # instead of propagating and crashing the caller (agent.py).
+            logger.warning("Trafilatura crawl timed out after 20s; using partial enrichment")
 
     enriched_count = sum(
         1 for i in web_indices

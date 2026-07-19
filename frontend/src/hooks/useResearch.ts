@@ -1,5 +1,6 @@
 import { useRef, useCallback, useEffect } from "react";
 import { API } from "../lib/api";
+import { parseSSE, readErrorResponse } from "../lib/sse";
 import type { ModelSelection } from "../types";
 
 export interface ResearchProgressItem {
@@ -17,7 +18,15 @@ export interface ResearchPatchState {
 
 type ResearchPatch = Partial<ResearchPatchState> | ((prev: ResearchPatchState) => Partial<ResearchPatchState>);
 
-/** Research pipeline streaming (SSE). */
+const SESSION_BUSY_NOTICE = "Phiên đang bận (một tab/luồng khác đang gửi tin). Thử lại sau vài giây.";
+
+/** Research pipeline streaming (SSE).
+ *
+ * `sessionId` is passed per-call (not bound once at hook creation) because
+ * the calling page may mint a brand-new session id and use it in the very
+ * same call (a fresh top-level search) — binding it as a hook-level
+ * parameter would race React's render cycle. The page still owns id
+ * generation/lifetime; this hook never generates one itself. */
 export function useResearch() {
   const abortRef = useRef<AbortController | null>(null);
 
@@ -25,6 +34,7 @@ export function useResearch() {
   // decides which message slot to update.
   const runSearch = useCallback(async (
     query: string,
+    sessionId: string,
     onUpdate: (patch: ResearchPatch) => void,
     model: ModelSelection | null = null,
   ) => {
@@ -35,37 +45,40 @@ export function useResearch() {
       const res = await fetch(`${API}/api/research/stream`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         signal: abortRef.current.signal,
-        body: JSON.stringify({ query, provider: model?.provider ?? null, model: model?.model ?? null }),
+        body: JSON.stringify({ query, session_id: sessionId, provider: model?.provider ?? null, model: model?.model ?? null }),
       });
-      if (!res.ok) { onUpdate({ phase: "error", errMsg: `Backend lỗi ${res.status}.` }); return; }
-      const reader = res.body!.getReader(); const decoder = new TextDecoder();
-      while (true) {
-        const { done, value } = await reader.read(); if (done) break;
-        for (const line of decoder.decode(value, { stream: true }).split("\n")) {
-          if (!line.startsWith("data:")) continue;
-          try {
-            const ev = JSON.parse(line.slice(5).trim());
-            if (ev.type === "status") {
-              const nextPhase = ev.source === "llm" ? "synthesizing" : undefined;
-              onUpdate(prev => ({
-                ...(nextPhase ? { phase: nextPhase } : {}),
-                progress: prev.progress.find(x => x.source === ev.source)
-                  ? prev.progress
-                  : [...prev.progress, { source: ev.source, count: null, done: false }],
-              }));
-            } else if (ev.type === "source_done") {
-              onUpdate(prev => ({
-                progress: prev.progress.map(x =>
-                  x.source === ev.source ? { ...x, count: ev.count, done: true } : x
-                ),
-              }));
-            } else if (ev.type === "done") {
-              onUpdate({ phase: "done", result: ev.data });
-            } else if (ev.type === "error") {
-              onUpdate({ phase: "error", errMsg: ev.message || "Unknown error" });
-            }
-          } catch {}
-        }
+      if (res.status === 409) {
+        onUpdate({ phase: "error", errMsg: SESSION_BUSY_NOTICE });
+        return;
+      }
+      if (!res.ok) { onUpdate({ phase: "error", errMsg: await readErrorResponse(res) }); return; }
+      for await (const { data } of parseSSE(res.body!)) {
+        try {
+          const ev = JSON.parse(data);
+          if (ev.type === "status") {
+            // NOTE: "status" fires for many things (query expansion, per-
+            // source progress, dedup/rerank…) including source "llm" for
+            // "Expanding query…" — it must NOT be mistaken for synthesis.
+            // The backend emits a dedicated "synthesizing" event for that.
+            onUpdate(prev => ({
+              progress: prev.progress.find(x => x.source === ev.source)
+                ? prev.progress
+                : [...prev.progress, { source: ev.source, count: null, done: false }],
+            }));
+          } else if (ev.type === "synthesizing") {
+            onUpdate({ phase: "synthesizing" });
+          } else if (ev.type === "source_done") {
+            onUpdate(prev => ({
+              progress: prev.progress.map(x =>
+                x.source === ev.source ? { ...x, count: ev.count, done: true } : x
+              ),
+            }));
+          } else if (ev.type === "done") {
+            onUpdate({ phase: "done", result: ev.data });
+          } else if (ev.type === "error") {
+            onUpdate({ phase: "error", errMsg: ev.message || "Unknown error" });
+          }
+        } catch {}
       }
     } catch (e) {
       if ((e as Error).name !== "AbortError") onUpdate({ phase: "error", errMsg: "Mất kết nối backend." });

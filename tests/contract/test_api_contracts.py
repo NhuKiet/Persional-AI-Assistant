@@ -28,23 +28,26 @@ PUBLIC_ROUTES = {
     ("GET", "/api/models"),
     ("POST", "/api/chat/stream"),
     ("DELETE", "/api/chat/session/{session_id}"),
+    ("GET", "/api/chat/sessions/{session_id}"),
     ("POST", "/api/research/stream"),
     ("POST", "/api/research/deep-dive"),
     ("GET", "/api/paper/{filename}"),
     ("DELETE", "/api/research/cache"),
+    ("GET", "/api/research/sessions/{session_id}"),
     ("POST", "/api/coding/upload"),
     ("DELETE", "/api/coding/file/{filename}"),
     ("POST", "/api/coding/stream"),
     ("GET", "/api/coding/artifact/{session_id}/{filename}"),
     ("GET", "/api/coding/artifact/{filename}"),
     ("DELETE", "/api/coding/session/{session_id}"),
-    ("GET", "/api/coding/session/{session_id}"),
+    ("GET", "/api/coding/sessions/{session_id}"),
     ("POST", "/api/pdf/upload"),
     ("GET", "/api/pdf/list"),
     ("GET", "/api/pdf/raw/{filename}"),
     ("DELETE", "/api/pdf/file/{filename}"),
     ("POST", "/api/pdf/stream"),
     ("POST", "/api/pdf/summarize"),
+    ("GET", "/api/pdf/sessions/{session_id}"),
 }
 
 
@@ -65,6 +68,7 @@ def test_research_routes_remain_registered():
         ("POST", "/api/research/deep-dive"),
         ("GET", "/api/paper/{filename}"),
         ("DELETE", "/api/research/cache"),
+        ("GET", "/api/research/sessions/{session_id}"),
     }
 
 
@@ -350,7 +354,9 @@ def test_coding_stream_serializes_agent_error_events(monkeypatch):
 def test_pdf_stream_and_summary_serialize_token_then_done(monkeypatch):
     monkeypatch.setattr(pdf_router._service, "_get_doc", lambda _filename: object())
     monkeypatch.setattr(pdf_router._service._processor, "build_context", lambda *_args: "context")
-    monkeypatch.setattr(pdf_router._service._processor, "summary_context", lambda _doc: "summary")
+    monkeypatch.setattr(pdf_router._service._processor, "exceeds_summary_scope", lambda _doc: False)
+    monkeypatch.setattr(pdf_router._service._processor, "map_chunks", lambda _doc: ["chunk"])
+    monkeypatch.setattr(pdf_router._service, "_map_summarize", lambda *_args, **_kwargs: "map summary")
     monkeypatch.setattr(pdf_router._service, "_stream_llm", lambda *_args, **_kwargs: iter(["pdf token"]))
     monkeypatch.setattr(pdf_router._service._conv_manager, "get_history", lambda *_args: [])
     monkeypatch.setattr(pdf_router._service._conv_manager, "add_turn", lambda *_args, **_kwargs: None)
