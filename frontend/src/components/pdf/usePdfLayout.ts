@@ -6,6 +6,7 @@ const OUTLINE_STORAGE_KEY = "pdf-outline-open";
 const ASSISTANT_STORAGE_KEY = "pdf-assistant-open";
 
 function readLayoutMode(): PdfLayoutMode {
+  if (typeof window === "undefined") return "desktop";
   if (window.innerWidth < 900) return "narrow";
   if (window.innerWidth < 1280) return "laptop";
   return "desktop";
@@ -24,62 +25,107 @@ export function usePdfLayoutMode(): PdfLayoutMode {
 }
 
 function stored(key: string, fallback: boolean): boolean {
-  const value = localStorage.getItem(key);
-  return value === null ? fallback : value === "true";
+  if (typeof localStorage === "undefined") return fallback;
+  try {
+    const value = localStorage.getItem(key);
+    return value === null ? fallback : value === "true";
+  } catch {
+    return fallback;
+  }
 }
 
-interface PdfPanelState {
+function persist(key: string, value: boolean): void {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.setItem(key, String(value));
+  } catch {
+    // Storage may be unavailable in privacy-restricted browsing contexts.
+  }
+}
+
+interface TransientPanelState {
+  mode: PdfLayoutMode;
   outlineOpen: boolean;
   assistantOpen: boolean;
 }
 
 export function usePdfLayout(mode: PdfLayoutMode) {
-  const [panels, setPanels] = useState<PdfPanelState>(() => ({
-    outlineOpen: mode === "desktop" && stored(OUTLINE_STORAGE_KEY, true),
-    assistantOpen: mode !== "narrow" && stored(ASSISTANT_STORAGE_KEY, true),
+  const [outlinePreference, setOutlinePreference] = useState(
+    () => stored(OUTLINE_STORAGE_KEY, true),
+  );
+  const [assistantPreference, setAssistantPreference] = useState(
+    () => stored(ASSISTANT_STORAGE_KEY, true),
+  );
+  const outlinePreferenceRef = useRef(outlinePreference);
+  const assistantPreferenceRef = useRef(assistantPreference);
+  const [transient, setTransient] = useState<TransientPanelState>(() => ({
+    mode,
+    outlineOpen: false,
+    assistantOpen: false,
   }));
-  const panelsRef = useRef(panels);
 
-  const updatePanels = useCallback((next: PdfPanelState) => {
-    panelsRef.current = next;
-    setPanels(next);
+  const updateTransient = useCallback((next: TransientPanelState) => {
+    setTransient(next);
   }, []);
 
   useEffect(() => {
-    if (mode !== "narrow") return;
-    const current = panelsRef.current;
-    if (current.outlineOpen && current.assistantOpen) {
-      updatePanels({ ...current, outlineOpen: false });
-    }
-  }, [mode, updatePanels]);
+    setTransient((current) => current.mode === mode ? current : {
+      mode,
+      outlineOpen: false,
+      assistantOpen: false,
+    });
+  }, [mode]);
+
+  const transientMatchesMode = transient.mode === mode;
+  const outlineOpen = mode === "desktop"
+    ? outlinePreference
+    : transientMatchesMode && transient.outlineOpen;
+  const assistantOpen = mode === "narrow"
+    ? transientMatchesMode && transient.assistantOpen
+    : assistantPreference;
 
   const toggleOutline = useCallback(() => {
-    const current = panelsRef.current;
-    const outlineOpen = !current.outlineOpen;
-    updatePanels({
-      outlineOpen,
-      assistantOpen: mode === "narrow" && outlineOpen ? false : current.assistantOpen,
+    if (mode === "desktop") {
+      const next = !outlinePreferenceRef.current;
+      outlinePreferenceRef.current = next;
+      setOutlinePreference(next);
+      persist(OUTLINE_STORAGE_KEY, next);
+      return;
+    }
+
+    const next = !outlineOpen;
+    updateTransient({
+      mode,
+      outlineOpen: next,
+      assistantOpen: mode === "narrow" && next ? false : assistantOpen,
     });
-    localStorage.setItem(OUTLINE_STORAGE_KEY, String(outlineOpen));
-  }, [mode, updatePanels]);
+  }, [assistantOpen, mode, outlineOpen, updateTransient]);
 
   const toggleAssistant = useCallback(() => {
-    const current = panelsRef.current;
-    const assistantOpen = !current.assistantOpen;
-    updatePanels({
-      outlineOpen: mode === "narrow" && assistantOpen ? false : current.outlineOpen,
-      assistantOpen,
+    if (mode !== "narrow") {
+      const next = !assistantPreferenceRef.current;
+      assistantPreferenceRef.current = next;
+      setAssistantPreference(next);
+      persist(ASSISTANT_STORAGE_KEY, next);
+      return;
+    }
+
+    const next = !assistantOpen;
+    updateTransient({
+      mode,
+      outlineOpen: next ? false : outlineOpen,
+      assistantOpen: next,
     });
-    localStorage.setItem(ASSISTANT_STORAGE_KEY, String(assistantOpen));
-  }, [mode, updatePanels]);
+  }, [assistantOpen, mode, outlineOpen, updateTransient]);
 
   const closeOverlays = useCallback(() => {
-    updatePanels({ outlineOpen: false, assistantOpen: false });
-  }, [updatePanels]);
+    if (mode === "desktop") return;
+    updateTransient({ mode, outlineOpen: false, assistantOpen: false });
+  }, [mode, updateTransient]);
 
   return {
-    outlineOpen: panels.outlineOpen,
-    assistantOpen: panels.assistantOpen,
+    outlineOpen,
+    assistantOpen,
     toggleOutline,
     toggleAssistant,
     closeOverlays,

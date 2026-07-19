@@ -96,6 +96,7 @@ export default function PdfToolbar({
         <form aria-label="Điều hướng trang PDF" onSubmit={submitPage}>
           <input
             aria-label="Trang hiện tại"
+            disabled={totalPages < 1}
             inputMode="numeric"
             max={Math.max(1, totalPages)}
             min={1}

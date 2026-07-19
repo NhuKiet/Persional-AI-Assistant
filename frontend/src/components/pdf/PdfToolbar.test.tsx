@@ -94,4 +94,10 @@ describe("PdfToolbar", () => {
       expect(button).toHaveAttribute("type", "button");
     }
   });
+
+  it("disables page entry before PDF.js reports a page count", () => {
+    render(<PdfToolbar {...toolbarProps()} currentPage={1} totalPages={0} />);
+
+    expect(screen.getByRole("spinbutton", { name: "Trang hiện tại" })).toBeDisabled();
+  });
 });

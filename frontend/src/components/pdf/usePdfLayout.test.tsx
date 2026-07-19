@@ -1,7 +1,7 @@
 import { StrictMode } from "react";
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { usePdfLayout, usePdfLayoutMode } from "./usePdfLayout";
+import { usePdfLayout, usePdfLayoutMode, type PdfLayoutMode } from "./usePdfLayout";
 
 beforeEach(() => {
   localStorage.clear();
@@ -43,6 +43,46 @@ describe("usePdfLayout", () => {
     expect(result.current.assistantOpen).toBe(true);
   });
 
+  it("applies narrow defaults synchronously and restores desktop preferences", () => {
+    localStorage.setItem("pdf-outline-open", "true");
+    localStorage.setItem("pdf-assistant-open", "true");
+    const { result, rerender } = renderHook(
+      ({ mode }) => usePdfLayout(mode),
+      { initialProps: { mode: "desktop" as PdfLayoutMode } },
+    );
+
+    rerender({ mode: "narrow" });
+    expect(result.current.outlineOpen).toBe(false);
+    expect(result.current.assistantOpen).toBe(false);
+    act(() => result.current.toggleAssistant());
+    expect(result.current.assistantOpen).toBe(true);
+
+    rerender({ mode: "desktop" });
+    expect(result.current.outlineOpen).toBe(true);
+    expect(result.current.assistantOpen).toBe(true);
+  });
+
+  it("uses a transient laptop outline drawer and a persisted docked assistant", () => {
+    const { result, rerender } = renderHook(
+      ({ mode }) => usePdfLayout(mode),
+      { initialProps: { mode: "desktop" as PdfLayoutMode } },
+    );
+
+    rerender({ mode: "laptop" });
+    expect(result.current.outlineOpen).toBe(false);
+    expect(result.current.assistantOpen).toBe(true);
+    act(() => result.current.toggleOutline());
+    act(() => result.current.toggleAssistant());
+    expect(result.current.outlineOpen).toBe(true);
+    expect(result.current.assistantOpen).toBe(false);
+    expect(localStorage.getItem("pdf-outline-open")).toBe(null);
+    expect(localStorage.getItem("pdf-assistant-open")).toBe("false");
+
+    rerender({ mode: "desktop" });
+    expect(result.current.outlineOpen).toBe(true);
+    expect(result.current.assistantOpen).toBe(false);
+  });
+
   it("closes narrow overlays without overwriting stored desktop preferences", () => {
     localStorage.setItem("pdf-outline-open", "true");
     localStorage.setItem("pdf-assistant-open", "true");
@@ -67,6 +107,22 @@ describe("usePdfLayout", () => {
 
     expect(setItem).toHaveBeenCalledTimes(1);
     expect(setItem).toHaveBeenCalledWith("pdf-outline-open", "false");
+  });
+
+  it("uses defaults when storage is unavailable", () => {
+    const availableStorage = localStorage;
+    Object.defineProperty(window, "localStorage", { configurable: true, value: undefined });
+    try {
+      const { result } = renderHook(() => usePdfLayout("desktop"));
+
+      expect(result.current.outlineOpen).toBe(true);
+      expect(result.current.assistantOpen).toBe(true);
+    } finally {
+      Object.defineProperty(window, "localStorage", {
+        configurable: true,
+        value: availableStorage,
+      });
+    }
   });
 });
 
