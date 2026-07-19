@@ -16,6 +16,7 @@ assumption first.
 
 import hashlib
 import threading
+from typing import Optional
 
 
 class SessionBusyError(Exception):
@@ -59,7 +60,7 @@ class KeyedLockRegistry:
                 self._locks[key] = lock
             return lock
 
-    def try_acquire(self, key: str) -> threading.Lock | None:
+    def try_acquire(self, key: str) -> Optional[threading.Lock]:
         """Attempt to acquire the lock for ``key`` without blocking.
 
         Returns the held lock on success, or ``None`` if it's already held by
