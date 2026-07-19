@@ -1,6 +1,23 @@
 /* breakpoints tablet/mobile */
 /* ── 20. Responsive ────────────────────────────────────────── */
 
+/* ── PDF workspace breakpoints ─────────────────────────────── */
+@media (max-width: 1279px) {
+  .pdf-workspace-laptop .pdf-outline-panel {
+    position: absolute; inset: 0 auto 0 0; z-index: 30; box-shadow: var(--shadow-2);
+  }
+}
+
+@media (max-width: 899px) {
+  .pdf-assistant-panel,
+  .pdf-outline-panel {
+    position: absolute; inset: 0; z-index: 40; width: min(100%, 420px);
+  }
+  .pdf-assistant-panel { margin-left: auto; }
+  .pdf-overlay-backdrop { position: absolute; inset: 0; z-index: 35; background: rgba(0, 0, 0, 0.55); border: 0; }
+  .pdf-workspace-toolbar { overflow-x: auto; }
+}
+
 /* Tablet */
 @media (max-width: 900px) {
   :root {
