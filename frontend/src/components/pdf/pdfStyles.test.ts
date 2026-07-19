@@ -20,4 +20,22 @@ describe("PDF workspace CSS contract", () => {
     expect(responsiveCss).toContain("@media (max-width: 1279px)");
     expect(responsiveCss).toContain("@media (max-width: 899px)");
   });
+
+  // Regression guard: PdfToolbar/PdfOutline/PdfSearch/PdfAssistantPanel
+  // render real DOM (buttons, lists, inputs) with no className of their own
+  // beyond a few wrapper hooks — the workspace shell (Task 8) styled only
+  // the container panels, leaving every control inside them as unstyled
+  // browser-default HTML. Assert the descendant selectors that style that
+  // content actually exist, so this can't silently regress to bare markup
+  // again.
+  it("styles the toolbar, outline, search bar, and assistant info bar content", () => {
+    expect(pdfCss).toContain(".pdf-toolbar {");
+    expect(pdfCss).toContain(".pdf-toolbar button");
+    expect(pdfCss).toContain(".pdf-outline-panel button");
+    expect(pdfCss).toContain(".pdf-outline-panel button[aria-current=\"page\"]");
+    expect(pdfCss).toContain(".pdf-search-anchor");
+    expect(pdfCss).toContain(".pdf-assistant-content");
+    expect(pdfCss).toContain(".pdf-info-bar");
+    expect(pdfCss).toContain(".pdf-summarize-btn");
+  });
 });
