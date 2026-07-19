@@ -5,8 +5,15 @@ export interface ModelSelection {
   model: string;
 }
 
+export interface PdfSource {
+  page: number;
+  chunk_index: number;
+  excerpt: string;
+}
+
 export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   id: number;
+  sources?: PdfSource[];
 }
