@@ -12,21 +12,41 @@ interface PdfSearchProps {
   onClose: () => void;
 }
 
+interface SearchSelection {
+  resultSetKey: string;
+  index: number;
+}
+
+function resultSetKey(results: PdfSearchResult[]): string {
+  return results.map((result) => JSON.stringify([
+    result.page,
+    result.matchStart,
+    result.matchEnd,
+    result.matchText,
+    result.excerpt,
+  ])).join("\u0000");
+}
+
 export default function PdfSearch({ pages, onOpenResult, onClose }: PdfSearchProps) {
   const [query, setQuery] = useState("");
-  const [requestedIndex, setRequestedIndex] = useState(0);
+  const [selection, setSelection] = useState<SearchSelection>({ resultSetKey: "", index: 0 });
   const results = useMemo(() => searchPdfPages(pages, query), [pages, query]);
+  const currentResultSetKey = useMemo(() => resultSetKey(results), [results]);
   const hasSearchableText = useMemo(
     () => pages.some((page) => page.text.trim().length > 0),
     [pages],
   );
   const hasQuery = normalizeSearchText(query).length > 0;
-  const activeIndex = results.length > 0 ? Math.min(requestedIndex, results.length - 1) : 0;
+  const activeIndex = results.length > 0 && selection.resultSetKey === currentResultSetKey
+    ? Math.min(selection.index, results.length - 1)
+    : 0;
   const activeResult = results[activeIndex];
 
   useEffect(() => {
-    setRequestedIndex(0);
-  }, [pages, query]);
+    setSelection((current) => current.resultSetKey === currentResultSetKey
+      ? current
+      : { resultSetKey: currentResultSetKey, index: 0 });
+  }, [currentResultSetKey]);
 
   useEffect(() => {
     if (activeResult) onOpenResult(activeResult);
@@ -34,7 +54,10 @@ export default function PdfSearch({ pages, onOpenResult, onClose }: PdfSearchPro
 
   const openAt = (nextIndex: number) => {
     if (!results.length) return;
-    setRequestedIndex((nextIndex + results.length) % results.length);
+    setSelection({
+      resultSetKey: currentResultSetKey,
+      index: (nextIndex + results.length) % results.length,
+    });
   };
 
   return (

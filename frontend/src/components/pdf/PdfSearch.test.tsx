@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { expect, it, vi } from "vitest";
 import PdfSearch from "./PdfSearch";
@@ -86,4 +86,40 @@ it("clamps the active result before callbacks when replacement pages shrink resu
 
   expect(onOpenResult).not.toHaveBeenCalledWith(undefined);
   expect(onOpenResult).toHaveBeenLastCalledWith(expect.objectContaining({ page: 9 }));
+});
+
+it("atomically resets selection for query and page replacements with the same result count", async () => {
+  const user = userEvent.setup();
+  const onOpenResult = vi.fn();
+  const onClose = vi.fn();
+  const firstPages = [
+    { page: 1, text: "alpha beta one" },
+    { page: 2, text: "alpha beta two" },
+  ];
+  const { rerender } = render(
+    <PdfSearch pages={firstPages} onOpenResult={onOpenResult} onClose={onClose} />,
+  );
+  const search = screen.getByRole("searchbox", { name: "Tìm trong PDF" });
+
+  await user.type(search, "alpha");
+  await user.click(screen.getByRole("button", { name: "Kết quả tiếp theo" }));
+  expect(onOpenResult).toHaveBeenLastCalledWith(expect.objectContaining({ page: 2, matchText: "alpha" }));
+
+  onOpenResult.mockClear();
+  fireEvent.change(search, { target: { value: "beta" } });
+  expect(onOpenResult).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1, matchText: "beta" }));
+  expect(onOpenResult).not.toHaveBeenCalledWith(expect.objectContaining({ page: 2, matchText: "beta" }));
+
+  await user.click(screen.getByRole("button", { name: "Kết quả tiếp theo" }));
+  onOpenResult.mockClear();
+  rerender(
+    <PdfSearch
+      pages={[{ page: 9, text: "beta three" }, { page: 10, text: "beta four" }]}
+      onOpenResult={onOpenResult}
+      onClose={onClose}
+    />,
+  );
+
+  expect(onOpenResult).toHaveBeenLastCalledWith(expect.objectContaining({ page: 9, matchText: "beta" }));
+  expect(onOpenResult).not.toHaveBeenCalledWith(expect.objectContaining({ page: 10, matchText: "beta" }));
 });
