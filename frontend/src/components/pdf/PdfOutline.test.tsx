@@ -39,6 +39,27 @@ it("marks the nearest nested destination at or before the current page", () => {
   expect(screen.getAllByRole("list")).toHaveLength(2);
 });
 
+it("marks one deterministic outline item when destinations share a page", () => {
+  render(
+    <PdfOutline
+      items={[
+        { title: "Chương 1", page: 4, children: [] },
+        {
+          title: "Chương 2",
+          page: 4,
+          children: [{ title: "Mục 2.1", page: 4, children: [] }],
+        },
+      ]}
+      totalPages={8}
+      currentPage={4}
+      onNavigate={vi.fn()}
+    />,
+  );
+
+  expect(screen.getAllByRole("button", { current: "page" })).toHaveLength(1);
+  expect(screen.getByRole("button", { name: "Mục 2.1" })).toHaveAttribute("aria-current", "page");
+});
+
 it("renders a flat page list when no outline exists", () => {
   render(<PdfOutline items={[]} totalPages={3} currentPage={1} onNavigate={vi.fn()} />);
 

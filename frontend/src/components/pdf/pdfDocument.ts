@@ -104,12 +104,17 @@ async function destinationPage(
     if (!explicit?.length) return null;
 
     const pageRef = explicit[0];
-    if (typeof pageRef === "number") return pageRef + 1;
+    if (typeof pageRef === "number") return pageIndexToPageNumber(pdf, pageRef);
     if (!isPageReference(pageRef)) return null;
-    return (await pdf.getPageIndex(pageRef)) + 1;
+    return pageIndexToPageNumber(pdf, await pdf.getPageIndex(pageRef));
   } catch {
     return null;
   }
+}
+
+function pageIndexToPageNumber(pdf: PDFDocumentProxy, index: number): number | null {
+  if (!Number.isInteger(index) || index < 0 || index >= pdf.numPages) return null;
+  return index + 1;
 }
 
 export async function resolvePdfOutline(pdf: PDFDocumentProxy): Promise<ResolvedOutlineItem[]> {
@@ -118,17 +123,18 @@ export async function resolvePdfOutline(pdf: PDFDocumentProxy): Promise<Resolved
 
   const resolveItems = async (items: typeof outline): Promise<ResolvedOutlineItem[]> => {
     const resolved = await Promise.all(items.map(async (item) => {
+      const children = await resolveItems(item.items);
       const page = item.dest ? await destinationPage(pdf, item.dest) : null;
-      if (page === null) return null;
+      if (page === null) return children;
 
-      return {
+      return [{
         title: item.title,
         page,
-        children: await resolveItems(item.items),
-      };
+        children,
+      }];
     }));
 
-    return resolved.filter((item): item is ResolvedOutlineItem => item !== null);
+    return resolved.flat();
   };
 
   return resolveItems(outline);

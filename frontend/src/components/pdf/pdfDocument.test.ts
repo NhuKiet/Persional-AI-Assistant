@@ -47,6 +47,7 @@ describe("PDF document helpers", () => {
 
   it("resolves named and explicit destinations recursively", async () => {
     const pdf = {
+      numPages: 10,
       getOutline: async () => [{
         title: "Chương",
         dest: "chapter",
@@ -61,5 +62,72 @@ describe("PDF document helpers", () => {
       page: 5,
       children: [{ title: "Mục", page: 10, children: [] }],
     }]);
+  });
+
+  it("promotes valid children when a parent destination is missing or throws", async () => {
+    const pdf = {
+      numPages: 3,
+      getOutline: async () => [
+        {
+          title: "Nhóm không có đích",
+          dest: null,
+          items: [{ title: "Con hợp lệ", dest: [0], items: [] }],
+        },
+        {
+          title: "Nhóm đích lỗi",
+          dest: "broken",
+          items: [{ title: "Con vẫn hợp lệ", dest: [1], items: [] }],
+        },
+      ],
+      getDestination: async () => { throw new Error("missing destination"); },
+      getPageIndex: async () => 0,
+    };
+
+    await expect(resolvePdfOutline(pdf as never)).resolves.toEqual([
+      { title: "Con hợp lệ", page: 1, children: [] },
+      { title: "Con vẫn hợp lệ", page: 2, children: [] },
+    ]);
+  });
+
+  it("rejects invalid numeric destination indexes without losing valid descendants or siblings", async () => {
+    const pdf = {
+      numPages: 3,
+      getOutline: async () => [
+        { title: "Âm", dest: [-1], items: [] },
+        { title: "Quá trang", dest: [3], items: [] },
+        { title: "Thập phân", dest: [1.5], items: [] },
+        {
+          title: "Cha không hợp lệ",
+          dest: [-1],
+          items: [{ title: "Con hợp lệ", dest: [2], items: [] }],
+        },
+        { title: "Anh chị em hợp lệ", dest: [1], items: [] },
+      ],
+      getDestination: async () => null,
+      getPageIndex: async () => 0,
+    };
+
+    await expect(resolvePdfOutline(pdf as never)).resolves.toEqual([
+      { title: "Con hợp lệ", page: 3, children: [] },
+      { title: "Anh chị em hợp lệ", page: 2, children: [] },
+    ]);
+  });
+
+  it("rejects invalid page indexes returned for destination references", async () => {
+    const pdf = {
+      numPages: 3,
+      getOutline: async () => [
+        { title: "Âm", dest: [{ num: -1, gen: 0 }], items: [] },
+        { title: "Quá trang", dest: [{ num: 3, gen: 0 }], items: [] },
+        { title: "Thập phân", dest: [{ num: 1.5, gen: 0 }], items: [] },
+        { title: "Hợp lệ", dest: [{ num: 1, gen: 0 }], items: [] },
+      ],
+      getDestination: async () => null,
+      getPageIndex: async (ref: { num: number }) => ref.num,
+    };
+
+    await expect(resolvePdfOutline(pdf as never)).resolves.toEqual([
+      { title: "Hợp lệ", page: 2, children: [] },
+    ]);
   });
 });

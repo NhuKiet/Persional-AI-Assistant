@@ -7,40 +7,58 @@ interface PdfOutlineProps {
   onNavigate: (page: number) => void;
 }
 
-function activeOutlinePage(items: ResolvedOutlineItem[], currentPage: number): number | null {
-  const pages: number[] = [];
-  const collect = (nodes: ResolvedOutlineItem[]) => nodes.forEach((node) => {
-    pages.push(node.page);
-    collect(node.children);
+function activeOutlineId(items: ResolvedOutlineItem[], currentPage: number): string | null {
+  const candidates: Array<{ id: string; page: number; order: number }> = [];
+  let order = 0;
+  const collect = (nodes: ResolvedOutlineItem[], parentId: string) => nodes.forEach((node, index) => {
+    const id = `${parentId}/${index}`;
+    const nodeOrder = order;
+    order += 1;
+
+    if (node.page <= currentPage) candidates.push({ id, page: node.page, order: nodeOrder });
+
+    collect(node.children, id);
   });
 
-  collect(items);
-  return pages.filter((page) => page <= currentPage).sort((a, b) => b - a)[0] ?? null;
+  collect(items, "outline");
+  return candidates.reduce<typeof candidates[number] | null>((active, candidate) => {
+    if (active === null || candidate.page > active.page) return candidate;
+    return candidate.page === active.page && candidate.order > active.order ? candidate : active;
+  }, null)?.id ?? null;
 }
 
 interface OutlineItemsProps {
   items: ResolvedOutlineItem[];
-  activePage: number | null;
+  activeId: string | null;
+  parentId: string;
   onNavigate: (page: number) => void;
 }
 
-function OutlineItems({ items, activePage, onNavigate }: OutlineItemsProps) {
+function OutlineItems({ items, activeId, parentId, onNavigate }: OutlineItemsProps) {
   return (
     <ul>
-      {items.map((item) => (
-        <li key={`${item.title}:${item.page}`}>
-          <button
-            type="button"
-            aria-current={item.page === activePage ? "page" : undefined}
-            onClick={() => onNavigate(item.page)}
-          >
-            {item.title}
-          </button>
-          {item.children.length > 0 ? (
-            <OutlineItems items={item.children} activePage={activePage} onNavigate={onNavigate} />
-          ) : null}
-        </li>
-      ))}
+      {items.map((item, index) => {
+        const id = `${parentId}/${index}`;
+        return (
+          <li key={id}>
+            <button
+              type="button"
+              aria-current={id === activeId ? "page" : undefined}
+              onClick={() => onNavigate(item.page)}
+            >
+              {item.title}
+            </button>
+            {item.children.length > 0 ? (
+              <OutlineItems
+                items={item.children}
+                activeId={activeId}
+                parentId={id}
+                onNavigate={onNavigate}
+              />
+            ) : null}
+          </li>
+        );
+      })}
     </ul>
   );
 }
@@ -51,7 +69,8 @@ export default function PdfOutline({ items, totalPages, currentPage, onNavigate 
       <nav aria-label="Mục lục PDF">
         <OutlineItems
           items={items}
-          activePage={activeOutlinePage(items, currentPage)}
+          activeId={activeOutlineId(items, currentPage)}
+          parentId="outline"
           onNavigate={onNavigate}
         />
       </nav>
