@@ -126,11 +126,27 @@ export function findExcerptSpanIndexes(spanTexts: string[], excerpt: string): nu
   let normalizedText = "";
   const spanByOffset: number[] = [];
   let pendingWhitespaceSpan: number | null = null;
+  let lastSpanIndex: number | null = null;
 
   spanTexts.forEach((spanText, spanIndex) => {
+    // PDF.js text-layer spans usually represent separate lines/blocks and often
+    // carry no whitespace character at all between them, unlike backend-extracted
+    // text (e.g. PyMuPDF), which always joins blocks with a space/newline. Treat
+    // a span boundary as an implicit space so excerpts spanning multiple spans
+    // still match, unless a real whitespace character already bridges the gap.
+    if (
+      lastSpanIndex !== null &&
+      normalizedText &&
+      !normalizedText.endsWith(" ") &&
+      pendingWhitespaceSpan === null
+    ) {
+      normalizedText += " ";
+      spanByOffset.push(lastSpanIndex);
+    }
+
     for (const character of spanText) {
       if (/\s/u.test(character)) {
-        if (normalizedText && pendingWhitespaceSpan === null) {
+        if (normalizedText && !normalizedText.endsWith(" ") && pendingWhitespaceSpan === null) {
           pendingWhitespaceSpan = spanIndex;
         }
         continue;
@@ -147,6 +163,7 @@ export function findExcerptSpanIndexes(spanTexts: string[], excerpt: string): nu
       for (let offset = 0; offset < normalizedCharacter.length; offset += 1) {
         spanByOffset.push(spanIndex);
       }
+      lastSpanIndex = spanIndex;
     }
   });
 

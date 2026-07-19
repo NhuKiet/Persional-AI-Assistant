@@ -72,6 +72,19 @@ describe("PDF document helpers", () => {
     expect(findExcerptSpanIndexes(["Alpha  ", "Embeddings"], "embeddings")).toEqual([1]);
   });
 
+  it("matches an excerpt spanning two spans that share no whitespace character at their boundary", () => {
+    // PDF.js text-layer spans for separate lines/blocks often carry no space or
+    // newline character between them (unlike PyMuPDF's extracted text, which the
+    // backend excerpt is built from and always joins blocks with a space). The
+    // span boundary itself must be treated as an implicit separator.
+    const spans = [
+      "Chuong 2: Kien truc he thong",
+      "Backend duoc xay dung bang FastAPI va Python.",
+    ];
+    expect(findExcerptSpanIndexes(spans, "thong backend")).toEqual([0, 1]);
+    expect(findExcerptSpanIndexes(spans, "he thong backend duoc")).toEqual([0, 1]);
+  });
+
   it("builds canonical searchable page text from PDF.js", async () => {
     const pdf = {
       numPages: 1,
