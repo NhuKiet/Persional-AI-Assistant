@@ -13,7 +13,7 @@ import { Document, Page, pdfjs } from "react-pdf";
 import {
   buildPdfSearchPages,
   clampPage,
-  findExcerptRange,
+  findExcerptSpanIndexes,
   type PdfSearchPage,
 } from "./pdfDocument";
 import "react-pdf/dist/Page/TextLayer.css";
@@ -32,6 +32,10 @@ const PAGE_GUTTER = 16; // chừa chỗ cho padding/scrollbar dọc
 const MIN_SCALE = 0.5;
 const MAX_SCALE = 2.5;
 const SCALE_STEP = 0.15;
+const VISIBILITY_THRESHOLDS = Array.from({ length: 11 }, (_, index) => index / 10);
+const HIGHLIGHT_RETRY_MS = 50;
+const HIGHLIGHT_LOOKUP_TIMEOUT_MS = 1000;
+const HIGHLIGHT_DISPLAY_MS = 4000;
 
 /** Bề rộng khả dụng của khung chứa; cập nhật khi kéo thanh chia hoặc resize. */
 function useFitWidth(hostRef: RefObject<HTMLDivElement | null>): number {
@@ -92,6 +96,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function PdfViewer
   const [sourceHighlight, setSourceHighlight] = useState<SourceHighlight | null>(null);
   const hostRef                 = useRef<HTMLDivElement>(null);
   const currentPageRef          = useRef<number | null>(null);
+  const searchGenerationRef     = useRef(0);
   // Vừa khít bề rộng pane thay vì scale cố định — pane co giãn được nên
   // scale cứng làm trang tràn ngang.
   const fitWidth                = useFitWidth(hostRef);
@@ -99,10 +104,21 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function PdfViewer
   const onLoad = useCallback((pdf: PDFDocumentProxy) => {
     setNumPages(pdf.numPages);
     onDocumentReady?.(pdf, pdf.numPages);
+    const generation = ++searchGenerationRef.current;
     if (onSearchIndexReady) {
-      void buildPdfSearchPages(pdf).then(onSearchIndexReady);
+      void buildPdfSearchPages(pdf).then((pages) => {
+        if (searchGenerationRef.current === generation) {
+          onSearchIndexReady(pages);
+        }
+      }).catch(() => {
+        // Search indexing is optional; document rendering remains usable on extraction failure.
+      });
     }
   }, [onDocumentReady, onSearchIndexReady]);
+
+  useEffect(() => () => {
+    searchGenerationRef.current += 1;
+  }, [file]);
 
   const handleDocumentError = useCallback((loadError: Error) => {
     setError(loadError);
@@ -113,55 +129,89 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function PdfViewer
     const host = hostRef.current;
     if (!host || numPages < 1 || !onCurrentPageChange) return;
 
+    const visibility = new Map<Element, number>();
+    const pages = Array.from(host.querySelectorAll(".pdf-page-wrap"));
+    pages.forEach((page) => visibility.set(page, 0));
+
     const observer = new IntersectionObserver((entries) => {
-      const mostVisible = entries
-        .filter((entry) => entry.isIntersecting)
-        .sort((left, right) => right.intersectionRatio - left.intersectionRatio)[0];
-      const page = Number((mostVisible?.target as HTMLElement | undefined)?.dataset.pageNumber);
+      entries.forEach((entry) => {
+        visibility.set(entry.target, entry.isIntersecting ? entry.intersectionRatio : 0);
+      });
+      const mostVisible = Array.from(visibility.entries()).reduce<
+        [Element, number] | null
+      >((best, candidate) => (
+        candidate[1] > 0 && (!best || candidate[1] > best[1]) ? candidate : best
+      ), null);
+      const page = Number((mostVisible?.[0] as HTMLElement | undefined)?.dataset.pageNumber);
 
       if (!Number.isInteger(page) || page === currentPageRef.current) return;
       currentPageRef.current = page;
       onCurrentPageChange(page);
-    });
+    }, { threshold: VISIBILITY_THRESHOLDS });
 
-    host.querySelectorAll(".pdf-page-wrap").forEach((page) => observer.observe(page));
-    return () => observer.disconnect();
+    pages.forEach((page) => observer.observe(page));
+    return () => {
+      observer.disconnect();
+      visibility.clear();
+    };
   }, [numPages, onCurrentPageChange]);
 
   useEffect(() => {
     if (!sourceHighlight) return;
 
-    const wrapper = hostRef.current?.querySelector<HTMLElement>(
-      `[data-page-number="${sourceHighlight.page}"]`,
-    );
-    if (!wrapper) return;
+    let wrapper: HTMLElement | null = null;
+    let retryTimeout: number | undefined;
+    let clearTimeout: number | undefined;
+    const highlightedSpans = new Set<HTMLElement>();
+    const startedAt = Date.now();
 
-    const spans = Array.from(wrapper.querySelectorAll<HTMLElement>(".textLayer span"));
-    const text = spans.map((span) => span.textContent ?? "").join("");
-    const range = findExcerptRange(text, sourceHighlight.excerpt);
+    const clearDecorations = () => {
+      highlightedSpans.forEach((span) => span.classList.remove("pdf-source-highlight"));
+      wrapper?.classList.remove("pdf-source-page-target");
+    };
 
-    if (range) {
-      let offset = 0;
-      spans.forEach((span) => {
-        const end = offset + (span.textContent?.length ?? 0);
-        if (offset < range.end && end > range.start) {
+    const scheduleClear = () => {
+      clearTimeout = window.setTimeout(clearDecorations, HIGHLIGHT_DISPLAY_MS);
+    };
+
+    const tryHighlight = () => {
+      wrapper = hostRef.current?.querySelector<HTMLElement>(
+        `[data-page-number="${sourceHighlight.page}"]`,
+      ) ?? null;
+      const spans = wrapper
+        ? Array.from(wrapper.querySelectorAll<HTMLElement>(".textLayer span"))
+        : [];
+      const matchingSpanIndexes = findExcerptSpanIndexes(
+        spans.map((span) => span.textContent ?? ""),
+        sourceHighlight.excerpt,
+      );
+
+      if (matchingSpanIndexes.length > 0) {
+        matchingSpanIndexes.forEach((spanIndex) => {
+          const span = spans[spanIndex];
+          if (!span) return;
+          highlightedSpans.add(span);
           span.classList.add("pdf-source-highlight");
-        }
-        offset = end;
-      });
-    } else {
-      wrapper.classList.add("pdf-source-page-target");
-    }
+        });
+        scheduleClear();
+        return;
+      }
 
-    const timeout = window.setTimeout(() => {
-      spans.forEach((span) => span.classList.remove("pdf-source-highlight"));
-      wrapper.classList.remove("pdf-source-page-target");
-    }, 4000);
+      if (Date.now() - startedAt >= HIGHLIGHT_LOOKUP_TIMEOUT_MS) {
+        wrapper?.classList.add("pdf-source-page-target");
+        scheduleClear();
+        return;
+      }
+
+      retryTimeout = window.setTimeout(tryHighlight, HIGHLIGHT_RETRY_MS);
+    };
+
+    tryHighlight();
 
     return () => {
-      window.clearTimeout(timeout);
-      spans.forEach((span) => span.classList.remove("pdf-source-highlight"));
-      wrapper.classList.remove("pdf-source-page-target");
+      if (retryTimeout !== undefined) window.clearTimeout(retryTimeout);
+      if (clearTimeout !== undefined) window.clearTimeout(clearTimeout);
+      clearDecorations();
     };
   }, [sourceHighlight]);
 

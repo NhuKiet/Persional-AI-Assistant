@@ -3,6 +3,7 @@ import {
   buildPdfSearchPages,
   clampPage,
   findExcerptRange,
+  findExcerptSpanIndexes,
   normalizeSearchText,
 } from "./pdfDocument";
 
@@ -22,6 +23,10 @@ describe("PDF document helpers", () => {
       start: 6,
       end: 16,
     });
+  });
+
+  it("maps normalized excerpt offsets back to the correct text spans", () => {
+    expect(findExcerptSpanIndexes(["Alpha  ", "Embeddings"], "embeddings")).toEqual([1]);
   });
 
   it("builds canonical searchable page text from PDF.js", async () => {

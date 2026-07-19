@@ -28,6 +28,42 @@ export function findExcerptRange(pageText: string, excerpt: string): TextRange |
   return start < 0 ? null : { start, end: start + needle.length };
 }
 
+export function findExcerptSpanIndexes(spanTexts: string[], excerpt: string): number[] {
+  let normalizedText = "";
+  const spanByOffset: number[] = [];
+  let pendingWhitespaceSpan: number | null = null;
+
+  spanTexts.forEach((spanText, spanIndex) => {
+    for (const character of spanText) {
+      if (/\s/u.test(character)) {
+        if (normalizedText && pendingWhitespaceSpan === null) {
+          pendingWhitespaceSpan = spanIndex;
+        }
+        continue;
+      }
+
+      if (pendingWhitespaceSpan !== null) {
+        normalizedText += " ";
+        spanByOffset.push(pendingWhitespaceSpan);
+        pendingWhitespaceSpan = null;
+      }
+
+      const normalizedCharacter = character.toLocaleLowerCase("vi");
+      normalizedText += normalizedCharacter;
+      for (let offset = 0; offset < normalizedCharacter.length; offset += 1) {
+        spanByOffset.push(spanIndex);
+      }
+    }
+  });
+
+  const needle = normalizeSearchText(excerpt);
+  if (!needle) return [];
+  const start = normalizedText.indexOf(needle);
+  if (start < 0) return [];
+
+  return Array.from(new Set(spanByOffset.slice(start, start + needle.length)));
+}
+
 export async function buildPdfSearchPages(pdf: PDFDocumentProxy): Promise<PdfSearchPage[]> {
   const pages: PdfSearchPage[] = [];
 
