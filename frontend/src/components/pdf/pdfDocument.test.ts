@@ -5,6 +5,7 @@ import {
   findExcerptRange,
   findExcerptSpanIndexes,
   normalizeSearchText,
+  resolvePdfOutline,
 } from "./pdfDocument";
 
 describe("PDF document helpers", () => {
@@ -42,5 +43,23 @@ describe("PDF document helpers", () => {
     await expect(buildPdfSearchPages(pdf as never)).resolves.toEqual([
       { page: 1, text: "Dữ liệu lớn" },
     ]);
+  });
+
+  it("resolves named and explicit destinations recursively", async () => {
+    const pdf = {
+      getOutline: async () => [{
+        title: "Chương",
+        dest: "chapter",
+        items: [{ title: "Mục", dest: [{ num: 9, gen: 0 }], items: [] }],
+      }],
+      getDestination: async () => [{ num: 4, gen: 0 }],
+      getPageIndex: async (ref: { num: number }) => ref.num,
+    };
+
+    await expect(resolvePdfOutline(pdf as never)).resolves.toEqual([{
+      title: "Chương",
+      page: 5,
+      children: [{ title: "Mục", page: 10, children: [] }],
+    }]);
   });
 });

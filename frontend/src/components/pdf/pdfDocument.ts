@@ -10,6 +10,14 @@ export interface TextRange {
   end: number;
 }
 
+export interface ResolvedOutlineItem {
+  title: string;
+  page: number;
+  children: ResolvedOutlineItem[];
+}
+
+type PdfPageReference = Parameters<PDFDocumentProxy["getPageIndex"]>[0];
+
 export function clampPage(page: number, totalPages: number): number {
   if (totalPages < 1) return 1;
   return Math.min(totalPages, Math.max(1, Math.trunc(page)));
@@ -79,4 +87,49 @@ export async function buildPdfSearchPages(pdf: PDFDocumentProxy): Promise<PdfSea
   }
 
   return pages;
+}
+
+function isPageReference(value: unknown): value is PdfPageReference {
+  return typeof value === "object" && value !== null
+    && "num" in value && typeof value.num === "number"
+    && "gen" in value && typeof value.gen === "number";
+}
+
+async function destinationPage(
+  pdf: PDFDocumentProxy,
+  dest: string | unknown[],
+): Promise<number | null> {
+  try {
+    const explicit = typeof dest === "string" ? await pdf.getDestination(dest) : dest;
+    if (!explicit?.length) return null;
+
+    const pageRef = explicit[0];
+    if (typeof pageRef === "number") return pageRef + 1;
+    if (!isPageReference(pageRef)) return null;
+    return (await pdf.getPageIndex(pageRef)) + 1;
+  } catch {
+    return null;
+  }
+}
+
+export async function resolvePdfOutline(pdf: PDFDocumentProxy): Promise<ResolvedOutlineItem[]> {
+  const outline = await pdf.getOutline();
+  if (!outline) return [];
+
+  const resolveItems = async (items: typeof outline): Promise<ResolvedOutlineItem[]> => {
+    const resolved = await Promise.all(items.map(async (item) => {
+      const page = item.dest ? await destinationPage(pdf, item.dest) : null;
+      if (page === null) return null;
+
+      return {
+        title: item.title,
+        page,
+        children: await resolveItems(item.items),
+      };
+    }));
+
+    return resolved.filter((item): item is ResolvedOutlineItem => item !== null);
+  };
+
+  return resolveItems(outline);
 }
