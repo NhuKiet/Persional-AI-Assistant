@@ -128,3 +128,64 @@ def test_evidence_age_prefers_falsy_published_at_over_stored_at():
     src = _src(stored_days_ago=1, published=0.0)
     # published_at=0.0 → age tính từ epoch (1970-01-01), phải lớn hơn nhiều so với 1 ngày
     assert suf.evidence_age_days(src, _NOW) > 1
+
+
+def test_assess_empty_when_no_candidates():
+    state, fresh = suf.assess("bất kỳ", [], now=_NOW)
+    assert state == suf.EMPTY
+    assert fresh == []
+
+
+def test_assess_stale_when_all_expired():
+    old = _src(content="transformer attention", stored_days_ago=400)
+    state, fresh = suf.assess("transformer attention", [old], now=_NOW)
+    assert state == suf.STALE
+    assert fresh == []
+
+
+def test_assess_thin_when_coverage_low():
+    src = _src(content="transformer attention", stored_days_ago=1)
+    state, fresh = suf.assess(
+        "transformer attention flops backbone chi tiết", [src], now=_NOW
+    )
+    assert state == suf.THIN
+    assert len(fresh) == 1
+
+
+def test_assess_maybe_when_fresh_and_covered():
+    src = _src(content="transformer attention mechanism", stored_days_ago=1)
+    state, fresh = suf.assess("transformer attention", [src], now=_NOW)
+    assert state == suf.MAYBE
+    assert len(fresh) == 1
+
+
+def test_assess_coverage_uses_fresh_subset_only():
+    """Một nguồn mới nhưng lạc đề không được kéo cả tập cũ thành 'còn tươi'."""
+    fresh_irrelevant = _src(content="chủ đề hoàn toàn khác", stored_days_ago=1)
+    old_relevant     = _src(content="transformer attention", stored_days_ago=400)
+    state, fresh = suf.assess(
+        "transformer attention", [fresh_irrelevant, old_relevant], now=_NOW
+    )
+    assert state == suf.THIN
+    assert len(fresh) == 1
+
+
+def test_assess_missing_timestamp_volatile_is_stale():
+    src = _src(content="YOLOv11 mới nhất")
+    state, fresh = suf.assess("YOLOv11 mới nhất", [src], now=_NOW)
+    assert state == suf.STALE
+
+
+def test_assess_missing_timestamp_stable_reaches_maybe():
+    src = _src(content="transformer là gì và kiến trúc của nó")
+    state, fresh = suf.assess("transformer là gì", [src], now=_NOW)
+    assert state == suf.MAYBE
+
+
+def test_assess_year_only_published_rounds_to_january_first():
+    """publishedYear chỉ có độ chính xác theo năm → quy về 1/1 (mốc già nhất)."""
+    jan_first_2026 = datetime.datetime(2026, 1, 1).timestamp()
+    src = _src(content="transformer attention", published=jan_first_2026)
+    # 25/07/2026 - 01/01/2026 = 205 ngày > TTL default 30 → hết hạn
+    state, _ = suf.assess("transformer attention", [src], now=_NOW)
+    assert state == suf.STALE

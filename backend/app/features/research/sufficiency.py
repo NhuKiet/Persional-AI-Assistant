@@ -122,3 +122,27 @@ def query_coverage(query: str, sources: list) -> float:
         return 0.0
     body = tokens(" ".join((s.content or "") for s in sources))
     return len(q & body) / len(q)
+
+
+def assess(query: str, candidates: list, now: float | None = None) -> tuple[str, list]:
+    """Trả (state, fresh_sources).
+
+    Nguồn không rõ tuổi bị loại khỏi fresh subset khi câu hỏi thuộc loại
+    volatile — với volatile mà toàn bộ candidate đều không rõ tuổi thì fresh
+    subset rỗng, tức STALE, tức full live search. Với stable/default thì cho
+    qua để tầng 2 phán, tránh vô hiệu hoá cả knowledge store cũ cùng lúc.
+    """
+    now = time.time() if now is None else now
+    if not candidates:
+        return EMPTY, []
+
+    cls        = classify_freshness(query, now)
+    ttl        = ttl_days_for(cls)
+    unknown_ok = cls != "volatile"
+    fresh      = fresh_subset(candidates, ttl, now, unknown_ok)
+
+    if not fresh:
+        return STALE, []
+    if query_coverage(query, fresh) < _COVERAGE_MIN:
+        return THIN, fresh
+    return MAYBE, fresh
