@@ -322,13 +322,6 @@ class ResearchAgent:
 
         logger.info("[SEARCH] DONE: %d final sources (%.1fs)", len(sources), time.time() - t0)
 
-        # Store in knowledge base
-        try:
-            n = knowledge.add_results(query, sources)
-            logger.info("[KNOWLEDGE] STORED: %d chunks", n)
-        except Exception as e:
-            logger.warning("[KNOWLEDGE] STORE failed (non-fatal): %s", e)
-
         output = self.synth.synthesize_grounded(query, sources)
 
         # ── Bounded gap-driven iteration (search path only) ─────────────────
@@ -523,19 +516,13 @@ class ResearchAgent:
 
                 yield {"type": "status", "message": "Reranking sources…", "source": "pipeline"}
                 all_sources = rerank_results(query, deduped, top_k=15)
+                newly_fetched.extend(all_sources)
 
                 logger.info(
                     "[PIPELINE] %d raw → %d enriched → %d deduped → %d reranked (%.1fs)",
                     len(raw_results), len(enriched), len(deduped),
                     len(all_sources), time.time() - t0,
                 )
-
-                # Store in knowledge base
-                try:
-                    n = knowledge.add_results(query, all_sources)
-                    logger.info("[KNOWLEDGE] STORED: %d chunks", n)
-                except Exception as e:
-                    logger.warning("[KNOWLEDGE] STORE failed (non-fatal): %s", e)
 
             # ── Synthesize ────────────────────────────────────────────────────
             if self._cancelled(cancel_event):
@@ -581,6 +568,19 @@ class ResearchAgent:
                     output.confidence = 0.4
 
             output.query = original_query
+
+            # ── Persistence: một điểm duy nhất, sau grounding ────────────────
+            # Trước đây có HAI call site (run và run_streaming), cả hai nằm
+            # trong nhánh live search và chạy TRƯỚC synthesis — vừa ghi đúp
+            # khi thêm điểm lưu mới, vừa bắt người dùng đợi qua phần việc
+            # không đóng góp gì cho câu trả lời của họ.
+            if newly_fetched:
+                try:
+                    n = knowledge.add_results(query, newly_fetched)
+                    logger.info("[KNOWLEDGE] STORED: %d chunks from %d new sources",
+                                n, len(newly_fetched))
+                except Exception as e:
+                    logger.warning("[KNOWLEDGE] STORE failed (non-fatal): %s", e)
 
             yield {
                 "type": "done",
