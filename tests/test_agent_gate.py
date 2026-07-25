@@ -133,3 +133,48 @@ def test_kill_switch_uses_legacy_retrieve_and_reuses(monkeypatch):
 
     assert judged == []                                   # không gọi judge
     assert _decisions(events)[0]["decision"] == "reuse"    # dùng lại dù đã cũ
+
+
+def test_thin_coverage_emits_top_up_decision_without_judge(monkeypatch):
+    """Low coverage (< 0.6) triggers THIN state: no judge call, top_up decision.
+
+    Source content "python list comprehension" shares 0 tokens with query
+    "transformer attention", giving coverage = 0/2 = 0.0 < 0.6 threshold.
+    """
+    judged = []
+    # Content with no overlap: query tokens {transformer, attention} ∩ {python, list, comprehension} = ∅
+    thin_source = _sr(content="python list comprehension", stored_at=__import__("time").time())
+
+    from concurrent.futures import ThreadPoolExecutor
+    from backend.app.features.research.agent import ResearchAgent
+
+    a = ResearchAgent.__new__(ResearchAgent)
+    a._pool = ThreadPoolExecutor(max_workers=2)
+
+    class _Store:
+        def retrieve_candidates(self, q, top_k=None): return [thin_source]
+        def retrieve(self, q): return [thin_source]
+        def add_results(self, q, s): return len(s)
+
+    monkeypatch.setattr(agent_mod, "get_store", lambda: _Store())
+    monkeypatch.setattr(a, "_run_judge",
+                        lambda *args: judged.append(1) or (True, None), raising=False)
+    monkeypatch.setattr(a, "_top_up",
+                        lambda q, base, gap: (base + [_sr("topup_result")], [_sr("topup_result")]),
+                        raising=False)
+    monkeypatch.setattr(a, "_search_all", lambda *args, **kw: [_sr("live")], raising=False)
+    monkeypatch.setattr(a, "_process_pipeline", lambda q, r, **kw: r, raising=False)
+    monkeypatch.setattr(agent_mod, "expand_query", lambda q, **kw: [q])
+    monkeypatch.setattr(agent_mod, "needs_iteration", lambda *args, **kw: False)
+
+    class _Synth:
+        def synthesize_rag_grounded(self, q, s): return ResearchOutput(query=q)
+        def synthesize_grounded(self, q, s):     return ResearchOutput(query=q)
+
+    a.synth = _Synth()
+    events = list(a.run_streaming("transformer attention"))
+
+    assert judged == []                              # THIN skips judge entirely
+    d = _decisions(events)[0]
+    assert d["decision"] == "top_up"                 # insufficient, so top_up
+    assert d["reason"] == "thin"                     # THIN state, not MAYBE
