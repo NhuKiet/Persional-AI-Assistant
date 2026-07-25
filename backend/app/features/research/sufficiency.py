@@ -15,6 +15,7 @@ import re
 import time
 
 from backend.app.core.config import settings
+from backend.app.features.research.security import frame_untrusted, UNTRUSTED_GUARD
 
 logger = logging.getLogger(__name__)
 
@@ -146,3 +147,85 @@ def assess(query: str, candidates: list, now: float | None = None) -> tuple[str,
     if query_coverage(query, fresh) < _COVERAGE_MIN:
         return THIN, fresh
     return MAYBE, fresh
+
+
+_JUDGE_SRC_CHARS   = 400     # mỗi nguồn
+_JUDGE_CTX_CHARS   = 4000    # tổng ngữ cảnh
+_MAX_MISSING_CHARS = 200
+_MAX_TOPUP_CHARS   = 400
+_CONTROL_RE = re.compile(r"[\x00-\x1f\x7f]")
+
+
+def build_judge_prompt(query: str, sources: list) -> str:
+    """Nội dung nguồn là dữ liệu ngoài, có thể chứa chỉ thị nhắm vào judge —
+    khung untrusted y như grounding._claim_extraction_prompt."""
+    parts, total = [], 0
+    for s in sources:
+        chunk = (
+            f"[{s.id}] {s.title}\n"
+            f"{frame_untrusted((s.content or '')[:_JUDGE_SRC_CHARS])}"
+        )
+        if total + len(chunk) > _JUDGE_CTX_CHARS:
+            break
+        parts.append(chunk)
+        total += len(chunk)
+
+    return (
+        f"{UNTRUSTED_GUARD}\n\n"
+        f"Question: {query}\n\n"
+        f"Stored context:\n" + "\n\n---\n\n".join(parts) + "\n\n"
+        f"Does the stored context contain enough evidence to answer the "
+        f"question fully and specifically?\n"
+        f"Return ONLY JSON: "
+        f'{{"sufficient": true|false, "missing": "what specific evidence is missing"}}'
+    )
+
+
+def validate_judge_response(obj) -> tuple[bool, str | None]:
+    """Bất kỳ thứ gì không qua được validation đều bị coi là THIẾU."""
+    if not isinstance(obj, dict):
+        return False, None
+
+    sufficient = obj.get("sufficient")
+    if sufficient is True:
+        return True, None
+    if not isinstance(sufficient, bool):
+        # "yes"/"1"/1 không được ép kiểu — chuỗi truthy là tín hiệu hỏng.
+        return False, None
+
+    missing = obj.get("missing")
+    if not isinstance(missing, str):
+        return False, None
+    missing = _CONTROL_RE.sub(" ", missing).strip()[:_MAX_MISSING_CHARS].strip()
+    return False, missing or None
+
+
+def anchor_gap_query(effective_query: str, missing: str | None) -> str:
+    """Query top-up LUÔN neo vào câu hỏi gốc, không bao giờ dùng `missing`
+    đứng một mình.
+
+    Quy tắc cũ "missing phải chia sẻ ít nhất 1 token với câu hỏi" quá yếu:
+    văn bản độc hại chỉ cần lặp lại một từ khoá là qua, rồi tự do lái phần
+    còn lại. Neo thì loại bỏ bề mặt tấn công thay vì đi kiểm tra nó.
+    """
+    base = (effective_query or "").strip()
+    gap  = (missing or "").strip()
+    if not gap:
+        return base
+    combined = f"{base} {gap}"
+    if len(combined) <= _MAX_TOPUP_CHARS:
+        return combined
+    # Cắt thì cắt phần bổ sung — câu hỏi người dùng luôn sống sót.
+    room = _MAX_TOPUP_CHARS - len(base) - 1
+    return f"{base} {gap[:room]}".strip() if room > 0 else base
+
+
+def judge_sufficiency(query, sources, llm_call, parse_obj) -> tuple[bool, str | None]:
+    if not sources:
+        return False, None
+    try:
+        raw = llm_call(build_judge_prompt(query, sources))
+        return validate_judge_response(parse_obj(raw))
+    except Exception as e:  # noqa: BLE001 — non-fatal, nghiêng về search thêm
+        logger.warning("judge_sufficiency failed (non-fatal): %s", e)
+        return False, None
