@@ -29,7 +29,7 @@ import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 
 pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
-const PAGE_GUTTER = 16; // chừa chỗ cho padding/scrollbar dọc
+const SCROLLBAR_GUTTER = 16; // chừa chỗ cho scrollbar dọc
 const MIN_SCALE = 0.5;
 const MAX_SCALE = 2.5;
 const SCALE_STEP = 0.15;
@@ -60,7 +60,15 @@ function useFitWidth(hostRef: RefObject<HTMLDivElement | null>): number {
   useLayoutEffect(() => {
     const host = hostRef.current;
     if (!host) return;
-    const measure = () => setWidth(Math.max(0, host.clientWidth - PAGE_GUTTER));
+    // host.clientWidth đã bao gồm padding trái/phải của .pdf-viewer (content-box
+    // của Grid nằm bên trong padding đó) — phải trừ padding thật sự, không phải
+    // hằng số cố định, nếu không trang render rộng hơn vùng chứa, tràn ngang và
+    // bị đẩy lệch sang một bên do margin:auto không còn chỗ để canh giữa.
+    const measure = () => {
+      const style = window.getComputedStyle(host);
+      const paddingX = (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0);
+      setWidth(Math.max(0, host.clientWidth - paddingX - SCROLLBAR_GUTTER));
+    };
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(host);

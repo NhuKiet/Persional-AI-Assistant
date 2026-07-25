@@ -8,7 +8,7 @@ it("labels sources by display order and opens the selected source", async () => 
   const source = { page: 15, chunk_index: 7, excerpt: "Embeddings" };
   render(<SourceChips sources={[source]} onOpenSource={onOpenSource} />);
 
-  await userEvent.click(screen.getByRole("button", { name: "Trang 15 · Nguồn 1" }));
+  await userEvent.click(screen.getByRole("button", { name: "Trang 15" }));
 
   expect(onOpenSource).toHaveBeenCalledWith(source);
 });

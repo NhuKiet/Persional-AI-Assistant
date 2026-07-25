@@ -21,7 +21,7 @@ def test_stream_events_yields_done_with_contract_keys(monkeypatch):
     }
 
     class _FakeAgent:
-        def run_streaming(self, query, provider=None, model=None, cancel_event=None):
+        def run_streaming(self, query, provider=None, model=None, cancel_event=None, history=None):
             yield {"type": "source_done", "source": "web", "count": 1}
             yield {"type": "done", "data": DONE}
 
@@ -41,7 +41,7 @@ def test_stream_events_persists_query_and_result_in_order(monkeypatch, tmp_path)
     DONE = {"query": "q", "summary_short": "s"}
 
     class _FakeAgent:
-        def run_streaming(self, query, provider=None, model=None, cancel_event=None):
+        def run_streaming(self, query, provider=None, model=None, cancel_event=None, history=None):
             yield {"type": "done", "data": DONE}
 
     svc = service_mod.ResearchService(agent=_FakeAgent())

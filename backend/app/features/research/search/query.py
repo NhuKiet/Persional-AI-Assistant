@@ -129,6 +129,65 @@ def expand_query(query: str, provider: str | None = None, model: str | None = No
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Contextual follow-up
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def contextualize_query(
+    query: str,
+    history: list[dict] | None,
+    provider: str | None = None,
+    model: str | None = None,
+) -> str:
+    """
+    Rewrite a follow-up query into a standalone one using recent conversation
+    history, so pronouns/omitted context ("what about its limitations?",
+    "so sánh với cái kia") resolve correctly for search + synthesis.
+
+    `history` is a plain [{"role": "user"|"assistant", "content": str}, ...]
+    list — callers are responsible for stringifying any richer stored shape
+    (e.g. the full research result dict) before passing it in here.
+
+    Falls back to the original query on empty history or ANY error — this is
+    a nice-to-have rewrite, never a hard dependency.
+    """
+    if not history:
+        return query
+    try:
+        from backend.app.core.llm import invoke_chat
+
+        recent = history[-6:]
+        convo = "\n".join(
+            f"{'User' if h.get('role') == 'user' else 'Assistant'}: {str(h.get('content', ''))[:400]}"
+            for h in recent
+            if h.get("content")
+        )
+        if not convo:
+            return query
+
+        prompt = (
+            f"Conversation so far:\n{convo}\n\n"
+            f'New question: "{query}"\n\n'
+            "If the new question depends on the conversation above (pronouns, "
+            "\"it\", \"that\", \"the other one\", omitted context, etc.), rewrite it "
+            "as a fully self-contained standalone question that keeps the original "
+            "meaning and language. If it is already standalone, return it unchanged.\n"
+            "Return ONLY the rewritten question, nothing else."
+        )
+        raw = invoke_chat(prompt, provider=provider, model=model, temperature=0.0).strip()
+        raw = raw.strip("\"' \n")
+        if raw and len(raw) > 3:
+            if raw != query:
+                logger.info("Contextualized query: %r -> %r", query, raw)
+            return raw
+
+    except Exception as e:
+        logger.warning("Query contextualization failed (non-fatal): %s", e)
+
+    return query
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Reranking
 # ─────────────────────────────────────────────────────────────────────────────
 

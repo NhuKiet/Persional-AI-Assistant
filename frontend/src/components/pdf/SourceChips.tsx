@@ -10,14 +10,14 @@ export default function SourceChips({ sources, onOpenSource }: SourceChipsProps)
 
   return (
     <div className="pdf-source-chips" aria-label="Nguồn trong tài liệu">
-      {sources.map((source, index) => (
+      {sources.map((source) => (
         <button
           className="pdf-source-chip"
           key={`${source.page}:${source.chunk_index}`}
           onClick={() => onOpenSource(source)}
           title={source.excerpt}
         >
-          Trang {source.page} · Nguồn {index + 1}
+          Trang {source.page}
         </button>
       ))}
     </div>

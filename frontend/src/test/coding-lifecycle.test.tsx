@@ -14,6 +14,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../App.tsx";
 import { BUSY_PHASES, isBusyPhase } from "../hooks/useCoding";
+import { API } from "../lib/api";
 import { historyKey } from "../lib/storage";
 
 const MODELS = {
@@ -101,7 +102,7 @@ describe("reset() targets the abandoned session id, not its replacement", () => 
     await user.click(await screen.findByRole("button", { name: /^Reset$/i }));
 
     await waitFor(() => expect(deleteCalls).toHaveLength(1));
-    expect(deleteCalls[0]).toBe(`http://localhost:8000/api/coding/session/${oldSessionId}`);
+    expect(deleteCalls[0]).toBe(`${API}/api/coding/session/${oldSessionId}`);
   });
 
   it("aborts the in-flight client request when Reset is clicked mid-run", async () => {

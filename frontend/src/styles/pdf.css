@@ -35,7 +35,21 @@
 }
 .pdf-viewer { height: 100%; overflow: auto; padding: 24px; }
 .pdf-page-wrap { width: max-content; max-width: 100%; margin: 0 auto 20px; box-shadow: var(--shadow-2); }
-.pdf-source-chip { border: 1px solid color-mix(in srgb, var(--accent-pdf) 45%, transparent); color: var(--accent-pdf); background: color-mix(in srgb, var(--accent-pdf) 8%, transparent); }
+.pdf-source-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.pdf-source-chip {
+  border: 1px solid color-mix(in srgb, var(--accent-pdf) 45%, transparent);
+  color: var(--accent-pdf);
+  background: color-mix(in srgb, var(--accent-pdf) 8%, transparent);
+  border-radius: 20px;
+  padding: 4px 10px;
+  font-family: var(--sans);
+  font-size: 11px;
+  line-height: 1.4;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+}
+.pdf-source-chip:hover { background: color-mix(in srgb, var(--accent-pdf) 16%, transparent); }
 .pdf-source-chip:focus-visible { outline: 2px solid var(--accent-pdf); outline-offset: 2px; }
 .pdf-source-highlight { background: color-mix(in srgb, var(--accent-pdf) 26%, transparent); }
 .pdf-source-page-target { outline: 3px solid var(--accent-pdf); outline-offset: 4px; }

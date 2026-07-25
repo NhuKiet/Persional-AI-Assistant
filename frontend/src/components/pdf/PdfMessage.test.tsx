@@ -16,5 +16,5 @@ it("shows source chips only for assistant messages", () => {
     />,
   );
 
-  expect(screen.queryByRole("button", { name: "Trang 15 · Nguồn 1" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Trang 15" })).not.toBeInTheDocument();
 });

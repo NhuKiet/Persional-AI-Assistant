@@ -11,7 +11,7 @@ def test_stream_events_sets_cancel_event_on_generator_close():
     seen = {}
 
     class _FakeAgent:
-        def run_streaming(self, query, provider=None, model=None, cancel_event=None):
+        def run_streaming(self, query, provider=None, model=None, cancel_event=None, history=None):
             seen["cancel_event"] = cancel_event
             # phát nhiều event để có thể đóng giữa chừng
             for i in range(100):

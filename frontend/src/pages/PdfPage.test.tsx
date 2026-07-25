@@ -177,7 +177,7 @@ describe("PDF workspace stream integration", () => {
     await userEvent.click(screen.getByRole("button", { name: "Hỏi tài liệu" }));
     await sendQuestion();
 
-    await userEvent.click(await screen.findByRole("button", { name: "Trang 4 · Nguồn 1" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Trang 4" }));
 
     expect(viewerHandle.highlightExcerpt).toHaveBeenCalledWith(4, "Đoạn nguồn");
     expect(screen.queryByRole("complementary", { name: "Trợ lý tài liệu" })).not.toBeInTheDocument();

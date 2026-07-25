@@ -17,6 +17,7 @@ from backend.app.features.research.search import (
     WebSearcher,
     WikipediaSearcher,
     # New helpers
+    contextualize_query,
     expand_query,
     get_dynamic_k,
     rerank_results,
@@ -282,6 +283,7 @@ class ResearchAgent:
     def run_streaming(
         self, query: str, provider: str | None = None, model: str | None = None,
         cancel_event: threading.Event | None = None,
+        history: list[dict] | None = None,
     ) -> Generator[dict, None, None]:
         _CANCEL = {"type": "cancelled", "message": "Đã hủy theo yêu cầu."}
         try:
@@ -293,6 +295,21 @@ class ResearchAgent:
                 synth = Synthesizer(get_llm(provider, model))
             else:
                 synth = self.synth
+
+            # ── Contextual follow-up ─────────────────────────────────────────
+            # Resolve pronouns/omitted context against recent conversation
+            # turns before this query drives retrieval + search + synthesis.
+            # `output.query` below is set back to the user's original text so
+            # the UI still shows exactly what they typed.
+            original_query = query
+            if history:
+                query = contextualize_query(query, history, provider=provider, model=model)
+                if query != original_query:
+                    yield {
+                        "type":    "status",
+                        "message": "Resolved follow-up context…",
+                        "source":  "llm",
+                    }
 
             # ── RAG check ────────────────────────────────────────────────────
             knowledge = get_store()
@@ -438,6 +455,8 @@ class ResearchAgent:
                     if step is None:
                         break
                     all_sources, output = step
+
+            output.query = original_query
 
             yield {
                 "type": "done",

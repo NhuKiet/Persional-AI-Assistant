@@ -15,6 +15,26 @@ __all__ = ["ResearchService", "SessionBusyError"]
 logger = logging.getLogger(__name__)
 
 
+def _stringify_turn_content(content) -> str:
+    """Turns can hold plain text (deep-dive Q&A) or the full research-result
+    dict (main flow, so session restore can rebuild the UI) — flatten either
+    shape into a short text usable as LLM conversation context."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, dict):
+        return content.get("summary_short") or content.get("summary_detailed") or ""
+    return ""
+
+
+def _text_history(history: list[dict]) -> list[dict]:
+    out = []
+    for h in history:
+        text = _stringify_turn_content(h.get("content"))
+        if text:
+            out.append({"role": h.get("role", "user"), "content": text})
+    return out
+
+
 class ResearchService:
     def __init__(
         self,
@@ -45,11 +65,13 @@ class ResearchService:
         aqueue: asyncio.Queue = asyncio.Queue()
         query = req.query.strip()
         cancel_event = threading.Event()
+        history = _text_history(self._conv_manager.get_history(req.session_id))
 
         def _run():
             try:
                 for event in self._agent.run_streaming(
                     query, req.provider, req.model, cancel_event=cancel_event,
+                    history=history,
                 ):
                     loop.call_soon_threadsafe(aqueue.put_nowait, event)
             except Exception as e:  # noqa: BLE001 — surfaced as SSE error
@@ -84,7 +106,24 @@ class ResearchService:
             f"[{meta.get('source', '').upper()}] {meta.get('title', '')}\n"
             f"{meta.get('url', '')}\n\n{framed}"
         ).strip()
-        user_prompt = f"{UNTRUSTED_GUARD}\n\nSource:\n{context}\n\nQuestion: {req.question.strip()}"
+
+        # Contextual follow-up: fold in recent turns from this session (prior
+        # deep-dive Q&A and/or the main research answer) so a question like
+        # "so what about X" resolves against what was already discussed.
+        history = _text_history(self._conv_manager.get_history(req.session_id))
+        convo_block = ""
+        if history:
+            recent = history[-6:]
+            convo = "\n".join(
+                f"{'User' if h['role'] == 'user' else 'Assistant'}: {h['content'][:300]}"
+                for h in recent
+            )
+            convo_block = f"Previous conversation:\n{convo}\n\n"
+
+        user_prompt = (
+            f"{UNTRUSTED_GUARD}\n\n{convo_block}"
+            f"Source:\n{context}\n\nQuestion: {req.question.strip()}"
+        )
         try:
             messages = [{"role": "user", "content": user_prompt}]
             full_response = ""

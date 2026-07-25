@@ -13,4 +13,10 @@
   border-color: color-mix(in srgb, var(--accent-pdf) 80%, white);
   box-shadow: 0 0 0 1px rgba(0,0,0,0.35), 0 0 10px color-mix(in srgb, var(--accent-pdf) 35%, transparent);
 }
-.selection-host { user-select: text; }
+/* height:100% phải tường minh: đây là wrapper chen giữa .pdf-viewer-panel
+   (đã có chiều cao xác định) và .pdf-viewer bên trong (height:100%,
+   overflow:auto). Thiếu height ở đây làm height:100% của .pdf-viewer
+   không phân giải được, khiến nó auto-grow theo nội dung (57 trang) thay vì
+   cuộn nội bộ — phần tràn ra bị .pdf-viewer-panel's overflow:hidden cắt mất
+   mà không có scrollbar nào để cuộn tới. */
+.selection-host { user-select: text; height: 100%; min-height: 0; }

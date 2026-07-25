@@ -16,7 +16,7 @@ from backend.app.features.research.reranker import _CREDIBILITY
 from backend.app.features.research.search.academic import ArxivSearcher, OpenAlexSearcher, SemanticScholarSearcher
 from backend.app.features.research.search.community import GitHubSearcher, HuggingFaceSearcher, WikipediaSearcher
 from backend.app.features.research.search.crawl import _crawl_url, _enrich_web_results
-from backend.app.features.research.search.query import expand_query, get_dynamic_k
+from backend.app.features.research.search.query import contextualize_query, expand_query, get_dynamic_k
 from backend.app.features.research.search.ranking import _get_reranker, rerank_results
 from backend.app.features.research.search.web import WebSearcher
 
@@ -28,6 +28,7 @@ __all__ = [
     "SemanticScholarSearcher",
     "WebSearcher",
     "WikipediaSearcher",
+    "contextualize_query",
     "expand_query",
     "get_dynamic_k",
     "rerank_results",

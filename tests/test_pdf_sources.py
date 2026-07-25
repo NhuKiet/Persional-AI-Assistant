@@ -7,7 +7,7 @@ from backend.app.features.pdf.service import PdfService
 from backend.app.features.pdf.sources import serialize_sources
 
 
-def test_serialize_sources_preserves_relevance_order_and_deduplicates():
+def test_serialize_sources_sorts_by_page_and_deduplicates_per_page():
     chunks = [
         PDFChunk(page=8, index=2, text="first relevant passage"),
         PDFChunk(page=3, index=0, text="second relevant passage"),
@@ -15,8 +15,8 @@ def test_serialize_sources_preserves_relevance_order_and_deduplicates():
     ]
 
     assert serialize_sources(chunks) == [
-        {"page": 8, "chunk_index": 2, "excerpt": "first relevant passage"},
         {"page": 3, "chunk_index": 0, "excerpt": "second relevant passage"},
+        {"page": 8, "chunk_index": 2, "excerpt": "first relevant passage"},
     ]
 
 

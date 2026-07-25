@@ -13,6 +13,7 @@ from backend.app.features.research.models import ResearchOutput, SearchResult
 import backend.app.features.coding.service as coding_agent
 import backend.app.features.research.agent as research_agent
 import backend.app.features.research.service as research_service
+import backend.app.shared.conversation_store as conv_store
 
 
 PUBLIC_ROUTES = {
@@ -202,7 +203,12 @@ def test_research_deep_dive_serializes_error_events(monkeypatch):
     assert events == [{"type": "error", "message": "source unavailable"}]
 
 
-def test_research_stream_serializes_cached_source_done_event(monkeypatch):
+def test_research_stream_serializes_cached_source_done_event(monkeypatch, tmp_path):
+    # Isolate the conversation store — stream_events now reads prior session
+    # history for contextual follow-up, so this must not see turns left over
+    # in the real data/sessions.db by other tests/runs against session "default".
+    monkeypatch.setattr(conv_store, "_store", conv_store._SessionStore(tmp_path / "s.db"))
+
     class CachedKnowledge:
         def retrieve(self, _query):
             return [SearchResult("knowledge", "Cached source", "https://example.com", "Evidence")]

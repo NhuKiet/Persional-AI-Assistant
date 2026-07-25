@@ -17,13 +17,19 @@ def serialize_sources(
     limit: int = 5,
     excerpt_chars: int = 180,
 ) -> list[dict]:
+    # `chunks` arrives ranked by relevance (highest score first). Two chunks
+    # from the same page cite the same "source" from the reader's point of
+    # view — keeping both produced visually-duplicate "Trang N" chips — so
+    # dedupe down to the single highest-scoring chunk per page. The kept
+    # chunks are then re-sorted by page number: relevance order picked *which*
+    # pages to cite, but showing citations out of page order read as random
+    # to the user, so display order should follow the document instead.
     sources: list[dict] = []
-    seen: set[tuple[int, int]] = set()
+    seen_pages: set[int] = set()
     for chunk in chunks:
-        key = (chunk.page, chunk.index)
-        if key in seen:
+        if chunk.page in seen_pages:
             continue
-        seen.add(key)
+        seen_pages.add(chunk.page)
         sources.append({
             "page": chunk.page,
             "chunk_index": chunk.index,
@@ -31,4 +37,5 @@ def serialize_sources(
         })
         if len(sources) == limit:
             break
+    sources.sort(key=lambda source: source["page"])
     return sources

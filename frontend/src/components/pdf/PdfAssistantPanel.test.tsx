@@ -57,7 +57,7 @@ it("renders assistant sources and removable context pins", async () => {
   props.pins = [{ type: "text" as const, page: 3, text: "Đoạn đã ghim" }];
   render(<PdfAssistantPanel {...props} />);
 
-  await userEvent.click(screen.getByRole("button", { name: "Trang 4 · Nguồn 1" }));
+  await userEvent.click(screen.getByRole("button", { name: "Trang 4" }));
   expect(props.onOpenSource).toHaveBeenCalledWith(source);
 
   await userEvent.click(screen.getByRole("button", { name: "Bỏ ghim trang 3" }));
