@@ -120,3 +120,11 @@ def test_query_coverage_empty_sources_is_zero():
 def test_query_coverage_degenerate_query_is_one():
     src = _src(content="nội dung")
     assert suf.query_coverage("ai", [src]) == 1.0
+
+
+def test_evidence_age_prefers_falsy_published_at_over_stored_at():
+    """published_at=0.0 (epoch) is a legitimate but falsy value — must still
+    take precedence over stored_at, not be treated as absent."""
+    src = _src(stored_days_ago=1, published=0.0)
+    # published_at=0.0 → age tính từ epoch (1970-01-01), phải lớn hơn nhiều so với 1 ngày
+    assert suf.evidence_age_days(src, _NOW) > 1

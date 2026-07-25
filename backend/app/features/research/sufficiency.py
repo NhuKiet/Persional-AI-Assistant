@@ -87,7 +87,9 @@ def evidence_age_days(source, now: float) -> float | None:
     thời điểm lưu. Một paper 2020 vừa index hôm nay KHÔNG phải bằng chứng
     hiện hành. Trả None khi không có mốc thời gian nào."""
     extra = getattr(source, "extra", None) or {}
-    ts = extra.get("published_at") or extra.get("stored_at")
+    ts = extra.get("published_at")
+    if ts is None:
+        ts = extra.get("stored_at")
     if ts is None:
         return None
     try:
