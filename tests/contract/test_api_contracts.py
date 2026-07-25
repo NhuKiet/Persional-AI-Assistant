@@ -203,22 +203,37 @@ def test_research_deep_dive_serializes_error_events(monkeypatch):
     assert events == [{"type": "error", "message": "source unavailable"}]
 
 
-def test_research_stream_serializes_cached_source_done_event(monkeypatch, tmp_path):
+def test_research_stream_serializes_knowledge_decision_event(monkeypatch, tmp_path):
     # Isolate the conversation store — stream_events now reads prior session
     # history for contextual follow-up, so this must not see turns left over
     # in the real data/sessions.db by other tests/runs against session "default".
     monkeypatch.setattr(conv_store, "_store", conv_store._SessionStore(tmp_path / "s.db"))
 
+    import time as _time
+
     class CachedKnowledge:
+        def retrieve_candidates(self, _query, top_k=None):
+            return [SearchResult(
+                "knowledge", "Cached source", "https://example.com",
+                "Evidence for cached query", extra={"stored_at": _time.time()},
+            )]
+
         def retrieve(self, _query):
-            return [SearchResult("knowledge", "Cached source", "https://example.com", "Evidence")]
+            return self.retrieve_candidates(_query)
 
     class Synthesizer:
-        def synthesize_rag(self, query, _sources):
+        def synthesize_rag_grounded(self, query, _sources):
+            return ResearchOutput(query=query)
+
+        def synthesize_grounded(self, query, _sources):
             return ResearchOutput(query=query)
 
     agent = object.__new__(research_agent.ResearchAgent)
     agent.synth = Synthesizer()
+    # The gate's 2nd tier (judge) is exercised elsewhere (test_agent_gate.py) —
+    # here we only care that a sufficient decision surfaces as an SSE event,
+    # so force the verdict rather than invoking a real LLM call.
+    monkeypatch.setattr(agent, "_run_judge", lambda *a: (True, None), raising=False)
     monkeypatch.setattr(research_agent, "get_store", lambda: CachedKnowledge())
     monkeypatch.setattr(
         research_router, "_service", research_service.ResearchService(agent=agent)
@@ -229,7 +244,12 @@ def test_research_stream_serializes_cached_source_done_event(monkeypatch, tmp_pa
     ))
 
     assert events[0] == {
-        "type": "source_done", "source": "knowledge", "count": 1, "cached": True,
+        "type":         "knowledge_decision",
+        "decision":     "reuse",
+        "reason":       "sufficient",
+        "stored_count": 1,
+        "fresh_count":  1,
+        "new_count":    0,
     }
 
 

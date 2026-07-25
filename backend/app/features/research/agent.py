@@ -376,25 +376,73 @@ class ResearchAgent:
                         "source":  "llm",
                     }
 
-            # ── RAG check ────────────────────────────────────────────────────
+            # ── Knowledge gate (3 tầng) ──────────────────────────────────────
             knowledge = get_store()
+            use_gate  = getattr(settings, "RESEARCH_SUFFICIENCY_ENABLED", True)
+
             try:
-                retrieved = knowledge.retrieve(query)
+                candidates = (
+                    knowledge.retrieve_candidates(query) if use_gate
+                    else knowledge.retrieve(query)
+                )
             except Exception as e:
                 logger.warning("[KNOWLEDGE] retrieve failed (non-fatal): %s", e)
-                retrieved = []
+                candidates = []
 
-            if retrieved and self._is_relevant(query, retrieved):
-                logger.info("[SOURCE] Using KNOWLEDGE (%d sources)", len(retrieved))
-                yield {
-                    "type":    "source_done",
-                    "source":  "knowledge",
-                    "count":   len(retrieved),
-                    "cached":  True,
-                }
-                all_sources = retrieved
+            state, fresh = (
+                sufficiency.assess(query, candidates) if use_gate
+                else ((sufficiency.MAYBE, candidates) if candidates else (sufficiency.EMPTY, []))
+            )
+            stored_count = len(candidates)
+            fresh_count  = len(fresh)
+            decision = reason = None
+            rag_path = False
+            all_sources: list[SearchResult] = []
 
-            else:
+            if state in (sufficiency.THIN, sufficiency.MAYBE):
+                if self._cancelled(cancel_event):
+                    yield _CANCEL
+                    return
+
+                if state == sufficiency.MAYBE and not use_gate:
+                    # Kill switch: hành vi cũ là "retrieve có kết quả thì dùng".
+                    sufficient, missing = True, None
+                elif state == sufficiency.MAYBE:
+                    verdict = self._run_judge(query, fresh, synth, cancel_event)
+                    if verdict is None:
+                        yield _CANCEL
+                        return
+                    sufficient, missing = verdict
+                else:
+                    sufficient, missing = False, None      # THIN không cần judge
+
+                if sufficient:
+                    decision, reason, rag_path = "reuse", "sufficient", True
+                    all_sources = fresh
+                else:
+                    gap = sufficiency.anchor_gap_query(query, missing)
+                    yield {"type": "status", "message": "Bổ sung nguồn còn thiếu…",
+                           "source": "knowledge"}
+                    all_sources, newly = self._top_up(query, fresh, gap)
+                    newly_fetched.extend(newly)
+                    if newly:
+                        decision = "top_up"
+                        reason   = "insufficient" if state == sufficiency.MAYBE else "thin"
+                    else:
+                        # Đã kết luận là thiếu mà không bù được → không giả vờ đủ.
+                        decision, reason = "degraded", "top_up_failed"
+
+            yield {
+                "type":         "knowledge_decision",
+                "decision":     decision or "search",
+                "reason":       reason or state,
+                "stored_count": stored_count,
+                "fresh_count":  fresh_count,
+                "new_count":    len(newly_fetched),
+            }
+
+            if decision is None:
+                # EMPTY hoặc STALE → live search; nguồn cũ không mang vào synthesis.
                 # ── Live search ───────────────────────────────────────────────
                 if self._cancelled(cancel_event):
                     yield _CANCEL
@@ -496,8 +544,8 @@ class ResearchAgent:
 
             yield {"type": "synthesizing", "message": "Synthesizing with AI…", "source": "llm"}
 
-            if retrieved and self._is_relevant(query, retrieved):
-                output = synth.synthesize_rag(query, all_sources)
+            if rag_path:
+                output = synth.synthesize_rag_grounded(query, all_sources)
             else:
                 output = synth.synthesize_grounded(query, all_sources)
 
@@ -521,6 +569,16 @@ class ResearchAgent:
                         break
                     all_sources, output, iteration_newly = step
                     newly_fetched.extend(iteration_newly)
+
+            if reason == "top_up_failed":
+                output.limitations.append(
+                    "Không tìm được nguồn bổ sung cho phần còn thiếu — "
+                    "câu trả lời dựa trên dữ liệu đã lưu và có thể chưa đầy đủ."
+                )
+                if output.confidence is not None:
+                    output.confidence = min(output.confidence, 0.4)
+                else:
+                    output.confidence = 0.4
 
             output.query = original_query
 
