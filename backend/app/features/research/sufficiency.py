@@ -80,3 +80,43 @@ def ttl_days_for(freshness_class: str) -> int:
         "volatile": _TTL_VOLATILE,
         "stable":   _TTL_STABLE,
     }.get(freshness_class, _TTL_DEFAULT)
+
+
+def evidence_age_days(source, now: float) -> float | None:
+    """Tuổi bằng chứng, tính theo ngày xuất bản nếu biết, không thì theo
+    thời điểm lưu. Một paper 2020 vừa index hôm nay KHÔNG phải bằng chứng
+    hiện hành. Trả None khi không có mốc thời gian nào."""
+    extra = getattr(source, "extra", None) or {}
+    ts = extra.get("published_at") or extra.get("stored_at")
+    if ts is None:
+        return None
+    try:
+        return (now - float(ts)) / 86400.0
+    except (TypeError, ValueError):
+        return None
+
+
+def is_fresh(source, ttl_days: int, now: float, unknown_ok: bool) -> bool:
+    age = evidence_age_days(source, now)
+    if age is None:
+        return unknown_ok
+    return age <= ttl_days
+
+
+def fresh_subset(sources: list, ttl_days: int, now: float, unknown_ok: bool) -> list:
+    return [s for s in sources if is_fresh(s, ttl_days, now, unknown_ok)]
+
+
+def query_coverage(query: str, sources: list) -> float:
+    """Tỉ lệ token của câu hỏi xuất hiện trong nội dung nguồn.
+
+    LUÔN gọi trên tập nguồn CÒN TƯƠI, không phải toàn bộ candidate — một
+    snippet mới mà lạc đề không được làm chín nguồn cũ trông như còn hạn.
+    """
+    q = tokens(query)
+    if not q:
+        return 1.0          # câu hỏi suy biến → nhường quyết định cho tầng 2
+    if not sources:
+        return 0.0
+    body = tokens(" ".join((s.content or "") for s in sources))
+    return len(q & body) / len(q)
