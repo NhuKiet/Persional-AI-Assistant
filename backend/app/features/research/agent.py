@@ -3,11 +3,13 @@ import logging
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import TimeoutError as FutureTimeoutError
 from typing import Generator
 
 from backend.app.core.config import settings
 from backend.app.features.research.iteration import needs_iteration, gap_query
 from backend.app.features.research.models import ResearchOutput, SearchResult
+from backend.app.features.research import sufficiency
 from backend.app.features.research.search import (
     ArxivSearcher,
     GitHubSearcher,
@@ -43,6 +45,11 @@ _SOURCES = [
 # must never crash the whole run — a timeout here degrades to "whatever
 # completed" rather than propagating TimeoutError up through run()/run_streaming().
 _SEARCH_TIMEOUT_SECONDS = 60
+
+# Second-layer judge: submitted to the pool and polled so cancellation is
+# observed WHILE the call is in flight, not just before it starts.
+_JUDGE_TIMEOUT_SECONDS = getattr(settings, "RESEARCH_JUDGE_TIMEOUT_SECONDS", 20)
+_JUDGE_POLL_SECONDS    = 0.1
 
 _SSE_STATUS = {
     "web":         "Searching web sources…",
@@ -124,6 +131,42 @@ class ResearchAgent:
     @staticmethod
     def _cancelled(cancel_event) -> bool:
         return cancel_event is not None and cancel_event.is_set()
+
+    def _run_judge(self, query, sources, synth, cancel_event):
+        """Chạy tầng-2 judge sao cho HỦY được trong lúc call đang bay.
+
+        Kiểm tra trước một lời gọi blocking thì không hủy được chính lời gọi
+        đó — nên judge chạy trong pool, còn ở đây poll `cancel_event` theo
+        nhịp ngắn. Future bị bỏ rơi cứ chạy nốt rồi vứt kết quả, giống cách
+        `_search_all` xử lý việc đã hủy.
+
+        Trả None nếu hủy; (sufficient, missing) nếu không. Hết giờ hoặc lỗi
+        đều cho (False, None) — nghiêng về phía search thêm.
+        """
+        if self._cancelled(cancel_event):
+            return None
+
+        future = self._pool.submit(
+            sufficiency.judge_sufficiency,
+            query, sources, synth._call, synth._parse_obj,
+        )
+        deadline = time.time() + _JUDGE_TIMEOUT_SECONDS
+        while True:
+            if self._cancelled(cancel_event):
+                future.cancel()
+                return None
+            try:
+                return future.result(timeout=_JUDGE_POLL_SECONDS)
+            except FutureTimeoutError:
+                pass
+            except Exception as e:  # noqa: BLE001
+                logger.warning("[JUDGE] failed (non-fatal): %s", e)
+                return False, None
+            if time.time() >= deadline:
+                logger.warning("[JUDGE] timed out after %ss — treating as insufficient",
+                               _JUDGE_TIMEOUT_SECONDS)
+                future.cancel()
+                return False, None
 
     # ── Core search pipeline ─────────────────────────────────────────────────
 
