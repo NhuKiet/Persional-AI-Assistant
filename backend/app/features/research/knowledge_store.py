@@ -25,6 +25,7 @@ _CHUNK_SIZE   = settings.KNOWLEDGE_CHUNK_SIZE
 _OVERLAP      = settings.KNOWLEDGE_OVERLAP
 _TOP_K        = settings.KNOWLEDGE_TOP_K
 _COLLECTION   = settings.WEAVIATE_COLLECTION
+_CANDIDATE_THRESHOLD = settings.KNOWLEDGE_CANDIDATE_THRESHOLD
 
 _RERANK_ENABLED = settings.RERANK_ENABLED
 _RERANK_GATE    = settings.RERANK_GATE_THRESHOLD
@@ -42,6 +43,8 @@ class _Hit:
     url:             str
     score:           float
     timestamp:       float
+    published_at:    float = 0.0
+    published_year:  int   = 0
 
 
 def _objects_to_hits(objects, now: float) -> list[_Hit]:
@@ -65,6 +68,8 @@ def _objects_to_hits(objects, now: float) -> list[_Hit]:
                 url            = p.get("url", ""),
                 score          = float(obj.metadata.score or 0.0),
                 timestamp      = float(p.get("timestamp", now)),
+                published_at   = float(p.get("publishedAt") or 0.0),
+                published_year = int(p.get("publishedYear") or 0),
             ))
         except Exception as e:
             logger.debug("Skipping malformed Weaviate object: %s", e)
@@ -95,6 +100,47 @@ def _rank_and_group(hits: list[_Hit], threshold: float, now: float) -> list[Sear
         for d_score, h in best.values()
     ]
     results.sort(key=lambda r: r.score, reverse=True)
+    return results
+
+
+def _rank_candidates(hits: list[_Hit], threshold: float, now: float) -> list[SearchResult]:
+    """Như `_rank_and_group` nhưng lọc theo điểm THÔ, decay chỉ dùng để SẮP XẾP.
+
+    `_rank_and_group` so ngưỡng với điểm ĐÃ decay, nên tuổi tác loại bỏ chứ
+    không phải hạ hạng: chunk điểm 1.0 biến mất sau ~26 ngày, 0.8 sau ~12.5
+    ngày. TTL 180 ngày cho câu hỏi stable vì thế không bao giờ chạy tới.
+    Tách ra: liên quan lọc ở đây, độ mới lọc ở tầng sufficiency.
+    """
+    best: dict[str, tuple[float, _Hit]] = {}
+    for h in hits:
+        if h.score < threshold:
+            continue
+        prev = best.get(h.parent_id)
+        if prev is None or h.score > prev[0]:
+            best[h.parent_id] = (h.score, h)
+
+    results: list[SearchResult] = []
+    for raw_score, h in best.values():
+        extra: dict = {"stored_at": h.timestamp}
+        if h.published_at:
+            extra["published_at"] = h.published_at
+        elif h.published_year:
+            extra["published_at"] = datetime.datetime(h.published_year, 1, 1).timestamp()
+
+        age_days = (now - h.timestamp) / 86400.0
+        results.append(SearchResult(
+            source  = h.source or "knowledge",
+            title   = h.title  or h.parent_id,
+            url     = h.url    or "",
+            content = h.parent_content,
+            score   = raw_score,
+            extra   = extra,
+        ))
+        results[-1].extra["_decayed"] = raw_score * math.exp(-age_days / 60.0)
+
+    results.sort(key=lambda r: r.extra["_decayed"], reverse=True)
+    for r in results:
+        r.extra.pop("_decayed", None)
     return results
 
 
@@ -373,6 +419,36 @@ class KnowledgeStore:
             results = results[:top_k]
         logger.info("KnowledgeStore: retrieved %d sources for: %s", len(results), query[:60])
         return results[:top_k]
+
+    def retrieve_candidates(self, query: str, top_k: int = _TOP_K) -> list[SearchResult]:
+        """Ứng viên cho tầng sufficiency: lọc liên quan theo điểm thô, mang
+        theo metadata độ mới. Không rerank-gate — gate đó dành cho `retrieve`
+        legacy; ở đây tầng 1/2 mới là nơi quyết định."""
+        try:
+            client = _get_weaviate()
+            q_vec  = embed_query(query)
+        except Exception as e:
+            logger.warning("retrieve_candidates skipped: %s", e)
+            return []
+
+        try:
+            from weaviate.classes.query import HybridFusion, MetadataQuery
+            col  = client.collections.get(_COLLECTION)
+            resp = col.query.hybrid(
+                query=query, vector=q_vec, alpha=0.5, limit=top_k * 2,
+                fusion_type=HybridFusion.RELATIVE_SCORE,
+                query_properties=["content"],
+                return_metadata=MetadataQuery(score=True),
+            )
+        except Exception as e:
+            logger.warning("Weaviate hybrid query failed (non-fatal): %s", e)
+            return []
+
+        now  = time.time()
+        hits = _objects_to_hits(resp.objects, now)
+        out  = _rank_candidates(hits, _CANDIDATE_THRESHOLD, now)
+        logger.info("retrieve_candidates: %d candidates for: %s", len(out), query[:60])
+        return out[:top_k]
 
     def size(self) -> int:
         try:
