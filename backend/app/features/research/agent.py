@@ -207,23 +207,44 @@ class ResearchAgent:
         )
         return reranked
 
-    def _iteration_step(self, query, sources, output, synth):
-        """Run one bounded extra search round targeting a grounding gap.
+    def _top_up(self, query: str, base_sources: list, gap_query: str) -> tuple[list, list]:
+        """Search bù rồi trộn với nguồn sẵn có.
 
-        Returns (new_sources, new_output), or None to stop (no gap query, or a
-        non-fatal failure — caller keeps the prior output).
+        Trả (merged_sources, newly_fetched_sources). CHỈ tập thứ hai được
+        đem đi lưu — nguồn trong `base_sources` đến từ Weaviate và ghi lại
+        sẽ nhân bản chunk mỗi lần hỏi tiếp về cùng chủ đề.
+
+        Tập "mới" tính SAU merge/dedup: nguồn mới bị dedup loại vì trùng nội
+        dung đã lưu thì cũng không đáng lưu.
+        """
+        base_ids = {s.id for s in base_sources}
+        try:
+            extra_raw = self._search_all(gap_query)
+            extra     = self._process_pipeline(gap_query, extra_raw)
+        except Exception as e:  # noqa: BLE001 — non-fatal, giữ nguyên nguồn cũ
+            logger.warning("[TOP-UP] search failed (non-fatal): %s", e)
+            return base_sources, []
+
+        combined = deduplicate_results(base_sources + extra, threshold=0.92)
+        merged   = rerank_results(query, combined, top_k=15)
+        newly    = [s for s in merged if s.id not in base_ids]
+        logger.info("[TOP-UP] %d base + %d extra → %d merged, %d new",
+                    len(base_sources), len(extra), len(merged), len(newly))
+        return merged, newly
+
+    def _iteration_step(self, query, sources, output, synth):
+        """Một vòng search bù nhắm vào khoảng trống grounding.
+
+        Trả (new_sources, new_output, newly_fetched), hoặc None để dừng.
         """
         gq = gap_query(query, output)
         if not gq:
             return None
         try:
-            extra_raw = self._search_all(gq)
-            extra = self._process_pipeline(gq, extra_raw)
-            combined = deduplicate_results(sources + extra, threshold=0.92)
-            new_sources = rerank_results(query, combined, top_k=15)
-            new_output = synth.synthesize_grounded(query, new_sources)
-            return new_sources, new_output
-        except Exception as e:  # noqa: BLE001 — non-fatal, keep prior output
+            merged, newly = self._top_up(query, sources, gq)
+            new_output = synth.synthesize_grounded(query, merged)
+            return merged, new_output, newly
+        except Exception as e:  # noqa: BLE001 — non-fatal, giữ output trước đó
             logger.warning("[ITERATION] round failed (non-fatal): %s", e)
             return None
 
@@ -275,7 +296,7 @@ class ResearchAgent:
             step = self._iteration_step(query, sources, output, self.synth)
             if step is None:
                 break
-            sources, output = step
+            sources, output, _newly = step
 
         logger.info("[FINAL] Search answer (%.1fs)", time.time() - t0)
         return output
@@ -288,6 +309,7 @@ class ResearchAgent:
         _CANCEL = {"type": "cancelled", "message": "Đã hủy theo yêu cầu."}
         try:
             t0 = time.time()
+            newly_fetched: list = []
             logger.info("[QUERY] %s", query)
 
             if provider or model:
@@ -454,7 +476,8 @@ class ResearchAgent:
                     step = self._iteration_step(query, all_sources, output, synth)
                     if step is None:
                         break
-                    all_sources, output = step
+                    all_sources, output, iteration_newly = step
+                    newly_fetched.extend(iteration_newly)
 
             output.query = original_query
 
