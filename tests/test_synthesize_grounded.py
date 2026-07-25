@@ -36,3 +36,45 @@ def test_synthesize_grounded_falls_back_when_disabled(monkeypatch):
     out = synth.synthesize_grounded("q", _sources())
     assert out.claims == []
     assert out.confidence is None
+
+
+def test_synthesize_rag_grounded_attaches_claims(monkeypatch):
+    from backend.app.features.research.models import Claim, SearchResult
+    from backend.app.features.research.synthesizer import Synthesizer
+    import backend.app.features.research.synthesizer as synth_mod
+
+    src = SearchResult(
+        source="web", title="t", url="u",
+        content="transformer attention mechanism scales with sequence length",
+    )
+    synth = Synthesizer(llm=None)
+    monkeypatch.setattr(synth, "_call", lambda p: "Câu trả lời tự nhiên về transformer.")
+    monkeypatch.setattr(
+        synth_mod, "extract_claims",
+        lambda q, s, c, p: [Claim(text="transformer attention scales", source_ids=[src.id])],
+    )
+
+    out = synth.synthesize_rag_grounded("transformer", [src])
+
+    assert out.summary_detailed
+    assert out.confidence is not None
+    assert len(out.claims) == 1
+
+
+def test_synthesize_rag_grounded_survives_grounding_failure(monkeypatch):
+    from backend.app.features.research.models import SearchResult
+    from backend.app.features.research.synthesizer import Synthesizer
+    import backend.app.features.research.synthesizer as synth_mod
+
+    src = SearchResult(source="web", title="t", url="u", content="nội dung")
+    synth = Synthesizer(llm=None)
+    monkeypatch.setattr(synth, "_call", lambda p: "Câu trả lời.")
+
+    def boom(*a, **k):
+        raise RuntimeError("grounding down")
+
+    monkeypatch.setattr(synth_mod, "extract_claims", boom)
+
+    out = synth.synthesize_rag_grounded("q", [src])
+    assert out.summary_detailed          # câu trả lời vẫn còn
+    assert out.claims == []              # grounding hỏng là non-fatal

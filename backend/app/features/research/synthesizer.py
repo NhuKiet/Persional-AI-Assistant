@@ -457,24 +457,38 @@ class Synthesizer:
         )
         return out
 
-    def synthesize_grounded(self, query: str, sources: list[SearchResult]) -> ResearchOutput:
+    def _attach_grounding(self, out: ResearchOutput, query: str, sources: list[SearchResult]) -> None:
+        """Gắn claims đã thẩm định + confidence + limitations vào `out`.
+
+        Fallback-safe: tắt grounding, không nguồn, hay bất kỳ exception nào →
+        `out` giữ nguyên (claims rỗng, confidence None).
         """
-        Runs `synthesize` unchanged, then attaches audited claims (grounded
-        only), rule-based confidence, and limitations. Fully fallback-safe:
-        grounding disabled, no sources, or any exception → returns the plain
-        `synthesize` output untouched (claims empty, confidence None).
-        """
-        out = self.synthesize(query, sources)
         if not getattr(settings, "RESEARCH_GROUNDING_ENABLED", True) or not sources:
-            return out
+            return
         try:
             claims = extract_claims(query, sources, self._call, self._parse_array)
             claims = ClaimAuditor().verify(claims, sources)
-            out.claims = [c for c in claims if c.grounded]
-            out.confidence = compute_confidence(claims, len(sources))
+            out.claims      = [c for c in claims if c.grounded]
+            out.confidence  = compute_confidence(claims, len(sources))
             out.limitations = derive_limitations(sources, claims)
         except Exception as e:
             logger.error("Grounding failed (non-fatal): %s", e, exc_info=True)
+
+    def synthesize_grounded(self, query: str, sources: list[SearchResult]) -> ResearchOutput:
+        """Đường structured (6 call) + grounding."""
+        out = self.synthesize(query, sources)
+        self._attach_grounding(out, query, sources)
+        return out
+
+    def synthesize_rag_grounded(self, query: str, sources: list[SearchResult]) -> ResearchOutput:
+        """Đường RAG (1 call) + grounding — 2 call thay vì 7.
+
+        Nhánh RAG trước đây trả lời mà không có claims/confidence/limitations,
+        nên người dùng không có cách nào biết câu trả lời từ DB đáng tin tới
+        đâu. Rẻ vẫn giữ rẻ, nhưng độ tin cậy thì áp dụng cho mọi nhánh.
+        """
+        out = self.synthesize_rag(query, sources)
+        self._attach_grounding(out, query, sources)
         return out
 
     # ── Follow-up Q&A ─────────────────────────────────────────────────────────
