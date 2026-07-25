@@ -5,6 +5,7 @@ Interface public giữ nguyên để research_agent không đổi.
 """
 from __future__ import annotations
 
+import datetime
 import logging
 import math
 import threading
@@ -104,6 +105,33 @@ def _apply_rerank_gate(results, rerank_used: bool, threshold: float):
     return results
 
 
+def published_epoch_from_extra(extra: dict | None) -> tuple[float, int]:
+    """Rút ngày xuất bản từ SearchResult.extra.
+
+    arxiv cho ngày đầy đủ ("published"), Semantic Scholar/OpenAlex chỉ cho
+    năm. Trả (epoch, year); 0 nghĩa là không biết.
+    """
+    extra = extra or {}
+
+    year = 0
+    try:
+        raw_year = extra.get("year")
+        if raw_year is not None:
+            year = int(raw_year)
+    except (TypeError, ValueError):
+        year = 0
+
+    at = 0.0
+    raw_date = extra.get("published")
+    if raw_date:
+        try:
+            at = datetime.datetime.strptime(str(raw_date)[:10], "%Y-%m-%d").timestamp()
+        except (TypeError, ValueError):
+            at = 0.0
+
+    return at, year
+
+
 def _rerank(query: str, results: list[SearchResult]) -> list[SearchResult]:
     """Fuse rerank + credibility + base, sort giảm dần, rồi gate. Không I/O nếu rerank tắt."""
     candidates = results[:_RERANK_CAND]
@@ -155,9 +183,40 @@ def _get_weaviate():
     return _client
 
 
+_NEW_PROPERTIES = [("publishedAt", "NUMBER"), ("publishedYear", "INT")]
+
+
+def _ensure_new_properties(client) -> None:
+    """Collection đã tồn tại thì `_ensure_schema` return sớm, nên property
+    mới thêm vào định nghĩa sẽ KHÔNG tới được collection đang chạy — phải
+    add tường minh. Toàn bộ non-fatal: thiếu property thì code đọc đã có
+    đường lui (published_at = None → rơi về stored_at).
+    """
+    import weaviate.classes.config as wc
+
+    try:
+        col = client.collections.get(_COLLECTION)
+        existing = {p.name for p in col.config.get().properties}
+    except Exception as e:  # noqa: BLE001
+        logger.warning("Could not read collection config (non-fatal): %s", e)
+        return
+
+    for name, dtype in _NEW_PROPERTIES:
+        if name in existing:
+            continue
+        try:
+            col.config.add_property(
+                wc.Property(name=name, data_type=getattr(wc.DataType, dtype))
+            )
+            logger.info("Weaviate: added property %s", name)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("Could not add property %s (non-fatal): %s", name, e)
+
+
 def _ensure_schema(client) -> None:
     import weaviate.classes.config as wc
     if client.collections.exists(_COLLECTION):
+        _ensure_new_properties(client)
         return
     client.collections.create(
         name=_COLLECTION,
@@ -174,6 +233,8 @@ def _ensure_schema(client) -> None:
             wc.Property(name="score",          data_type=wc.DataType.NUMBER),
             wc.Property(name="chunkIndex",     data_type=wc.DataType.INT),
             wc.Property(name="parentContent",  data_type=wc.DataType.TEXT),
+            wc.Property(name="publishedAt",   data_type=wc.DataType.NUMBER),
+            wc.Property(name="publishedYear", data_type=wc.DataType.INT),
         ],
     )
     logger.info("Weaviate schema created: %s", _COLLECTION)
@@ -235,6 +296,7 @@ class KnowledgeStore:
                 continue
             category = category_for(result.source)
             ts = time.time()
+            published_at, published_year = published_epoch_from_extra(result.extra)
             objects: list = []
             for parent in build_parent_child(result.content, _CHUNK_SIZE, _OVERLAP):
                 try:
@@ -256,6 +318,8 @@ class KnowledgeStore:
                             "score":          result.score,
                             "chunkIndex":     idx,
                             "parentContent":  parent.content,
+                            "publishedAt":    published_at,
+                            "publishedYear":  published_year,
                         },
                         vector=vec,
                     ))
