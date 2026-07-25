@@ -47,6 +47,11 @@ class Settings(BaseSettings):
     KNOWLEDGE_CHUNK_SIZE: int = 500
     KNOWLEDGE_OVERLAP: int = 50
     KNOWLEDGE_TOP_K: int = 40
+    KNOWLEDGE_CANDIDATE_THRESHOLD: float = 0.65
+    KNOWLEDGE_COVERAGE_MIN: float = 0.6
+    KNOWLEDGE_TTL_VOLATILE_DAYS: int = 7
+    KNOWLEDGE_TTL_STABLE_DAYS: int = 180
+    KNOWLEDGE_TTL_DEFAULT_DAYS: int = 30
 
     # ── Weaviate Cloud ──────────────────────────────────────────────
     WEAVIATE_URL: str | None = None
@@ -62,6 +67,8 @@ class Settings(BaseSettings):
     # ── Research grounding ────────────────────────────────────────────
     RESEARCH_GROUNDING_ENABLED: bool = True
     RESEARCH_MAX_ITERATIONS: int = 1
+    RESEARCH_SUFFICIENCY_ENABLED: bool = True
+    RESEARCH_JUDGE_TIMEOUT_SECONDS: int = 20
 
     # ── Search APIs ─────────────────────────────────────────────────
     TAVILY_API_KEY: str | None = None
