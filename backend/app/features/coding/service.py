@@ -4,7 +4,6 @@ import json
 import logging
 import re
 import shutil
-import sqlite3
 import threading
 from collections.abc import AsyncIterator, Callable, Generator, Iterator
 from pathlib import Path
@@ -18,9 +17,10 @@ from backend.app.features.coding.execution import CodeExecutor, SANDBOX_DIR, det
 from backend.app.features.coding.prompts import CHAT_SYSTEM, CODE_PROMPT, DEBUG_PROMPT, PLAN_PROMPT, REVIEW_PROMPT, SYSTEM_PROMPT, TEST_PROMPT
 from backend.app.features.coding.schemas import CodingRequest
 from backend.app.features.coding.uploads import session_sandbox
+from backend.app.shared.conversation_store import ConversationManager
 from backend.app.shared.session_locks import KeyedLockRegistry, SessionBusyError
 
-__all__ = ["CodingAgent", "CodingConversationManager", "CodingService", "SessionBusyError"]
+__all__ = ["CodingAgent", "CodingService", "SessionBusyError"]
 
 
 logger = logging.getLogger(__name__)
@@ -34,98 +34,6 @@ ENABLE_AUTO_INSTALL = settings.ENABLE_AUTO_INSTALL
 # implementations canonical in this feature's execution/artifact modules.
 _detect_missing_packages = detect_missing_packages
 _install_packages = install_packages
-
-_BASE_DIR = Path(__file__).resolve().parents[4]
-_DB_PATH = _BASE_DIR / "data" / "sessions.db"
-
-
-class _CodingSessionStore:
-    def __init__(self, db_path: Path = _DB_PATH):
-        db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._db = str(db_path)
-        self._lock = threading.Lock()
-        with self._lock, self._connect() as connection:
-            connection.execute(
-                """CREATE TABLE IF NOT EXISTS sessions (
-                    key TEXT PRIMARY KEY,
-                    messages TEXT NOT NULL DEFAULT '[]',
-                    updated_at REAL NOT NULL,
-                    revision INTEGER NOT NULL DEFAULT 0
-                )"""
-            )
-            try:
-                connection.execute(
-                    "ALTER TABLE sessions ADD COLUMN revision INTEGER NOT NULL DEFAULT 0"
-                )
-            except sqlite3.OperationalError:
-                pass  # column already exists (fresh table already has it above)
-            connection.commit()
-
-    def _connect(self) -> sqlite3.Connection:
-        connection = sqlite3.connect(self._db, check_same_thread=False)
-        connection.row_factory = sqlite3.Row
-        return connection
-
-    def load(self, key: str) -> list[dict]:
-        return self.load_with_revision(key)[0]
-
-    def load_with_revision(self, key: str) -> tuple[list[dict], int]:
-        with self._lock, self._connect() as connection:
-            row = connection.execute(
-                "SELECT messages, revision FROM sessions WHERE key = ?", (key,)
-            ).fetchone()
-            if row is None:
-                return [], 0
-            try:
-                messages = json.loads(row["messages"])
-            except json.JSONDecodeError:
-                messages = []
-            return messages, row["revision"]
-
-    def save(self, key: str, messages: list[dict]) -> None:
-        import time
-
-        with self._lock, self._connect() as connection:
-            connection.execute(
-                """INSERT INTO sessions (key, messages, updated_at, revision) VALUES (?, ?, ?, 1)
-                ON CONFLICT(key) DO UPDATE SET
-                    messages = excluded.messages,
-                    updated_at = excluded.updated_at,
-                    revision = sessions.revision + 1""",
-                (key, json.dumps(messages, ensure_ascii=False), time.time()),
-            )
-            connection.commit()
-
-    def delete(self, key: str) -> None:
-        with self._lock, self._connect() as connection:
-            connection.execute("DELETE FROM sessions WHERE key = ?", (key,))
-            connection.commit()
-
-
-_sessions = _CodingSessionStore()
-
-
-class CodingConversationManager:
-    def __init__(self, namespace: str = "coding"):
-        self.namespace = namespace
-
-    def _key(self, session_id: str) -> str:
-        return f"{self.namespace}:{session_id}"
-
-    def get_history(self, session_id: str) -> list[dict]:
-        return _sessions.load(self._key(session_id))
-
-    def get_history_with_revision(self, session_id: str) -> tuple[list[dict], int]:
-        return _sessions.load_with_revision(self._key(session_id))
-
-    def add_turn(self, session_id: str, role: str, content: str) -> None:
-        history = self.get_history(session_id)
-        history.append({"role": role, "content": content})
-        _sessions.save(self._key(session_id), history[-settings.MAX_HISTORY:])
-
-    def clear_session(self, session_id: str) -> None:
-        _sessions.delete(self._key(session_id))
-
 
 def _extract_all_files(text: str) -> list[dict]:
     named = re.findall(r"```python:([\w./\-]+\.py)\s*\n([\s\S]*?)```", text)
@@ -498,9 +406,9 @@ class CodingAgent:
 
 
 class CodingService:
-    def __init__(self, agent_factory: Callable[..., CodingAgent] | None = None, conversations: CodingConversationManager | None = None):
+    def __init__(self, agent_factory: Callable[..., CodingAgent] | None = None, conversations: ConversationManager | None = None):
         self._agent = (agent_factory or CodingAgent)()
-        self._conversations = conversations or CodingConversationManager()
+        self._conversations = conversations or ConversationManager(namespace="coding")
         # Single-worker only — see backend/app/shared/session_locks.py.
         self._locks = KeyedLockRegistry()
 

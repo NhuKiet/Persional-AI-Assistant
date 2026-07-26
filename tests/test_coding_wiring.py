@@ -4,9 +4,11 @@ from fastapi.testclient import TestClient
 
 import backend.app.features.coding.router as coding_router
 import backend.app.features.coding.service as ca
+import backend.app.shared.conversation_store as conv_mod
 from backend.app.features.coding.artifacts import ArtifactService
 from backend.app.features.coding.execution import SANDBOX_DIR
-from backend.app.features.coding.service import CodingAgent, CodingConversationManager
+from backend.app.features.coding.service import CodingAgent
+from tests.fake_session_store import FakeSessionStore
 
 
 def test_stream_ollama_uses_stream_chat(monkeypatch):
@@ -179,7 +181,7 @@ def test_serve_session_artifact_forces_attachment_for_html():
 # ── Session history restore + concurrency lock ──────────────────────────────
 
 def test_get_sessions_history_returns_expected_shape(monkeypatch, tmp_path):
-    monkeypatch.setattr(ca, "_sessions", ca._CodingSessionStore(tmp_path / "s.db"))
+    monkeypatch.setattr(conv_mod, "_store", FakeSessionStore())
     coding_router._conv_manager.add_turn("hist-1", role="user", content="hi")
     coding_router._conv_manager.add_turn("hist-1", role="assistant", content="hello")
 
@@ -199,13 +201,13 @@ def test_get_sessions_history_returns_expected_shape(monkeypatch, tmp_path):
 
 
 def test_get_sessions_history_404_when_unknown(monkeypatch, tmp_path):
-    monkeypatch.setattr(ca, "_sessions", ca._CodingSessionStore(tmp_path / "s.db"))
+    monkeypatch.setattr(conv_mod, "_store", FakeSessionStore())
     r = _client().get("/api/coding/sessions/never-existed")
     assert r.status_code == 404
 
 
 def test_delete_coding_session_removes_exact_history(monkeypatch, tmp_path):
-    monkeypatch.setattr(ca, "_sessions", ca._CodingSessionStore(tmp_path / "s.db"))
+    monkeypatch.setattr(conv_mod, "_store", FakeSessionStore())
     coding_router._conv_manager.add_turn("del-1", role="user", content="hi")
 
     r = _client().delete("/api/coding/session/del-1")

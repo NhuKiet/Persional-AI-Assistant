@@ -6,8 +6,9 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from backend.app.core.config import settings
 from backend.app.features.coding.artifacts import ArtifactService, artifact_response
 from backend.app.features.coding.schemas import CodingRequest, SessionHistoryResponse
-from backend.app.features.coding.service import CodingConversationManager, CodingService, SessionBusyError
+from backend.app.features.coding.service import CodingService, SessionBusyError
 from backend.app.features.coding.uploads import UploadService
+from backend.app.shared.conversation_store import ConversationManager
 from backend.app.shared.session_locks import log_concurrent_rejection
 from backend.app.shared.sse import sse
 
@@ -16,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["coding"])
 
-_conv_manager = CodingConversationManager()
+_conv_manager = ConversationManager(namespace="coding")
 _service = CodingService(conversations=_conv_manager)
 _uploads = UploadService()
 _artifacts = ArtifactService()

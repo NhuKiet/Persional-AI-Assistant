@@ -9,14 +9,16 @@ from backend.app.features.coding.execution import ExecutionResult, detect_missin
 from backend.app.features.coding.prompts import REVIEW_PROMPT, SYSTEM_PROMPT
 from backend.app.features.coding.schemas import CodingRequest
 import backend.app.features.coding.service as coding_service
+import backend.app.shared.conversation_store as conv_mod
 from backend.app.features.coding.service import (
     CodingAgent,
-    CodingConversationManager,
     CodingService,
     SessionBusyError,
     _build_plot_hint,
     _inject_preamble,
 )
+from backend.app.shared.conversation_store import ConversationManager
+from tests.fake_session_store import FakeSessionStore
 
 
 def test_coding_request_keeps_existing_public_fields():
@@ -188,8 +190,8 @@ def test_agent_reports_safe_message_when_executor_unavailable(monkeypatch, tmp_p
 
 
 def test_coding_history_serialization_and_revision(monkeypatch, tmp_path):
-    monkeypatch.setattr(coding_service, "_sessions", coding_service._CodingSessionStore(tmp_path / "s.db"))
-    mgr = CodingConversationManager()
+    monkeypatch.setattr(conv_mod, "_store", FakeSessionStore())
+    mgr = ConversationManager(namespace="coding")
 
     mgr.add_turn("sess-1", role="user", content="one")
     mgr.add_turn("sess-1", role="assistant", content="two")
@@ -203,8 +205,8 @@ def test_coding_history_serialization_and_revision(monkeypatch, tmp_path):
 
 
 def test_coding_clear_session_removes_exact_history(monkeypatch, tmp_path):
-    monkeypatch.setattr(coding_service, "_sessions", coding_service._CodingSessionStore(tmp_path / "s.db"))
-    mgr = CodingConversationManager()
+    monkeypatch.setattr(conv_mod, "_store", FakeSessionStore())
+    mgr = ConversationManager(namespace="coding")
     mgr.add_turn("sess-2", role="user", content="hi")
 
     mgr.clear_session("sess-2")
@@ -364,8 +366,8 @@ def test_agent_stops_generation_when_cancelled(monkeypatch, tmp_path):
 def test_chat_only_mode_stores_real_assistant_response(monkeypatch, tmp_path):
     """Regression: chat_only turns used to always persist the placeholder
     '[agent run]' instead of the real streamed answer."""
-    monkeypatch.setattr(coding_service, "_sessions", coding_service._CodingSessionStore(tmp_path / "s.db"))
-    mgr = CodingConversationManager()
+    monkeypatch.setattr(conv_mod, "_store", FakeSessionStore())
+    mgr = ConversationManager(namespace="coding")
 
     class _FakeAgent:
         def chat(self, message, history, provider=None, model=None):
