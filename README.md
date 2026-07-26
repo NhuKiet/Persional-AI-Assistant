@@ -29,7 +29,7 @@ Trang `/` là landing page và nơi chọn công cụ. URL không hợp lệ đ�
 ### Trò chuyện và model
 
 - Stream phản hồi bằng Server-Sent Events (SSE).
-- Lưu lịch sử backend trong SQLite và giới hạn số message theo `MAX_HISTORY`.
+- Lưu lịch sử backend trong Supabase (Postgres) và giới hạn số message theo `MAX_HISTORY`.
 - Lưu danh sách phiên và phiên đang dùng trên frontend bằng `localStorage`.
 - Chọn provider/model riêng cho Chat, Research, Coding và PDF.
 - Hỗ trợ Ollama, Anthropic và endpoint OpenAI-compatible.
@@ -74,7 +74,7 @@ Trang `/` là landing page và nơi chọn công cụ. URL không hợp lệ đ�
 | Research | Tavily, arXiv, Wikipedia, Semantic Scholar, Hugging Face, GitHub, OpenAlex |
 | Retrieval | OpenAI embeddings, Weaviate hybrid search, BGE rerank và adapter Cohere tùy chọn |
 | PDF | PyMuPDF, PDF.js/react-pdf |
-| Storage | SQLite, browser `localStorage`, Weaviate Cloud tùy chọn |
+| Storage | Supabase (Postgres), browser `localStorage`, Weaviate Cloud tùy chọn |
 | Kiểm thử | pytest, Vitest, Testing Library |
 | Đóng gói | Docker, Docker Compose, nginx |
 
@@ -185,7 +185,7 @@ Các service được mở tại:
 - Frontend: `http://localhost:5173`
 - Backend: `http://localhost:8000`
 
-Trong Compose, backend gọi Ollama trên máy host qua `host.docker.internal:11434`. Volume `./data:/app/data` giữ lại PDF, sandbox và SQLite khi container được tạo lại.
+Trong Compose, backend gọi Ollama trên máy host qua `host.docker.internal:11434`. Volume `./data:/app/data` giữ lại PDF và sandbox khi container được tạo lại.
 
 > `Dockerfile.executor` là image riêng để chạy code do Coding Agent sinh. Nó không được build tự động bởi `docker compose up --build`. Xem phần [Bảo mật Coding Executor](#bảo-mật-coding-executor).
 
@@ -289,7 +289,7 @@ Browser
         │
         └── FastAPI
               ├── LLM factory (Ollama / Anthropic / OpenAI)
-              ├── SQLite conversation store
+              ├── Supabase conversation store
               ├── Research Agent + Knowledge Store
               ├── Coding Agent + Code Executor
               └── PDF processor + multimodal context
@@ -379,7 +379,7 @@ data: {"type":"token","content":"..."}
 
 | Dữ liệu | Vị trí | Vòng đời |
 |---|---|---|
-| Lịch sử hội thoại backend | `data/sessions.db` | SQLite; startup xóa session cũ hơn 30 ngày |
+| Lịch sử hội thoại backend | Supabase (Postgres), bảng `sessions`/`messages` | Startup xóa session cũ hơn 30 ngày (`_store.cleanup_old`) |
 | Danh sách phiên frontend | Browser `localStorage` | Theo trình duyệt và từng tool |
 | File Coding và artifact | `data/sandbox/<session_id>/` | Runtime, không commit Git |
 | PDF upload | `data/pdfs/` | Runtime, giữ đến khi người dùng xóa |
@@ -455,7 +455,7 @@ Persional-AI-Assistant/
 │   │   ├── llm.py                 # LLM factory đa provider
 │   │   └── lifespan.py            # Startup/shutdown (dọn session cũ, ...)
 │   ├── shared/
-│   │   ├── conversation_store.py  # SQLite conversation store dùng chung
+│   │   ├── conversation_store.py  # Supabase (Postgres) conversation store dùng chung
 │   │   ├── session_locks.py       # Khóa mutation theo session
 │   │   ├── sse.py                 # Parser/encoder SSE dùng chung
 │   │   └── files.py                # Tiện ích file/path an toàn

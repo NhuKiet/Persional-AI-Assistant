@@ -15,7 +15,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
-      # Giữ dữ liệu runtime (pdf, sandbox, chat sqlite) ngoài container.
+      # Giữ dữ liệu runtime (pdf, sandbox) ngoài container.
       - ./data:/app/data
     restart: unless-stopped
 

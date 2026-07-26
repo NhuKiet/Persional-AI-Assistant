@@ -156,7 +156,12 @@ class ResearchService:
         # Contextual follow-up: fold in recent turns from this session (prior
         # deep-dive Q&A and/or the main research answer) so a question like
         # "so what about X" resolves against what was already discussed.
-        history = _text_history(self._conv_manager.get_history(req.session_id))
+        try:
+            history = _text_history(self._conv_manager.get_history(req.session_id))
+        except Exception as e:
+            logger.error("[STORAGE] get_history failed: %s", e, exc_info=True)
+            yield _STORAGE_ERROR
+            return
         convo_block = ""
         if history:
             recent = history[-6:]
@@ -178,8 +183,16 @@ class ResearchService:
             ):
                 full_response += token
                 yield {"type": "token", "content": token}
-            self._conv_manager.add_turn(req.session_id, role="user", content=req.question.strip())
-            self._conv_manager.add_turn(req.session_id, role="assistant", content=full_response)
+            try:
+                self._conv_manager.add_turn(req.session_id, role="user", content=req.question.strip())
+                self._conv_manager.add_turn(
+                    req.session_id, role="assistant", content=full_response
+                )
+            except Exception as e:
+                logger.error("[STORAGE] add_turn failed: %s", e, exc_info=True)
+                yield {"type": "done", "message": "ok"}
+                yield _STORAGE_ERROR
+                return
             yield {"type": "done", "message": "ok"}
         except Exception as e:  # noqa: BLE001
             logger.error("Deep dive error: %s", e, exc_info=True)

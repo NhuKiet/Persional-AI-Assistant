@@ -440,6 +440,84 @@ def test_stream_events_yields_storage_error_after_done_when_persist_fails(monkey
     assert "db.internal.example.com" not in str(events)
 
 
+def test_deep_dive_events_yields_storage_error_when_history_load_fails(monkeypatch):
+    class _BrokenStore:
+        def load(self, key):
+            raise RuntimeError("connection refused: db.internal.example.com:5432")
+        def load_with_revision(self, key):
+            return [], 0
+        def save(self, key, messages):
+            pass
+        def delete(self, key):
+            pass
+        def cleanup_old(self, max_age_days=30):
+            return 0
+
+    monkeypatch.setattr(conv_mod, "_store", _BrokenStore())
+    svc = service_mod.ResearchService(agent=object())
+
+    async def _collect():
+        return [
+            ev async for ev in svc.deep_dive_events(
+                DeepDiveRequest(
+                    question="what?", source_content="src", session_id="s1"
+                ),
+                system="SYS",
+            )
+        ]
+
+    events = asyncio.run(_collect())
+
+    assert events == [{
+        "type": "error", "code": "storage_unavailable",
+        "message": "Không thể kết nối kho lịch sử.",
+    }]
+    # the raw exception text (which could contain a hostname) must never reach the client
+    assert "db.internal.example.com" not in str(events)
+
+
+def test_deep_dive_events_yields_storage_error_after_done_when_persist_fails(monkeypatch):
+    async def fake_astream(messages, system="", provider=None, model=None, temperature=0.1):
+        yield "ok"
+
+    monkeypatch.setattr(service_mod, "astream_chat", fake_astream)
+
+    class _SaveFailsStore:
+        def load(self, key):
+            return []
+        def load_with_revision(self, key):
+            return [], 0
+        def save(self, key, messages):
+            raise RuntimeError("connection refused: db.internal.example.com:5432")
+        def delete(self, key):
+            pass
+        def cleanup_old(self, max_age_days=30):
+            return 0
+
+    monkeypatch.setattr(conv_mod, "_store", _SaveFailsStore())
+    svc = service_mod.ResearchService(agent=object())
+
+    async def _collect():
+        return [
+            ev async for ev in svc.deep_dive_events(
+                DeepDiveRequest(
+                    question="what?", source_content="src", session_id="s1"
+                ),
+                system="SYS",
+            )
+        ]
+
+    events = asyncio.run(_collect())
+
+    assert events[0]["type"] == "token"
+    assert events[1] == {"type": "done", "message": "ok"}
+    assert events[2] == {
+        "type": "error", "code": "storage_unavailable",
+        "message": "Không thể kết nối kho lịch sử.",
+    }
+    assert "db.internal.example.com" not in str(events)
+
+
 def test_stream_events_succeeds_normally_when_storage_works(monkeypatch):
     """Regression guard: the try/except added around storage calls must not
     change behavior on the success path."""

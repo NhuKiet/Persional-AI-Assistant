@@ -1,5 +1,7 @@
+import concurrent.futures
 import datetime
 import os
+import threading
 import uuid
 
 import psycopg
@@ -156,3 +158,43 @@ def test_save_empty_list_keeps_session_with_zero_messages(supabase_store):
     key = _unique_key()
     supabase_store.save(key, [])
     assert supabase_store.load_with_revision(key) == ([], 1)
+
+
+@pytest.mark.supabase_integration
+def test_get_pool_is_thread_safe_and_returns_same_pool(monkeypatch, supabase_store):
+    """Concurrent first-use callers must all observe the same pool instance —
+    the check-and-create in _get_pool() is guarded by a lock so two threads
+    racing on first use can't each construct (and orphan) their own pool.
+
+    Counting ConnectionPool() constructor calls is the real discriminator:
+    `_get_pool()` always returns `self._pool` freshly at the end, so even an
+    unguarded race tends to leave every caller looking at the same final
+    (last-written) pool object — identity alone doesn't reliably catch the
+    bug. What the lock actually prevents is the constructor running more
+    than once. A real ConnectionPool()+.open() is slow enough on its own
+    that a race is unlikely to show up by chance, so this widens the window
+    with a small artificial delay between the `self._pool is None` check and
+    the assignment — exactly the gap the lock has to close."""
+    import time
+
+    import backend.app.shared.conversation_store as conv_mod
+
+    real_pool_cls = conv_mod.ConnectionPool
+    construct_count = 0
+    count_lock = threading.Lock()
+
+    def _slow_pool(*args, **kwargs):
+        nonlocal construct_count
+        with count_lock:
+            construct_count += 1
+        time.sleep(0.05)
+        return real_pool_cls(*args, **kwargs)
+
+    monkeypatch.setattr(conv_mod, "ConnectionPool", _slow_pool)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=16) as pool:
+        pools = list(pool.map(lambda _: supabase_store._get_pool(), range(16)))
+
+    first = pools[0]
+    assert all(p is first for p in pools)
+    assert construct_count == 1

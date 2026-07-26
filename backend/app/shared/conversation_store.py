@@ -1,5 +1,6 @@
 import datetime
 import logging
+import threading
 from typing import AsyncGenerator
 
 from psycopg.rows import dict_row
@@ -32,20 +33,23 @@ class _SupabaseSessionStore:
 
     def __init__(self):
         self._pool: ConnectionPool | None = None
+        self._lock = threading.Lock()
 
     def _get_pool(self) -> ConnectionPool:
         if self._pool is None:
-            if not settings.SUPABASE_DB_URL:
-                raise RuntimeError("SUPABASE_DB_URL chưa cấu hình.")
-            self._pool = ConnectionPool(
-                conninfo=settings.SUPABASE_DB_URL,
-                min_size=1,
-                max_size=5,
-                timeout=5,
-                open=False,
-                kwargs={"row_factory": dict_row, "connect_timeout": 5},
-            )
-            self._pool.open(wait=True)
+            with self._lock:
+                if self._pool is None:
+                    if not settings.SUPABASE_DB_URL:
+                        raise RuntimeError("SUPABASE_DB_URL chưa cấu hình.")
+                    self._pool = ConnectionPool(
+                        conninfo=settings.SUPABASE_DB_URL,
+                        min_size=1,
+                        max_size=5,
+                        timeout=5,
+                        open=False,
+                        kwargs={"row_factory": dict_row, "connect_timeout": 5},
+                    )
+                    self._pool.open(wait=True)
         return self._pool
 
     def close(self) -> None:
