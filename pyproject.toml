@@ -48,6 +48,7 @@ dependencies = [
     "orjson==3.11.7",
     "requests-toolbelt==1.0.0",
     "pydantic-settings",
+    "psycopg[binary,pool]==3.2.3",
 ]
 
 [dependency-groups]

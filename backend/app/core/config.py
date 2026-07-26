@@ -58,6 +58,9 @@ class Settings(BaseSettings):
     WEAVIATE_API_KEY: str | None = None
     WEAVIATE_COLLECTION: str = "KnowledgeChunk"
 
+    # ── Supabase (sessions/messages) ───────────────────────────────
+    SUPABASE_DB_URL: str | None = None
+
     # ── Rerank ──────────────────────────────────────────────────────
     COHERE_API_KEY: str | None = None
     RERANK_ENABLED: bool = True
