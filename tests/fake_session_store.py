@@ -29,3 +29,10 @@ class FakeSessionStore:
         # provided for interface completeness. Add real aging behavior here
         # if a test ever needs it.
         return 0
+
+    def close(self) -> None:
+        # No-op — no pool to release. Exists so a test can monkeypatch
+        # conv_mod._store to a FakeSessionStore and still exercise the
+        # FastAPI lifespan shutdown path, which unconditionally calls
+        # _store.close().
+        pass
