@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 import backend.app.shared.conversation_store as conv_mod
 import backend.app.features.pdf.router as pdf_router
 import backend.app.features.pdf.service as pdf_service
+from tests.fake_session_store import FakeSessionStore
 
 
 def _client():
@@ -133,7 +134,7 @@ def test_no_pins_with_ollama_passes_guard(monkeypatch):
 # ── History restore + concurrency lock ──────────────────────────────────────
 
 def test_get_pdf_session_history_returns_expected_shape(monkeypatch, tmp_path):
-    monkeypatch.setattr(conv_mod, "_store", conv_mod._SessionStore(tmp_path / "s.db"))
+    monkeypatch.setattr(conv_mod, "_store", FakeSessionStore())
     pdf_router._service._conv_manager.add_turn("hist-1", role="user", content="hi")
     pdf_router._service._conv_manager.add_turn("hist-1", role="assistant", content="hello")
 
@@ -153,7 +154,7 @@ def test_get_pdf_session_history_returns_expected_shape(monkeypatch, tmp_path):
 
 
 def test_get_pdf_session_history_404_when_unknown(monkeypatch, tmp_path):
-    monkeypatch.setattr(conv_mod, "_store", conv_mod._SessionStore(tmp_path / "s.db"))
+    monkeypatch.setattr(conv_mod, "_store", FakeSessionStore())
     r = _client().get("/api/pdf/sessions/never-existed")
     assert r.status_code == 404
 
@@ -209,7 +210,7 @@ def test_delete_pdf_does_not_touch_other_sessions_conversation(monkeypatch, tmp_
     filename must not be able to wipe each other's chat history."""
     from backend.app.shared.conversation_store import ConversationManager
 
-    monkeypatch.setattr(conv_mod, "_store", conv_mod._SessionStore(tmp_path / "s.db"))
+    monkeypatch.setattr(conv_mod, "_store", FakeSessionStore())
     conv = ConversationManager(namespace="pdf")
     conv.add_turn("session-A", role="user", content="hello from A")
     conv.add_turn("session-B", role="user", content="hello from B")

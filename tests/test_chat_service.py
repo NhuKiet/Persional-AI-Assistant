@@ -6,6 +6,7 @@ from backend.app.features.chat.schemas import ChatRequest
 from backend.app.features.chat.service import ChatService
 from backend.app.shared.conversation_store import ConversationManager
 from backend.app.shared.session_locks import SessionBusyError
+from tests.fake_session_store import FakeSessionStore
 
 
 def test_chat_service_emits_current_token_event_shape():
@@ -29,7 +30,7 @@ def test_chat_service_emits_current_token_event_shape():
 def test_history_serialization_preserves_order(monkeypatch, tmp_path):
     import backend.app.shared.conversation_store as conv_mod
 
-    monkeypatch.setattr(conv_mod, "_store", conv_mod._SessionStore(tmp_path / "s.db"))
+    monkeypatch.setattr(conv_mod, "_store", FakeSessionStore())
     mgr = ConversationManager()
 
     mgr.add_turn("sess-1", role="user", content="one")
@@ -49,7 +50,7 @@ def test_history_serialization_preserves_order(monkeypatch, tmp_path):
 def test_history_revision_zero_for_unknown_session(monkeypatch, tmp_path):
     import backend.app.shared.conversation_store as conv_mod
 
-    monkeypatch.setattr(conv_mod, "_store", conv_mod._SessionStore(tmp_path / "s.db"))
+    monkeypatch.setattr(conv_mod, "_store", FakeSessionStore())
     mgr = ConversationManager()
 
     messages, revision = mgr.get_history_with_revision("never-seen")
@@ -61,7 +62,7 @@ def test_history_revision_zero_for_unknown_session(monkeypatch, tmp_path):
 def test_clear_session_removes_history_exactly(monkeypatch, tmp_path):
     import backend.app.shared.conversation_store as conv_mod
 
-    monkeypatch.setattr(conv_mod, "_store", conv_mod._SessionStore(tmp_path / "s.db"))
+    monkeypatch.setattr(conv_mod, "_store", FakeSessionStore())
     mgr = ConversationManager()
     mgr.add_turn("sess-2", role="user", content="hi")
 

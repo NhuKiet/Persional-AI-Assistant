@@ -8,6 +8,7 @@ import backend.app.features.research.service as service_mod
 from backend.app.features.research.schemas import DeepDiveRequest, ResearchRequest
 from backend.app.shared.conversation_store import ConversationManager
 from backend.app.shared.session_locks import SessionBusyError
+from tests.fake_session_store import FakeSessionStore
 
 
 def test_stream_events_yields_done_with_contract_keys(monkeypatch):
@@ -37,7 +38,7 @@ def test_stream_events_yields_done_with_contract_keys(monkeypatch):
 
 
 def test_stream_events_persists_query_and_result_in_order(monkeypatch, tmp_path):
-    monkeypatch.setattr(conv_mod, "_store", conv_mod._SessionStore(tmp_path / "s.db"))
+    monkeypatch.setattr(conv_mod, "_store", FakeSessionStore())
     DONE = {"query": "q", "summary_short": "s"}
 
     class _FakeAgent:
@@ -64,7 +65,7 @@ def test_stream_events_persists_query_and_result_in_order(monkeypatch, tmp_path)
 
 
 def test_deep_dive_events_persists_question_and_answer(monkeypatch, tmp_path):
-    monkeypatch.setattr(conv_mod, "_store", conv_mod._SessionStore(tmp_path / "s.db"))
+    monkeypatch.setattr(conv_mod, "_store", FakeSessionStore())
 
     async def fake_astream(messages, system="", provider=None, model=None, temperature=0.1):
         for t in ["hel", "lo"]:
@@ -97,7 +98,7 @@ def test_deep_dive_events_retrieves_full_content_when_snippet_short(monkeypatch,
     """source_content shorter than _DEEP_DIVE_MIN_CONTENT + a url present →
     deep-dive re-crawls the source instead of answering off the short
     reference snippet the client happens to have."""
-    monkeypatch.setattr(conv_mod, "_store", conv_mod._SessionStore(tmp_path / "s.db"))
+    monkeypatch.setattr(conv_mod, "_store", FakeSessionStore())
     monkeypatch.setattr(service_mod, "_crawl_url", lambda url, timeout=8: "full article text " * 50)
 
     captured = {}
@@ -127,7 +128,7 @@ def test_deep_dive_events_retrieves_full_content_when_snippet_short(monkeypatch,
 
 
 def test_deep_dive_events_skips_recrawl_when_content_already_long(monkeypatch, tmp_path):
-    monkeypatch.setattr(conv_mod, "_store", conv_mod._SessionStore(tmp_path / "s.db"))
+    monkeypatch.setattr(conv_mod, "_store", FakeSessionStore())
     calls = []
     monkeypatch.setattr(service_mod, "_crawl_url", lambda url, timeout=8: calls.append(url) or "should not be used")
 

@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 import backend.app.shared.conversation_store as conv_mod
 import backend.app.features.chat.router as chat_router
 from backend.app.shared.conversation_store import ConversationManager
+from tests.fake_session_store import FakeSessionStore
 
 
 def test_chat_stream_uses_astream_chat(monkeypatch, tmp_path):
@@ -18,7 +19,7 @@ def test_chat_stream_uses_astream_chat(monkeypatch, tmp_path):
             yield t
 
     monkeypatch.setattr(conv_mod, "astream_chat", fake_astream)
-    monkeypatch.setattr(conv_mod, "_store", conv_mod._SessionStore(tmp_path / "s.db"))
+    monkeypatch.setattr(conv_mod, "_store", FakeSessionStore())
 
     mgr = ConversationManager()
 
@@ -42,7 +43,7 @@ def _client():
 
 
 def test_get_session_history_returns_expected_shape(monkeypatch, tmp_path):
-    monkeypatch.setattr(conv_mod, "_store", conv_mod._SessionStore(tmp_path / "s.db"))
+    monkeypatch.setattr(conv_mod, "_store", FakeSessionStore())
     chat_router._conv_manager.add_turn("hist-1", role="user", content="hi")
     chat_router._conv_manager.add_turn("hist-1", role="assistant", content="hello")
 
@@ -60,13 +61,13 @@ def test_get_session_history_returns_expected_shape(monkeypatch, tmp_path):
 
 
 def test_get_session_history_404_when_unknown(monkeypatch, tmp_path):
-    monkeypatch.setattr(conv_mod, "_store", conv_mod._SessionStore(tmp_path / "s.db"))
+    monkeypatch.setattr(conv_mod, "_store", FakeSessionStore())
     r = _client().get("/api/chat/sessions/never-existed")
     assert r.status_code == 404
 
 
 def test_delete_session_removes_exact_history(monkeypatch, tmp_path):
-    monkeypatch.setattr(conv_mod, "_store", conv_mod._SessionStore(tmp_path / "s.db"))
+    monkeypatch.setattr(conv_mod, "_store", FakeSessionStore())
     chat_router._conv_manager.add_turn("del-1", role="user", content="hi")
 
     r = _client().delete("/api/chat/session/del-1")

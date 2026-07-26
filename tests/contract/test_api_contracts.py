@@ -14,6 +14,7 @@ import backend.app.features.coding.service as coding_agent
 import backend.app.features.research.agent as research_agent
 import backend.app.features.research.service as research_service
 import backend.app.shared.conversation_store as conv_store
+from tests.fake_session_store import FakeSessionStore
 
 
 PUBLIC_ROUTES = {
@@ -207,7 +208,7 @@ def test_research_stream_serializes_knowledge_decision_event(monkeypatch, tmp_pa
     # Isolate the conversation store — stream_events now reads prior session
     # history for contextual follow-up, so this must not see turns left over
     # in the real data/sessions.db by other tests/runs against session "default".
-    monkeypatch.setattr(conv_store, "_store", conv_store._SessionStore(tmp_path / "s.db"))
+    monkeypatch.setattr(conv_store, "_store", FakeSessionStore())
 
     import time as _time
 

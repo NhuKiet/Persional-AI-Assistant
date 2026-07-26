@@ -2,6 +2,27 @@ import os
 
 import pytest
 
+from tests.fake_session_store import FakeSessionStore
+
+
+@pytest.fixture(autouse=True)
+def _default_session_store(monkeypatch):
+    """Most tests never care about session persistence at all and don't
+    monkeypatch `_store` themselves — under the old SQLite-backed store
+    that was harmless, since it worked with zero config out of the box.
+    The production store is now `_SupabaseSessionStore`, which raises
+    unless `SUPABASE_DB_URL` is configured, so any test that incidentally
+    exercises a `ConversationManager` codepath needs a safe default.
+    Individual tests that explicitly `monkeypatch.setattr(conv_mod,
+    "_store", ...)` simply override this afterwards, so this is a no-op for
+    them. `tests/test_supabase_session_store.py` constructs
+    `_SupabaseSessionStore` instances directly rather than going through the
+    module-level `_store` singleton, so it is unaffected by this fixture.
+    """
+    import backend.app.shared.conversation_store as conv_mod
+
+    monkeypatch.setattr(conv_mod, "_store", FakeSessionStore())
+
 
 def pytest_configure(config):
     config.addinivalue_line(

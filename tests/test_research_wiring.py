@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 import backend.app.features.research.agent as ra_mod
 import backend.app.features.research.router as research_router
 import backend.app.shared.conversation_store as conv_mod
+from tests.fake_session_store import FakeSessionStore
 
 
 def test_run_streaming_done_includes_grounding_keys(monkeypatch):
@@ -468,7 +469,7 @@ def _client():
 
 
 def test_get_research_session_history_returns_expected_shape(monkeypatch, tmp_path):
-    monkeypatch.setattr(conv_mod, "_store", conv_mod._SessionStore(tmp_path / "s.db"))
+    monkeypatch.setattr(conv_mod, "_store", FakeSessionStore())
     svc = research_router.get_service()
     svc._conv_manager.add_turn("hist-1", role="user", content="q")
     svc._conv_manager.add_turn("hist-1", role="assistant", content={"summary_short": "s"})
@@ -489,7 +490,7 @@ def test_get_research_session_history_returns_expected_shape(monkeypatch, tmp_pa
 
 
 def test_get_research_session_history_404_when_unknown(monkeypatch, tmp_path):
-    monkeypatch.setattr(conv_mod, "_store", conv_mod._SessionStore(tmp_path / "s.db"))
+    monkeypatch.setattr(conv_mod, "_store", FakeSessionStore())
     r = _client().get("/api/research/sessions/never-existed")
     assert r.status_code == 404
 

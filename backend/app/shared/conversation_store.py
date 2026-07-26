@@ -1,9 +1,5 @@
 import datetime
-import json
 import logging
-import sqlite3
-import threading
-from pathlib import Path
 from typing import AsyncGenerator
 
 from psycopg.rows import dict_row
@@ -19,91 +15,6 @@ logger = logging.getLogger(__name__)
 MAX_HISTORY = settings.MAX_HISTORY
 
 _DEFAULT_PROFILE_ID = "00000000-0000-0000-0000-000000000001"
-
-_BASE_DIR = Path(__file__).resolve().parents[3]
-_DB_PATH = _BASE_DIR / "data" / "sessions.db"
-
-
-class _SessionStore:
-    def __init__(self, db_path: Path = _DB_PATH):
-        db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._db = str(db_path)
-        self._lock = threading.Lock()
-        self._init_db()
-
-    def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self._db, check_same_thread=False)
-        conn.row_factory = sqlite3.Row
-        return conn
-
-    def _init_db(self) -> None:
-        with self._lock, self._connect() as conn:
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS sessions (
-                    key        TEXT PRIMARY KEY,
-                    messages   TEXT NOT NULL DEFAULT '[]',
-                    updated_at REAL NOT NULL,
-                    revision   INTEGER NOT NULL DEFAULT 0
-                )
-                """
-            )
-            try:
-                conn.execute(
-                    "ALTER TABLE sessions ADD COLUMN revision INTEGER NOT NULL DEFAULT 0"
-                )
-            except sqlite3.OperationalError:
-                pass  # column already exists (fresh table already has it above)
-            conn.commit()
-
-    def load(self, key: str) -> list[dict]:
-        return self.load_with_revision(key)[0]
-
-    def load_with_revision(self, key: str) -> tuple[list[dict], int]:
-        with self._lock, self._connect() as conn:
-            row = conn.execute(
-                "SELECT messages, revision FROM sessions WHERE key = ?", (key,)
-            ).fetchone()
-            if row is None:
-                return [], 0
-            try:
-                messages = json.loads(row["messages"])
-            except json.JSONDecodeError:
-                messages = []
-            return messages, row["revision"]
-
-    def save(self, key: str, messages: list[dict]) -> None:
-        import time
-
-        with self._lock, self._connect() as conn:
-            conn.execute(
-                """
-                INSERT INTO sessions (key, messages, updated_at, revision)
-                VALUES (?, ?, ?, 1)
-                ON CONFLICT(key) DO UPDATE SET
-                    messages   = excluded.messages,
-                    updated_at = excluded.updated_at,
-                    revision   = sessions.revision + 1
-                """,
-                (key, json.dumps(messages, ensure_ascii=False), time.time()),
-            )
-            conn.commit()
-
-    def delete(self, key: str) -> None:
-        with self._lock, self._connect() as conn:
-            conn.execute("DELETE FROM sessions WHERE key = ?", (key,))
-            conn.commit()
-
-    def cleanup_old(self, max_age_days: int = 30) -> int:
-        import time
-
-        cutoff = time.time() - max_age_days * 86400
-        with self._lock, self._connect() as conn:
-            cur = conn.execute(
-                "DELETE FROM sessions WHERE updated_at < ?", (cutoff,)
-            )
-            conn.commit()
-            return cur.rowcount
 
 
 class _SupabaseSessionStore:
@@ -218,7 +129,7 @@ class _SupabaseSessionStore:
             return len(rows)
 
 
-_store = _SessionStore()
+_store = _SupabaseSessionStore()
 
 
 class ConversationManager:
