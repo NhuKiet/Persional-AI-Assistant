@@ -123,11 +123,6 @@ class ResearchAgent:
         self.synth    = Synthesizer(llm)
         self._pool    = ThreadPoolExecutor(max_workers=8)
 
-    def _is_relevant(self, query: str, results: list[SearchResult]) -> bool:
-        # Gate liên quan đã nằm trong KnowledgeStore.retrieve() (rerank + threshold).
-        # Ở đây chỉ cần xác nhận có kết quả trả về.
-        return bool(results)
-
     @staticmethod
     def _cancelled(cancel_event) -> bool:
         return cancel_event is not None and cancel_event.is_set()
@@ -294,47 +289,28 @@ class ResearchAgent:
     # ── Public API ───────────────────────────────────────────────────────────
 
     def run(self, query: str) -> ResearchOutput:
-        t0 = time.time()
-        logger.info("[QUERY] %s", query)
+        """Đường đồng bộ, không SSE. Chỉ là một cách drain `_run_core` —
+        dùng CHUNG quyết định 3 tầng (EMPTY/STALE/THIN/MAYBE + judge +
+        top-up) và persistence với `run_streaming`, thay vì có logic riêng.
 
-        # RAG check
-        knowledge = get_store()
+        Trước đây `run()` tự gọi thẳng `retrieve()` (bỏ qua freshness/
+        coverage) và không lưu gì sau khi search live — hai API cho hai
+        quyết định khác nhau với cùng một câu hỏi. Giờ cả hai đi qua đúng
+        một chỗ.
+        """
+        core = self._run_core(query, provider=None, model=None, cancel_event=None, history=None)
+        error_message = None
+        output: ResearchOutput | None = None
         try:
-            retrieved = knowledge.retrieve(query)
-        except Exception as e:
-            logger.warning("[KNOWLEDGE] retrieve failed (non-fatal): %s", e)
-            retrieved = []
+            while True:
+                event = next(core)
+                if event.get("type") == "error":
+                    error_message = event.get("message")
+        except StopIteration as stop:
+            output = stop.value
 
-        if retrieved and self._is_relevant(query, retrieved):
-            logger.info("[SOURCE] Using KNOWLEDGE (%d sources)", len(retrieved))
-            output = self.synth.synthesize_rag(query, retrieved)
-            logger.info("[FINAL] Knowledge answer (%.1fs)", time.time() - t0)
-            return output
-
-        logger.info("[SEARCH] TRIGGERED")
-
-        # Expand query
-        expansions = expand_query(query)
-        dynamic_k  = get_dynamic_k(query)
-
-        raw     = self._search_all(query, dynamic_k, expansions)
-        sources = self._process_pipeline(query, raw)
-
-        logger.info("[SEARCH] DONE: %d final sources (%.1fs)", len(sources), time.time() - t0)
-
-        output = self.synth.synthesize_grounded(query, sources)
-
-        # ── Bounded gap-driven iteration (search path only) ─────────────────
-        rounds = 0
-        max_rounds = getattr(settings, "RESEARCH_MAX_ITERATIONS", 1)
-        while needs_iteration(output, rounds, max_rounds):
-            rounds += 1
-            step = self._iteration_step(query, sources, output, self.synth)
-            if step is None:
-                break
-            sources, output, _newly = step
-
-        logger.info("[FINAL] Search answer (%.1fs)", time.time() - t0)
+        if output is None:
+            raise RuntimeError(error_message or f"Research failed for query: {query!r}")
         return output
 
     def run_streaming(
@@ -342,6 +318,20 @@ class ResearchAgent:
         cancel_event: threading.Event | None = None,
         history: list[dict] | None = None,
     ) -> Generator[dict, None, None]:
+        yield from self._run_core(query, provider, model, cancel_event, history)
+
+    def _run_core(
+        self, query: str, provider: str | None, model: str | None,
+        cancel_event: threading.Event | None, history: list[dict] | None,
+    ) -> Generator[dict, None, ResearchOutput | None]:
+        """Toàn bộ luồng thật: contextualize → gate 3 tầng → judge/top-up →
+        search live → synthesize → iteration → persistence → done.
+
+        Generator's return value (lấy qua `StopIteration.value`, hoặc
+        `result = yield from _run_core(...)`) là `ResearchOutput` cuối cùng
+        khi thành công, `None` khi hủy/lỗi — đây là cách `run()` lấy được
+        đối tượng kết quả thật thay vì dict SSE đã serialize.
+        """
         _CANCEL = {"type": "cancelled", "message": "Đã hủy theo yêu cầu."}
         try:
             t0 = time.time()
@@ -628,9 +618,10 @@ class ResearchAgent:
                     "limitations":  output.limitations,
                 },
             }
+            return output
 
         except Exception as e:
-            logger.error("run_streaming failed: %s", e, exc_info=True)
+            logger.error("_run_core failed: %s", e, exc_info=True)
             yield {"type": "error", "message": str(e)}
 
     # ── Cache / knowledge helpers ─────────────────────────────────────────────

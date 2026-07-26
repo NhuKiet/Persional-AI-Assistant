@@ -91,12 +91,6 @@ def test_run_streaming_accepts_provider(monkeypatch):
     assert any(e.get("type") == "error" for e in events)
 
 
-def test_is_relevant_is_now_presence_check():
-    from backend.app.features.research.agent import ResearchAgent
-    from backend.app.features.research.models import SearchResult
-    agent = ResearchAgent.__new__(ResearchAgent)  # không chạy __init__ (tránh tải searchers)
-    assert agent._is_relevant("bất kỳ", [SearchResult(source="web", title="t", url="u", content="x")]) is True
-    assert agent._is_relevant("bất kỳ", []) is False
 
 
 def test_search_shares_single_bge_singleton(monkeypatch):
@@ -247,7 +241,14 @@ def test_run_streaming_no_iteration_when_first_result_strong(monkeypatch):
 
 
 def test_run_iterates_once_when_first_result_weak(monkeypatch):
-    """run() (non-streaming): grounding yếu ở vòng 1 → 1 vòng bù rồi trả kết quả mạnh."""
+    """run() (non-streaming): grounding yếu ở vòng 1 → 1 vòng bù rồi trả kết quả mạnh.
+
+    Từ khi run() dùng chung _run_core với run_streaming(): live search ban
+    đầu đi qua từng searcher riêng lẻ (self.<attr>.search — như
+    run_streaming, không qua self._search_all), còn vòng bù iteration vẫn
+    qua _search_all (dùng bởi _top_up). Xem test_run_streaming_done_includes_
+    grounding_keys ở trên cho cùng quy ước mock.
+    """
     import backend.app.features.research.agent as ra
     from backend.app.features.research.models import ResearchOutput, Claim, SearchResult
     import backend.app.core.config as cfg
@@ -255,7 +256,7 @@ def test_run_iterates_once_when_first_result_weak(monkeypatch):
 
     agent = ra.ResearchAgent.__new__(ra.ResearchAgent)
 
-    calls = {"synth": 0, "search_rounds": 0}
+    calls = {"synth": 0, "topup_search": 0}
 
     class _Synth:
         def synthesize_grounded(self, q, s):
@@ -269,29 +270,90 @@ def test_run_iterates_once_when_first_result_weak(monkeypatch):
                 o.claims = [Claim(text="c", source_ids=["x"], grounded=True) for _ in range(4)]
                 o.confidence = 0.8
             return o
-        def synthesize_rag(self, q, s): return ResearchOutput(query=q)
+        def synthesize_rag_grounded(self, q, s): return ResearchOutput(query=q)
     agent.synth = _Synth()
 
     def _fake_search_all(q, *a, **k):
-        calls["search_rounds"] += 1
-        return [SearchResult(source="web", title="t", url=f"u{calls['search_rounds']}", content="x")]
+        calls["topup_search"] += 1
+        return [SearchResult(source="web", title="t", url=f"u{calls['topup_search']}", content="x")]
     monkeypatch.setattr(agent, "_search_all", _fake_search_all)
     monkeypatch.setattr(agent, "_process_pipeline", lambda q, raw, **k: raw)
 
     monkeypatch.setattr(ra, "get_store", lambda: type("K", (), {
-        "retrieve": lambda self, q: [], "add_results": lambda self, q, s: 0})())
+        "retrieve_candidates": lambda self, q, top_k=None: [],
+        "retrieve": lambda self, q: [],
+        "add_results": lambda self, q, s: 0})())
+    monkeypatch.setattr(ra, "expand_query", lambda q, **_kw: [q])
+    monkeypatch.setattr(ra, "get_dynamic_k", lambda q: {})
+    monkeypatch.setattr(ra, "_enrich_web_results", lambda r: r)
+    monkeypatch.setattr(ra, "deduplicate_results", lambda r, threshold=0.92: r)
+    monkeypatch.setattr(ra, "rerank_results", lambda q, r, top_k=15: r)
+    for attr in ("web", "arxiv", "wiki", "semantic", "hf", "github", "openalex"):
+        setattr(agent, attr, type("S", (), {"search": lambda self, q, k=4: []})())
+
+    output = agent.run("q")
+
+    assert calls["synth"] == 2                  # synth 2 lần (vòng 1 + bù)
+    assert calls["topup_search"] == 1            # 1 vòng bù qua _top_up -> _search_all
+    assert output.confidence == 0.8              # kết quả bù (mạnh) được trả về
+
+
+def test_run_and_run_streaming_reach_the_same_decision(monkeypatch):
+    """run() và run_streaming() giờ dùng chung _run_core — cùng input phải
+    ra cùng quyết định (không còn hai đường logic khác nhau như trước khi
+    run() bị thay thế bằng lớp vỏ drain generator)."""
+    import backend.app.features.research.agent as ra
+    from backend.app.features.research.models import ResearchOutput, SearchResult
+
+    def _make_agent():
+        agent = ra.ResearchAgent.__new__(ra.ResearchAgent)
+
+        class _Synth:
+            def synthesize_grounded(self, q, s): return ResearchOutput(query=q)
+            def synthesize_rag_grounded(self, q, s): return ResearchOutput(query=q)
+        agent.synth = _Synth()
+        agent._search_all = lambda q, *a, **k: [
+            SearchResult(source="web", title="new", url="u2", content="quantum error correction")
+        ]
+        agent._process_pipeline = lambda q, raw, **k: raw
+        for attr in ("web", "arxiv", "wiki", "semantic", "hf", "github", "openalex"):
+            setattr(agent, attr, type("S", (), {"search": lambda self, q, k=4: []})())
+        return agent
+
+    stored = SearchResult(
+        source="web", title="cached", url="u1",
+        content="python list comprehension syntax tutorial",
+        extra={"stored_at": __import__("time").time()},
+    )
+
+    def _fake_store():
+        return type("K", (), {
+            "retrieve_candidates": lambda self, q, top_k=None: [stored],
+            "retrieve":            lambda self, q: [stored],
+            "add_results":         lambda self, q, s: 0,
+        })()
+
+    monkeypatch.setattr(ra, "get_store", _fake_store)
     monkeypatch.setattr(ra, "expand_query", lambda q, **_kw: [q])
     monkeypatch.setattr(ra, "get_dynamic_k", lambda q: {})
     monkeypatch.setattr(ra, "_enrich_web_results", lambda r: r)
     monkeypatch.setattr(ra, "deduplicate_results", lambda r, threshold=0.92: r)
     monkeypatch.setattr(ra, "rerank_results", lambda q, r, top_k=15: r)
 
-    output = agent.run("q")
+    # Câu hỏi không liên quan gì tới nội dung đã lưu -> coverage thấp -> THIN
+    # -> top-up (không cần judge) ở cả hai đường.
+    query = "quantum error correction surface codes"
 
-    assert calls["synth"] == 2                 # synth 2 lần (vòng 1 + bù)
-    # _search_all gọi 1 lần cho search ban đầu + 1 lần cho vòng bù
-    assert calls["search_rounds"] == 2
-    assert output.confidence == 0.8             # kết quả bù (mạnh) được trả về
+    streaming_events = list(_make_agent().run_streaming(query))
+    decisions = [e for e in streaming_events if e.get("type") == "knowledge_decision"]
+    assert len(decisions) == 1
+    assert decisions[0]["decision"] == "top_up"
+    assert decisions[0]["reason"] == "thin"
+
+    # run() không phát SSE nhưng phải đi qua đúng cùng nhánh THIN->top_up
+    # (không lỗi, không rơi về nhánh reuse/degraded khác với run_streaming).
+    output = _make_agent().run(query)
+    assert output.query == query
 
 
 def test_rerank_fallback_prefers_more_recent(monkeypatch):
