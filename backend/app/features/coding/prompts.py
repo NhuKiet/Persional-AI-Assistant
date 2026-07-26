@@ -33,6 +33,8 @@ FILE READING RULES:
 
 Always include print() for key outputs.'''
 
+PLAN_SYSTEM = "You are a senior Python developer. Return only valid JSON arrays."
+
 PLAN_PROMPT = """You are a senior Python developer. The user wants:
 
 {request}

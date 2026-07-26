@@ -19,6 +19,7 @@ from backend.app.features.research.grounding import (
     ClaimAuditor, compute_confidence, derive_limitations, extract_claims,
 )
 from backend.app.features.research.models import ResearchOutput, SearchResult
+from backend.app.features.research import prompts
 from backend.app.features.research.security import frame_untrusted, UNTRUSTED_GUARD
 
 logger = logging.getLogger(__name__)
@@ -166,13 +167,7 @@ class Synthesizer:
 
     def _make_summaries(self, query: str, ctx: str, out: ResearchOutput) -> None:
         # Call 1: short + medium
-        raw1 = self._call(
-            f"You are a research assistant. Based on these sources, answer: {query}\n\n"
-            f"Sources:\n{ctx}\n\n"
-            f"Write TWO things:\n"
-            f"1. A 2-3 sentence summary starting with 'SUMMARY:' — cover the main topic and key insight\n"
-            f"2. A 2-paragraph overview starting with 'OVERVIEW:' — explain context, methods, and findings\n"
-        )
+        raw1 = self._call(prompts.summary_short_medium_prompt(query, ctx))
 
         m = re.search(r"SUMMARY:\s*(.+?)(?=OVERVIEW:|$)", raw1, re.DOTALL | re.IGNORECASE)
         out.summary_short = m.group(1).strip() if m else ""
@@ -188,16 +183,7 @@ class Synthesizer:
             out.summary_medium = raw1.strip() or out.summary_short
 
         # Call 2: detailed analysis
-        raw2 = self._call(
-            f"Write a comprehensive analysis (4-6 paragraphs) about: {query}\n\n"
-            f"Sources:\n{ctx}\n\n"
-            f"Requirements:\n"
-            f"- Paragraph 1: Context and background — why this topic matters\n"
-            f"- Paragraph 2-3: Core findings, methods, and key developments from the sources\n"
-            f"- Paragraph 4: Specific data points, numbers, benchmarks if available\n"
-            f"- Paragraph 5-6: Current trends, limitations, and future directions\n"
-            f"Be specific. Cite source names when referencing data. Do not repeat yourself."
-        )
+        raw2 = self._call(prompts.summary_detailed_prompt(query, ctx))
         out.summary_detailed = raw2.strip() if raw2.strip() else out.summary_medium
 
         logger.info(
@@ -208,19 +194,7 @@ class Synthesizer:
     # ── Key points ────────────────────────────────────────────────────────────
 
     def _make_key_points(self, query: str, ctx: str, out: ResearchOutput) -> None:
-        raw = self._call(
-            f"List 8 key findings about '{query}' from these sources.\n\n"
-            f"Sources:\n{ctx}\n\n"
-            f"Rules:\n"
-            f"- One finding per line, minimum 15 words each\n"
-            f"- Start each with a dash and one tag: [FINDING] [METHOD] [DATA] [TREND] [LIMITATION] [DEFINITION]\n"
-            f"- Be specific — include numbers, names, comparisons when available\n"
-            f"- Do NOT repeat the same information in different words\n"
-            f"Example:\n"
-            f"- [FINDING] RLHF achieves better alignment than supervised fine-tuning, reducing harmful outputs by 60% in GPT-4 evaluations\n"
-            f"- [DATA] DPO reduces training time by 40% compared to PPO while maintaining similar reward model performance\n"
-            f"- [TREND] Diffusion models are increasingly replacing GANs for image synthesis tasks due to better mode coverage\n"
-        )
+        raw = self._call(prompts.key_points_prompt(query, ctx))
 
         out.key_points = []
         for line in raw.splitlines():
@@ -259,13 +233,7 @@ class Synthesizer:
             for i, s in enumerate(sources[:4])
         )
 
-        raw = self._call(
-            f"{UNTRUSTED_GUARD}\n\n"
-            f"Compare these sources about '{query}'.\n\n"
-            f"Sources:\n{src_text}\n\n"
-            f"Return ONLY valid JSON array, nothing else:\n"
-            f'[{{"source":"title","type":"web","main_claim":"one sentence","strength":"one strength","limitation":"one limitation"}}]'
-        )
+        raw = self._call(prompts.comparison_table_prompt(query, src_text))
 
         parsed = self._parse_array(raw)
         valid  = [r for r in parsed if isinstance(r, dict) and "source" in r and "main_claim" in r]
@@ -291,13 +259,7 @@ class Synthesizer:
     # ── Chart data ────────────────────────────────────────────────────────────
 
     def _make_chart_data(self, query: str, ctx: str, out: ResearchOutput) -> None:
-        raw = self._call(
-            f"Look at these sources about '{query}'.\n\n"
-            f"Sources:\n{ctx}\n\n"
-            f"Do you see numbers that can be compared (%, scores, counts, years)?\n"
-            f'If YES, return ONLY this JSON: {{"type":"bar","title":"title","labels":["a","b"],"values":[1,2],"unit":""}}\n'
-            f"If NO, reply: NO_DATA"
-        ).strip()
+        raw = self._call(prompts.chart_data_prompt(query, ctx)).strip()
 
         if raw and "NO_DATA" not in raw.upper():
             chart = self._parse_obj(raw)
@@ -308,10 +270,7 @@ class Synthesizer:
     # ── Follow-up questions ───────────────────────────────────────────────────
 
     def _make_follow_up_questions(self, query: str, out: ResearchOutput) -> None:
-        raw = self._call(
-            f"Suggest 4 follow-up research questions about '{query}'.\n"
-            f'Return ONLY a JSON array: ["Q1?", "Q2?", "Q3?", "Q4?"]'
-        )
+        raw = self._call(prompts.follow_up_questions_prompt(query))
 
         parsed     = self._parse_array(raw)
         str_qs     = [q for q in parsed if isinstance(q, str) and "?" in q]
@@ -364,16 +323,7 @@ class Synthesizer:
 
         ctx = self._ctx(sources, max_chars=6500, per_source=1300)
 
-        prompt = (
-            f"You are a knowledgeable research assistant. "
-            f"Answer the following question in a clear, comprehensive way — like explaining to a colleague.\n\n"
-            f"Question: {query}\n\n"
-            f"Use the sources below as your knowledge base:\n{ctx}\n\n"
-            f"Write a thorough answer covering: what it is, how it works, key components, benefits, limitations, and current trends. "
-            f"Be specific and natural. Do not use JSON or special markers."
-        )
-
-        raw = self._call(prompt).strip()
+        raw = self._call(prompts.rag_synthesis_prompt(query, ctx)).strip()
         logger.info("[RAG SYNTH] LLM raw: %d chars", len(raw))
 
         # Toàn bộ response là summary_detailed
@@ -495,10 +445,4 @@ class Synthesizer:
 
     def answer(self, question: str, context: str) -> str:
         """Answer a follow-up question grounded in previous research context."""
-        return self._call(
-            f"{UNTRUSTED_GUARD}\n\n"
-            f"You are a research assistant. Answer using the context below.\n"
-            f"Be specific and cite sources when possible.\n\n"
-            f"Context:\n{frame_untrusted(context[:4000])}\n\n"
-            f"Question: {question}\n\nAnswer:"
-        )
+        return self._call(prompts.follow_up_answer_prompt(question, context))

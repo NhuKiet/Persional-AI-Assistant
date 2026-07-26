@@ -14,7 +14,7 @@ from backend.app.core.config import settings
 from backend.app.core.llm import invoke_chat, stream_chat
 from backend.app.features.coding.artifacts import ARTIFACT_EXTS, ArtifactService, emit_path_rejected, validate_relative_path
 from backend.app.features.coding.execution import CodeExecutor, SANDBOX_DIR, detect_missing_packages, install_packages
-from backend.app.features.coding.prompts import CHAT_SYSTEM, CODE_PROMPT, DEBUG_PROMPT, PLAN_PROMPT, REVIEW_PROMPT, SYSTEM_PROMPT, TEST_PROMPT
+from backend.app.features.coding.prompts import CHAT_SYSTEM, CODE_PROMPT, DEBUG_PROMPT, PLAN_PROMPT, PLAN_SYSTEM, REVIEW_PROMPT, SYSTEM_PROMPT, TEST_PROMPT
 from backend.app.features.coding.schemas import CodingRequest
 from backend.app.features.coding.uploads import session_sandbox
 from backend.app.shared.conversation_store import ConversationManager
@@ -223,7 +223,7 @@ class CodingAgent:
         yield {"type": "thinking", "message": "Đang lên kế hoạch..."}
         plan_tokens: list[str] = []
         try:
-            for token in _stream_ollama(PLAN_PROMPT.format(request=request, file_context=file_context, history=history_str), system="You are a senior Python developer. Return only valid JSON arrays.", provider=provider, model=model):
+            for token in _stream_ollama(PLAN_PROMPT.format(request=request, file_context=file_context, history=history_str), system=PLAN_SYSTEM, provider=provider, model=model):
                 if self._cancelled(cancel_event):
                     yield _CANCELLED_EVENT
                     return

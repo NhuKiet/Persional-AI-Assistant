@@ -1,4 +1,4 @@
-"""Citation grounding cho Research.
+"""Citation grounding cho Research. Prompt text lives in research/prompts.py.
 
 Lõi thẩm định (is_grounded, confidence, limitations) là HÀM THUẦN dựa trên tín
 hiệu lexical (token-overlap) — deterministic, không I/O, không phụ thuộc embedding.
@@ -9,7 +9,8 @@ import logging
 import re
 
 from backend.app.features.research.models import Claim, SearchResult
-from backend.app.features.research.security import frame_untrusted, UNTRUSTED_GUARD
+from backend.app.features.research.prompts import claim_extraction_prompt
+from backend.app.features.research.security import frame_untrusted
 
 logger = logging.getLogger(__name__)
 
@@ -64,18 +65,9 @@ def derive_limitations(sources: list[SearchResult], claims: list[Claim]) -> list
 _EVIDENCE_TYPES = {"direct", "inference", "opinion", "uncertain"}
 
 
-def _claim_extraction_prompt(query: str, sources: list[SearchResult]) -> str:
-    numbered = "\n".join(
+def _numbered_sources(sources: list[SearchResult]) -> str:
+    return "\n".join(
         f"[{i+1}] {s.title}: {frame_untrusted(s.content[:400])}" for i, s in enumerate(sources)
-    )
-    return (
-        f"{UNTRUSTED_GUARD}\n\n"
-        f"From the sources below, extract up to 8 factual claims that answer: {query}\n\n"
-        f"Sources:\n{numbered}\n\n"
-        f'Return ONLY a JSON array. Each item: '
-        f'{{"text": "the claim", "source_id": <source number>, '
-        f'"evidence_type": "direct|inference|opinion|uncertain"}}\n'
-        f"Use the source number that best supports each claim."
     )
 
 
@@ -83,7 +75,7 @@ def extract_claims(query, sources, llm_call, parse_array) -> list[Claim]:
     if not sources:
         return []
     try:
-        raw = llm_call(_claim_extraction_prompt(query, sources))
+        raw = llm_call(claim_extraction_prompt(query, _numbered_sources(sources)))
         parsed = parse_array(raw)
     except Exception as e:  # noqa: BLE001
         logger.warning("extract_claims failed (non-fatal): %s", e)

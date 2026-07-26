@@ -98,16 +98,11 @@ def expand_query(query: str, provider: str | None = None, model: str | None = No
         import json
 
         from backend.app.core.llm import invoke_chat
+        from backend.app.features.research.prompts import query_expansion_prompt
 
-        prompt = (
-            f"Generate 2 alternative search queries for: \"{query}\"\n"
-            f"Rules:\n"
-            f"- Each query should approach the topic from a different angle\n"
-            f"- Keep queries concise (3-8 words)\n"
-            f"- Use academic/technical terms when appropriate\n"
-            f'Return ONLY a JSON array: ["query1", "query2"]'
-        )
-        raw = invoke_chat(prompt, provider=provider, model=model, temperature=0.3).strip()
+        raw = invoke_chat(
+            query_expansion_prompt(query), provider=provider, model=model, temperature=0.3,
+        ).strip()
         raw = raw.replace("```json", "").replace("```", "").strip()
 
         # Find JSON array
@@ -155,6 +150,7 @@ def contextualize_query(
         return query
     try:
         from backend.app.core.llm import invoke_chat
+        from backend.app.features.research.prompts import contextualize_query_prompt
 
         recent = history[-6:]
         convo = "\n".join(
@@ -165,16 +161,9 @@ def contextualize_query(
         if not convo:
             return query
 
-        prompt = (
-            f"Conversation so far:\n{convo}\n\n"
-            f'New question: "{query}"\n\n'
-            "If the new question depends on the conversation above (pronouns, "
-            "\"it\", \"that\", \"the other one\", omitted context, etc.), rewrite it "
-            "as a fully self-contained standalone question that keeps the original "
-            "meaning and language. If it is already standalone, return it unchanged.\n"
-            "Return ONLY the rewritten question, nothing else."
-        )
-        raw = invoke_chat(prompt, provider=provider, model=model, temperature=0.0).strip()
+        raw = invoke_chat(
+            contextualize_query_prompt(convo, query), provider=provider, model=model, temperature=0.0,
+        ).strip()
         raw = raw.strip("\"' \n")
         if raw and len(raw) > 3:
             if raw != query:

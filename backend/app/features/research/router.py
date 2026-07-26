@@ -5,6 +5,7 @@ import os
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 
+from backend.app.features.research.prompts import DEEP_DIVE_SYSTEM
 from backend.app.features.research.schemas import DeepDiveRequest, ResearchRequest, SessionHistoryResponse
 from backend.app.features.research.service import ResearchService, SessionBusyError
 from backend.app.shared.session_locks import log_concurrent_rejection
@@ -12,14 +13,6 @@ from backend.app.shared.session_locks import log_concurrent_rejection
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["research"])
-
-DEEP_DIVE_SYSTEM = (
-    "You are KiNg, a research assistant. Answer the user's question using ONLY "
-    "the provided source. Be specific and cite figures/methods from the source. "
-    "If the source does not contain the answer, say so plainly. "
-    "Respond in Vietnamese by default; if the question is in English, respond in English. "
-    "Use clean markdown."
-)
 
 _service: ResearchService | None = None
 

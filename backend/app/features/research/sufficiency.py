@@ -15,7 +15,8 @@ import re
 import time
 
 from backend.app.core.config import settings
-from backend.app.features.research.security import frame_untrusted, UNTRUSTED_GUARD
+from backend.app.features.research.prompts import judge_prompt as _judge_prompt_template
+from backend.app.features.research.security import frame_untrusted
 
 logger = logging.getLogger(__name__)
 
@@ -158,7 +159,7 @@ _CONTROL_RE = re.compile(r"[\x00-\x1f\x7f]")
 
 def build_judge_prompt(query: str, sources: list) -> str:
     """Nội dung nguồn là dữ liệu ngoài, có thể chứa chỉ thị nhắm vào judge —
-    khung untrusted y như grounding._claim_extraction_prompt."""
+    khung untrusted y như grounding.claim_extraction_prompt (research/prompts.py)."""
     parts, total = [], 0
     for s in sources:
         chunk = (
@@ -170,15 +171,7 @@ def build_judge_prompt(query: str, sources: list) -> str:
         parts.append(chunk)
         total += len(chunk)
 
-    return (
-        f"{UNTRUSTED_GUARD}\n\n"
-        f"Question: {query}\n\n"
-        f"Stored context:\n" + "\n\n---\n\n".join(parts) + "\n\n"
-        f"Does the stored context contain enough evidence to answer the "
-        f"question fully and specifically?\n"
-        f"Return ONLY JSON: "
-        f'{{"sufficient": true|false, "missing": "what specific evidence is missing"}}'
-    )
+    return _judge_prompt_template(query, "\n\n---\n\n".join(parts))
 
 
 def validate_judge_response(obj) -> tuple[bool, str | None]:

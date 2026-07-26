@@ -190,7 +190,8 @@ class ResearchAgent:
             return getattr(getattr(self, attr), "search")(q, k)
 
         futures: dict = {}
-        with ThreadPoolExecutor(max_workers=10) as ex:
+        ex = ThreadPoolExecutor(max_workers=10)
+        try:
             for name, attr, _ in _SOURCES:
                 # Primary query
                 futures[ex.submit(_run_search, name, attr, query)] = (name, query)
@@ -214,6 +215,13 @@ class ResearchAgent:
                     "[SEARCH] _search_all timed out after %ss — %d results collected so far",
                     _SEARCH_TIMEOUT_SECONDS, len(all_results),
                 )
+        finally:
+            # wait=False + cancel_futures: a plain `with ThreadPoolExecutor()`
+            # blocks on shutdown(wait=True) regardless of the TimeoutError
+            # caught above, silently negating the declared timeout — stragglers
+            # (e.g. Arxiv retries backing off after 429s) would keep the whole
+            # call blocked for minutes. Let them die on their own instead.
+            ex.shutdown(wait=False, cancel_futures=True)
 
         _cache.set(query, all_results)
         return all_results
