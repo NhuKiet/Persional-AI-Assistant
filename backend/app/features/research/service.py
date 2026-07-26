@@ -6,6 +6,7 @@ from collections.abc import AsyncIterator
 from backend.app.core.llm import astream_chat
 from backend.app.features.research.agent import ResearchAgent
 from backend.app.features.research.schemas import DeepDiveRequest, ResearchRequest
+from backend.app.features.research.search.crawl import _crawl_url
 from backend.app.features.research.security import frame_untrusted, UNTRUSTED_GUARD
 from backend.app.shared.conversation_store import ConversationManager
 from backend.app.shared.session_locks import KeyedLockRegistry, SessionBusyError
@@ -13,6 +14,16 @@ from backend.app.shared.session_locks import KeyedLockRegistry, SessionBusyError
 __all__ = ["ResearchService", "SessionBusyError"]
 
 logger = logging.getLogger(__name__)
+
+# Below this many chars, the frontend-supplied content is almost certainly
+# just the ~200-char reference snippet (see synthesizer._make_papers_and_refs),
+# not enough to answer a deep-dive question from — worth a re-crawl.
+_DEEP_DIVE_MIN_CONTENT = 500
+
+# Hard ceiling on one research run (search + synthesis + iteration rounds).
+# Derive the user-facing message from the same constant so they can never
+# drift apart again.
+_STREAM_TIMEOUT_SECONDS = 1800
 
 
 def _stringify_turn_content(content) -> str:
@@ -83,7 +94,7 @@ class ResearchService:
         try:
             while True:
                 try:
-                    event = await asyncio.wait_for(aqueue.get(), timeout=1800)
+                    event = await asyncio.wait_for(aqueue.get(), timeout=_STREAM_TIMEOUT_SECONDS)
                     yield event
                     if event.get("type") == "done":
                         self._conv_manager.add_turn(req.session_id, role="user", content=query)
@@ -94,14 +105,34 @@ class ResearchService:
                     if event.get("type") == "error":
                         break
                 except asyncio.TimeoutError:
-                    yield {"type": "error", "message": "Research timed out (20 min)"}
+                    yield {
+                        "type": "error",
+                        "message": f"Research timed out ({_STREAM_TIMEOUT_SECONDS // 60} min)",
+                    }
                     break
         finally:
             cancel_event.set()   # client disconnect (GeneratorExit) hoặc kết thúc → dừng worker
 
     async def deep_dive_events(self, req: DeepDiveRequest, system: str) -> AsyncIterator[dict]:
         meta = req.source_meta or {}
-        framed = frame_untrusted(req.source_content[:8000])
+        content = req.source_content or ""
+
+        # Deep-dive retrieval: the client only ever has the ~200-char
+        # reference snippet for most sources (full text isn't sent over the
+        # wire) — re-crawl the source URL server-side for real content
+        # instead of answering off that short snippet. Non-fatal: any
+        # failure just falls back to whatever content was passed in.
+        url = meta.get("url")
+        if len(content) < _DEEP_DIVE_MIN_CONTENT and url:
+            try:
+                full_text = await asyncio.to_thread(_crawl_url, url)
+                if full_text and len(full_text) > len(content):
+                    logger.info("[DEEP DIVE] retrieved %d chars from %s", len(full_text), url)
+                    content = full_text
+            except Exception as e:
+                logger.warning("[DEEP DIVE] retrieval crawl failed (non-fatal): %s", e)
+
+        framed = frame_untrusted(content[:8000])
         context = (
             f"[{meta.get('source', '').upper()}] {meta.get('title', '')}\n"
             f"{meta.get('url', '')}\n\n{framed}"

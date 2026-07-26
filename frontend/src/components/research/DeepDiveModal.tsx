@@ -133,8 +133,9 @@ export function DeepDiveModal({ source, onClose, model }: DeepDiveModalProps) {
             />
             <button className="dd-ask-btn"
               style={{ background: loading ? "#2a2a3a" : sourceColor }}
-              onClick={() => ask()} disabled={loading || !question.trim()}>
-              {loading ? "…" : "Ask"}
+              onClick={() => (loading ? abortRef.current?.abort() : ask())}
+              disabled={!loading && !question.trim()}>
+              {loading ? "■ Stop" : "Ask"}
             </button>
           </div>
 

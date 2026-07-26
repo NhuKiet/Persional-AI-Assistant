@@ -93,6 +93,66 @@ def test_deep_dive_events_persists_question_and_answer(monkeypatch, tmp_path):
     assert revision == 2
 
 
+def test_deep_dive_events_retrieves_full_content_when_snippet_short(monkeypatch, tmp_path):
+    """source_content shorter than _DEEP_DIVE_MIN_CONTENT + a url present →
+    deep-dive re-crawls the source instead of answering off the short
+    reference snippet the client happens to have."""
+    monkeypatch.setattr(conv_mod, "_store", conv_mod._SessionStore(tmp_path / "s.db"))
+    monkeypatch.setattr(service_mod, "_crawl_url", lambda url, timeout=8: "full article text " * 50)
+
+    captured = {}
+
+    async def fake_astream(messages, system="", provider=None, model=None, temperature=0.1):
+        captured["prompt"] = messages[0]["content"]
+        yield "ok"
+
+    monkeypatch.setattr(service_mod, "astream_chat", fake_astream)
+    svc = service_mod.ResearchService(agent=object())
+
+    async def _collect():
+        return [
+            ev async for ev in svc.deep_dive_events(
+                DeepDiveRequest(
+                    question="what?", source_content="short snippet",
+                    source_meta={"url": "https://example.com/article", "title": "T", "source": "web"},
+                    session_id="sess-3",
+                ),
+                system="SYS",
+            )
+        ]
+
+    asyncio.run(_collect())
+    assert "full article text" in captured["prompt"]
+    assert "short snippet" not in captured["prompt"]
+
+
+def test_deep_dive_events_skips_recrawl_when_content_already_long(monkeypatch, tmp_path):
+    monkeypatch.setattr(conv_mod, "_store", conv_mod._SessionStore(tmp_path / "s.db"))
+    calls = []
+    monkeypatch.setattr(service_mod, "_crawl_url", lambda url, timeout=8: calls.append(url) or "should not be used")
+
+    async def fake_astream(messages, system="", provider=None, model=None, temperature=0.1):
+        yield "ok"
+
+    monkeypatch.setattr(service_mod, "astream_chat", fake_astream)
+    svc = service_mod.ResearchService(agent=object())
+
+    async def _collect():
+        return [
+            ev async for ev in svc.deep_dive_events(
+                DeepDiveRequest(
+                    question="what?", source_content="already long content " * 50,
+                    source_meta={"url": "https://example.com/article"},
+                    session_id="sess-4",
+                ),
+                system="SYS",
+            )
+        ]
+
+    asyncio.run(_collect())
+    assert calls == []
+
+
 def test_research_service_second_stream_while_active_raises_busy():
     service = service_mod.ResearchService(agent=object())
     lock = service.begin_session("busy-1")

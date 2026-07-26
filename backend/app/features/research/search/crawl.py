@@ -1,6 +1,9 @@
 """tools/search/crawl.py — crawl full-text lam giau ket qua web (trafilatura)."""
+import ipaddress
 import logging
+import socket
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from urllib.parse import urlparse
 
 import httpx
 
@@ -16,13 +19,46 @@ except ImportError:
     logger.warning("trafilatura not installed - full-crawl disabled. Run: pip install trafilatura")
 
 
+def _is_safe_url(url: str) -> bool:
+    """SSRF guard: only allow http(s) URLs whose resolved address is a
+    public IP. Search results (Tavily, etc.) point at arbitrary external
+    pages we don't control — without this, a malicious/compromised result
+    (or a redirect chain) could make the server fetch internal services
+    (localhost, cloud metadata endpoints, RFC1918 ranges)."""
+    try:
+        parsed = urlparse(url)
+        if parsed.scheme not in ("http", "https") or not parsed.hostname:
+            return False
+        for _family, _type, _proto, _canon, sockaddr in socket.getaddrinfo(parsed.hostname, None):
+            ip = ipaddress.ip_address(sockaddr[0])
+            if (
+                ip.is_private or ip.is_loopback or ip.is_link_local
+                or ip.is_reserved or ip.is_multicast or ip.is_unspecified
+            ):
+                return False
+        return True
+    except Exception:
+        return False
+
+
+def _guard_redirects(request: httpx.Request) -> None:
+    """httpx event hook — re-validates every hop (initial request + each
+    redirect target), so a safe URL that 302s to an internal address is
+    still blocked."""
+    if not _is_safe_url(str(request.url)):
+        raise httpx.RequestError(f"blocked unsafe URL (SSRF guard): {request.url}")
+
+
 def _crawl_url(url: str, timeout: int = 8) -> str | None:
     """Fetch and extract full article text using trafilatura."""
-    if not _TRAFILATURA_OK or not url:
+    if not _TRAFILATURA_OK or not url or not _is_safe_url(url):
         return None
     try:
-        resp = httpx.get(url, timeout=timeout, follow_redirects=True,
-                         headers={"User-Agent": "Mozilla/5.0 (research-agent)"})
+        with httpx.Client(
+            timeout=timeout, follow_redirects=True,
+            event_hooks={"request": [_guard_redirects]},
+        ) as client:
+            resp = client.get(url, headers={"User-Agent": "Mozilla/5.0 (research-agent)"})
         if resp.status_code != 200:
             return None
         text = trafilatura.extract(

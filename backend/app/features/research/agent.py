@@ -467,7 +467,9 @@ class ResearchAgent:
                 raw_results: list[SearchResult] = []
 
                 futures: dict = {}
-                with ThreadPoolExecutor(max_workers=10) as ex:
+                ex = ThreadPoolExecutor(max_workers=10)
+                cancelled_mid_search = False
+                try:
                     for name, attr, _ in _SOURCES:
                         k = dynamic_k.get(name, 4)
                         futures[ex.submit(
@@ -482,6 +484,15 @@ class ResearchAgent:
 
                     try:
                         for future in as_completed(futures, timeout=_SEARCH_TIMEOUT_SECONDS):
+                            # Check between each completion instead of only at
+                            # the top-level checkpoints — otherwise a cancel
+                            # requested mid-search sits idle for up to
+                            # _SEARCH_TIMEOUT_SECONDS before it's noticed, and
+                            # the (expensive) synthesis phase still starts on
+                            # whatever had completed by then.
+                            if self._cancelled(cancel_event):
+                                cancelled_mid_search = True
+                                break
                             name = futures[future]
                             try:
                                 batch = future.result()
@@ -503,6 +514,16 @@ class ResearchAgent:
                             "source":  "pipeline",
                             "degraded": True,
                         }
+                finally:
+                    # wait=False + cancel_futures: don't block the generator
+                    # waiting for in-flight source calls to finish just to
+                    # tear the pool down — let them die on their own instead
+                    # of paying for a search whose result nobody wants anymore.
+                    ex.shutdown(wait=False, cancel_futures=True)
+
+                if cancelled_mid_search:
+                    yield _CANCEL
+                    return
 
                 logger.info("[SEARCH] Raw: %d results (%.1fs)", len(raw_results), time.time() - t0)
                 _cache.set(query, raw_results)
