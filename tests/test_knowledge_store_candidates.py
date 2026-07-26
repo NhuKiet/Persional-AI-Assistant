@@ -7,11 +7,13 @@ _DAY = 86400.0
 _NOW = datetime.datetime(2026, 7, 25).timestamp()
 
 
-def _hit(score, days_old=0, published_at=0.0, published_year=0, content="nội dung"):
+def _hit(score, days_old=0, published_at=0.0, published_year=0, content="nội dung",
+         timestamp_known=True):
     return _Hit(
         parent_id=content, parent_content=content, source="web", title="t",
         url="u", score=score, timestamp=_NOW - days_old * _DAY,
         published_at=published_at, published_year=published_year,
+        timestamp_known=timestamp_known,
     )
 
 
@@ -53,6 +55,24 @@ def test_published_year_resolves_to_january_first():
 def test_no_published_metadata_leaves_key_absent():
     out = _rank_candidates([_hit(0.9, days_old=5)], threshold=0.65, now=_NOW)
     assert "published_at" not in out[0].extra
+
+
+def test_unknown_timestamp_leaves_stored_at_absent():
+    """Chunk thiếu property `timestamp` thật sự trong Weaviate KHÔNG được
+    coi là 'vừa lưu bây giờ' — nếu không, quy tắc bất đối xứng volatile+
+    unknown-timestamp→STALE (spec §12.1) không bao giờ được kích hoạt trên
+    dữ liệu thật, vì mọi chunk đều trông 'mới toanh'."""
+    out = _rank_candidates(
+        [_hit(0.9, timestamp_known=False)], threshold=0.65, now=_NOW,
+    )
+    assert "stored_at" not in out[0].extra
+
+
+def test_known_zero_age_timestamp_still_carried():
+    """Ngược lại: timestamp thật sự = now (chunk mới lưu tích tắc trước) vẫn
+    phải được mang theo — chỉ khi THỰC SỰ thiếu property mới bỏ qua."""
+    out = _rank_candidates([_hit(0.9, days_old=0)], threshold=0.65, now=_NOW)
+    assert out[0].extra["stored_at"] == _NOW
 
 
 def test_duplicate_parents_keep_best_score():

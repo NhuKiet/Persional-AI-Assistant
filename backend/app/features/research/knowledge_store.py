@@ -45,6 +45,13 @@ class _Hit:
     timestamp:       float
     published_at:    float = 0.0
     published_year:  int   = 0
+    # True nếu Weaviate object thực sự có property "timestamp". False khi
+    # thiếu và `timestamp` chỉ là giá trị fallback `now` — legacy `_rank_and_
+    # group`/`retrieve()` vẫn cần MỘT con số hợp lệ để tính decay nên field
+    # `timestamp` luôn được set, nhưng `_rank_candidates` (tầng sufficiency
+    # mới) cần phân biệt được "mới thật" với "không rõ" để quy tắc bất đối
+    # xứng volatile+unknown→STALE (spec §12.1) hoạt động trên dữ liệu thật.
+    timestamp_known: bool = True
 
 
 def _objects_to_hits(objects, now: float) -> list[_Hit]:
@@ -61,15 +68,16 @@ def _objects_to_hits(objects, now: float) -> list[_Hit]:
             p = obj.properties
             parent_content = p.get("parentContent") or p.get("content", "")
             hits.append(_Hit(
-                parent_id      = parent_content or str(obj.uuid),
-                parent_content = parent_content,
-                source         = p.get("source", "knowledge"),
-                title          = p.get("title", ""),
-                url            = p.get("url", ""),
-                score          = float(obj.metadata.score or 0.0),
-                timestamp      = float(p.get("timestamp", now)),
-                published_at   = float(p.get("publishedAt") or 0.0),
-                published_year = int(p.get("publishedYear") or 0),
+                parent_id       = parent_content or str(obj.uuid),
+                parent_content  = parent_content,
+                source          = p.get("source", "knowledge"),
+                title           = p.get("title", ""),
+                url             = p.get("url", ""),
+                score           = float(obj.metadata.score or 0.0),
+                timestamp       = float(p.get("timestamp", now)),
+                timestamp_known = "timestamp" in p,
+                published_at    = float(p.get("publishedAt") or 0.0),
+                published_year  = int(p.get("publishedYear") or 0),
             ))
         except Exception as e:
             logger.debug("Skipping malformed Weaviate object: %s", e)
@@ -121,7 +129,14 @@ def _rank_candidates(hits: list[_Hit], threshold: float, now: float) -> list[Sea
 
     results: list[SearchResult] = []
     for raw_score, h in best.values():
-        extra: dict = {"stored_at": h.timestamp}
+        # `h.timestamp` luôn có giá trị (fallback `now` cho decay ordering ở
+        # dưới) nhưng chỉ đưa vào `extra` khi property THẬT SỰ tồn tại —
+        # nếu không, mọi chunk thiếu timestamp sẽ trông "vừa lưu bây giờ"
+        # thay vì "không rõ tuổi", vô hiệu hoá quy tắc bất đối xứng ở
+        # sufficiency.assess (spec §12.1).
+        extra: dict = {}
+        if h.timestamp_known:
+            extra["stored_at"] = h.timestamp
         if h.published_at:
             extra["published_at"] = h.published_at
         elif h.published_year:
