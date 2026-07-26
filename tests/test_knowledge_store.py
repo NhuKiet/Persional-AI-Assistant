@@ -154,3 +154,53 @@ def test_objects_to_hits_skips_malformed():
 
     assert len(hits) == 1
     assert hits[0].parent_content == "parent section content"
+
+
+def test_objects_to_hits_flags_missing_timestamp_as_unknown():
+    """Chunk cũ (lưu trước khi có property `timestamp`, hoặc bị thiếu vì lý
+    do khác) không được coi là 'vừa lưu bây giờ' — `timestamp` vẫn fallback
+    `now` để `_rank_and_group` (legacy) tính decay được, nhưng
+    `timestamp_known` phải phản ánh đúng là property không hề tồn tại."""
+    now = time.time()
+
+    obj_without_timestamp = types.SimpleNamespace(
+        properties={
+            "content":       "child chunk text",
+            "parentContent": "parent section content",
+            "source":        "arxiv",
+            "title":         "T1",
+            "url":           "u1",
+            # cố ý không có "timestamp"
+        },
+        metadata=types.SimpleNamespace(score=0.77),
+        uuid="no-ts-uuid",
+    )
+
+    hits = _objects_to_hits([obj_without_timestamp], now)
+
+    assert len(hits) == 1
+    assert hits[0].timestamp == now          # fallback vẫn có giá trị hợp lệ
+    assert hits[0].timestamp_known is False  # nhưng đánh dấu là KHÔNG rõ
+
+
+def test_objects_to_hits_flags_present_timestamp_as_known():
+    now = time.time()
+
+    obj_with_timestamp = types.SimpleNamespace(
+        properties={
+            "content":       "child chunk text",
+            "parentContent": "parent section content",
+            "source":        "arxiv",
+            "title":         "T1",
+            "url":           "u1",
+            "timestamp":     now - 3600,
+        },
+        metadata=types.SimpleNamespace(score=0.77),
+        uuid="with-ts-uuid",
+    )
+
+    hits = _objects_to_hits([obj_with_timestamp], now)
+
+    assert len(hits) == 1
+    assert hits[0].timestamp == now - 3600
+    assert hits[0].timestamp_known is True
