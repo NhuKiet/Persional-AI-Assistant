@@ -208,7 +208,7 @@ def test_thin_state_real_gate_topup_chain_persists_correctly(monkeypatch):
     assert persisted_ids == {new_source.id}
 
 
-def test_maybe_state_real_judge_chain_routes_to_degraded_on_insufficient(monkeypatch):
+def test_maybe_state_real_judge_chain_routes_to_top_up_on_insufficient(monkeypatch):
     """End-to-end: real assess()->MAYBE, real _run_judge()->judge_sufficiency()
     (real thread-pool submit/poll loop, real Synthesizer._call and
     Synthesizer._parse_obj at the LLM boundary), real _top_up()->dedup/rerank,
