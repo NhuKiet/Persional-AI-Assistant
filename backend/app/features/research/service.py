@@ -25,6 +25,11 @@ _DEEP_DIVE_MIN_CONTENT = 500
 # drift apart again.
 _STREAM_TIMEOUT_SECONDS = 1800
 
+_STORAGE_ERROR = {
+    "type": "error", "code": "storage_unavailable",
+    "message": "Không thể kết nối kho lịch sử.",
+}
+
 
 def _stringify_turn_content(content) -> str:
     """Turns can hold plain text (deep-dive Q&A) or the full research-result
@@ -76,7 +81,13 @@ class ResearchService:
         aqueue: asyncio.Queue = asyncio.Queue()
         query = req.query.strip()
         cancel_event = threading.Event()
-        history = _text_history(self._conv_manager.get_history(req.session_id))
+
+        try:
+            history = _text_history(self._conv_manager.get_history(req.session_id))
+        except Exception as e:
+            logger.error("[STORAGE] get_history failed: %s", e, exc_info=True)
+            yield _STORAGE_ERROR
+            return
 
         def _run():
             try:
@@ -97,10 +108,14 @@ class ResearchService:
                     event = await asyncio.wait_for(aqueue.get(), timeout=_STREAM_TIMEOUT_SECONDS)
                     yield event
                     if event.get("type") == "done":
-                        self._conv_manager.add_turn(req.session_id, role="user", content=query)
-                        self._conv_manager.add_turn(
-                            req.session_id, role="assistant", content=event.get("data", {})
-                        )
+                        try:
+                            self._conv_manager.add_turn(req.session_id, role="user", content=query)
+                            self._conv_manager.add_turn(
+                                req.session_id, role="assistant", content=event.get("data", {})
+                            )
+                        except Exception as e:
+                            logger.error("[STORAGE] add_turn failed: %s", e, exc_info=True)
+                            yield _STORAGE_ERROR
                         break
                     if event.get("type") == "error":
                         break
