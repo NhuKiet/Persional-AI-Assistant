@@ -90,9 +90,6 @@ def test_run_streaming_accepts_provider(monkeypatch):
     assert seen.get("built") is True
     assert any(e.get("type") == "error" for e in events)
 
-
-
-
 def test_search_shares_single_bge_singleton(monkeypatch):
     """search KHÔNG được tự load BGE — phải đi qua singleton của reranker.py.
 
@@ -301,11 +298,20 @@ def test_run_iterates_once_when_first_result_weak(monkeypatch):
 def test_run_and_run_streaming_reach_the_same_decision(monkeypatch):
     """run() và run_streaming() giờ dùng chung _run_core — cùng input phải
     ra cùng quyết định (không còn hai đường logic khác nhau như trước khi
-    run() bị thay thế bằng lớp vỏ drain generator)."""
+    run() bị thay thế bằng lớp vỏ drain generator).
+
+    `retrieve()` (legacy) và `retrieve_candidates()` (gate mới) cố tình trả
+    về DỮ LIỆU KHÁC NHAU — nếu run() lỡ quay lại gọi thẳng `retrieve()` như
+    code cũ (bỏ qua gate), nó sẽ thấy [] thay vì [stored] và không bao giờ
+    gọi `add_results` (code cũ không hề persist ở nhánh live-search). Assertion
+    dựa trên persistence thật, không phải chỉ `output.query` — cái mà mọi
+    nhánh (reuse/top_up/degraded/search) đều thoả như nhau nên không phân
+    biệt được đường code nào đã chạy.
+    """
     import backend.app.features.research.agent as ra
     from backend.app.features.research.models import ResearchOutput, SearchResult
 
-    def _make_agent():
+    def _make_agent(stored_calls):
         agent = ra.ResearchAgent.__new__(ra.ResearchAgent)
 
         class _Synth:
@@ -318,22 +324,24 @@ def test_run_and_run_streaming_reach_the_same_decision(monkeypatch):
         agent._process_pipeline = lambda q, raw, **k: raw
         for attr in ("web", "arxiv", "wiki", "semantic", "hf", "github", "openalex"):
             setattr(agent, attr, type("S", (), {"search": lambda self, q, k=4: []})())
+
+        stored = SearchResult(
+            source="web", title="cached", url="u1",
+            content="python list comprehension syntax tutorial",
+            extra={"stored_at": __import__("time").time()},
+        )
+
+        def _add_results(_self, q, sources):
+            stored_calls.append([s.url for s in sources])
+            return len(sources)
+
+        monkeypatch.setattr(ra, "get_store", lambda: type("K", (), {
+            "retrieve_candidates": lambda self, q, top_k=None: [stored],
+            "retrieve":            lambda self, q: [],   # legacy path -- cố tình khác
+            "add_results":         _add_results,
+        })())
         return agent
 
-    stored = SearchResult(
-        source="web", title="cached", url="u1",
-        content="python list comprehension syntax tutorial",
-        extra={"stored_at": __import__("time").time()},
-    )
-
-    def _fake_store():
-        return type("K", (), {
-            "retrieve_candidates": lambda self, q, top_k=None: [stored],
-            "retrieve":            lambda self, q: [stored],
-            "add_results":         lambda self, q, s: 0,
-        })()
-
-    monkeypatch.setattr(ra, "get_store", _fake_store)
     monkeypatch.setattr(ra, "expand_query", lambda q, **_kw: [q])
     monkeypatch.setattr(ra, "get_dynamic_k", lambda q: {})
     monkeypatch.setattr(ra, "_enrich_web_results", lambda r: r)
@@ -344,16 +352,21 @@ def test_run_and_run_streaming_reach_the_same_decision(monkeypatch):
     # -> top-up (không cần judge) ở cả hai đường.
     query = "quantum error correction surface codes"
 
-    streaming_events = list(_make_agent().run_streaming(query))
+    streaming_calls: list = []
+    streaming_events = list(_make_agent(streaming_calls).run_streaming(query))
     decisions = [e for e in streaming_events if e.get("type") == "knowledge_decision"]
     assert len(decisions) == 1
     assert decisions[0]["decision"] == "top_up"
     assert decisions[0]["reason"] == "thin"
+    assert streaming_calls == [["u2"]]   # chỉ nguồn mới bù được lưu, không phải u1
 
-    # run() không phát SSE nhưng phải đi qua đúng cùng nhánh THIN->top_up
-    # (không lỗi, không rơi về nhánh reuse/degraded khác với run_streaming).
-    output = _make_agent().run(query)
+    # run() không phát SSE, nhưng phải đi qua ĐÚNG cùng nhánh THIN->top_up->
+    # persist. Nếu nó lỡ quay lại gọi retrieve() trực tiếp (code cũ), sẽ thấy
+    # store rỗng và KHÔNG BAO GIỜ gọi add_results (code cũ không persist).
+    run_calls: list = []
+    output = _make_agent(run_calls).run(query)
     assert output.query == query
+    assert run_calls == [["u2"]]
 
 
 def test_rerank_fallback_prefers_more_recent(monkeypatch):
