@@ -41,7 +41,11 @@ class _SupabaseSessionStore:
                 if self._pool is None:
                     if not settings.SUPABASE_DB_URL:
                         raise RuntimeError("SUPABASE_DB_URL chưa cấu hình.")
-                    self._pool = ConnectionPool(
+                    # Build + open BEFORE publishing to self._pool — otherwise
+                    # a racing reader on the unlocked fast path above could
+                    # see a non-None pool that isn't open yet and hit
+                    # PoolClosed. Publish only once open() has succeeded.
+                    pool = ConnectionPool(
                         conninfo=settings.SUPABASE_DB_URL,
                         min_size=1,
                         max_size=5,
@@ -49,7 +53,8 @@ class _SupabaseSessionStore:
                         open=False,
                         kwargs={"row_factory": dict_row, "connect_timeout": 5},
                     )
-                    self._pool.open(wait=True)
+                    pool.open(wait=True)
+                    self._pool = pool
         return self._pool
 
     def close(self) -> None:
