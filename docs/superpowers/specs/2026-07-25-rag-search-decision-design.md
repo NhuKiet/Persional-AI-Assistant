@@ -106,7 +106,7 @@ Add a new method rather than changing `retrieve()`:
 - `retrieve_candidates(query)` filters on the **raw** hybrid score for relevance, uses time-decay only for **ordering**, and returns freshness metadata alongside each result.
 - `retrieve()` is left exactly as it is.
 
-Two reasons for a new method instead of an edit: the kill switch in section 12 must restore legacy behavior byte-for-byte, and `retrieve()` has callers and tests that should not shift underneath this change.
+Two reasons for a new method instead of an edit: the kill switch in section 12 must restore the legacy retrieval *decision* byte-for-byte, and `retrieve()` has callers and tests that should not shift underneath this change.
 
 Relevance filtering and freshness filtering become separate concerns, applied at separate layers, with one policy each.
 
@@ -202,7 +202,7 @@ def judge_sufficiency(query, sources, llm_call, parse_obj) -> tuple[bool, str | 
 
 | Setting | Default | Defined in |
 |---|---|---|
-| `RESEARCH_SUFFICIENCY_ENABLED` | `True` | Kill switch; `False` restores legacy `retrieve()` and the old gate exactly (section 12) |
+| `RESEARCH_SUFFICIENCY_ENABLED` | `True` | Kill switch; `False` restores the legacy `retrieve()` and the old gate *decision* — not the old ungrounded synthesis, which stays grounded regardless (section 12) |
 | `KNOWLEDGE_CANDIDATE_THRESHOLD` | `0.65` | Raw-score relevance cutoff for `retrieve_candidates`, distinct from `KNOWLEDGE_THRESHOLD` (section 5.3) |
 | `KNOWLEDGE_TTL_VOLATILE_DAYS` | `7` | Section 6.3 |
 | `KNOWLEDGE_TTL_STABLE_DAYS` | `180` | Section 6.3 |
@@ -315,6 +315,8 @@ Only these decision/reason pairs are valid:
 
 Exactly one `knowledge_decision` is emitted per run, before the `synthesizing` event. On `reuse`, `new_count` is 0. On `search`, `fresh_count` is 0 for `stale` and both counts are 0 for `empty`.
 
+The event is emitted **before** live search runs, so on `search` (both `empty` and `stale`), `new_count` is always `0` at emission time even though the run is about to fetch a full new set — this reports what was known when the decision was made, not what the run eventually finds. A future frontend consuming this event should not read `new_count: 0` on `search` as "this run found nothing."
+
 `useResearch.ts` dispatches through an `if / else if` chain that ignores unrecognized event types, so emitting this does not break the current frontend. Rendering it is deliberately deferred to separate work.
 
 ## 11. Cost Model
@@ -348,7 +350,7 @@ Every failure path resolves toward searching more, following requirement 1.
 | Top-up search fails, times out, or returns nothing | Degraded result per section 10. |
 | Embedding fails during merge dedup | `deduplicate_results` already catches this and returns its input unchanged. |
 | Persistence fails | Logged, non-fatal; the answer is unaffected. |
-| `RESEARCH_SUFFICIENCY_ENABLED` is `False` | Legacy `retrieve()` and the old gate; behavior identical to today. |
+| `RESEARCH_SUFFICIENCY_ENABLED` is `False` | Legacy `retrieve()` and the old gate — the retrieval *decision* (reuse vs. search) is identical to today. Grounding on the RAG path (section 3.2) is a separate, independently-shipped improvement and is **not** rolled back by this switch: a reuse decision still calls `synthesize_rag_grounded`, not the old ungrounded `synthesize_rag`. The switch's job is to restore the old gate, not to undo grounding-on-RAG. |
 
 ### 12.1 Missing timestamp
 
@@ -411,10 +413,11 @@ New file `tests/test_research_sufficiency.py`, runnable with no LLM, no Weaviate
 - A newly fetched source dropped by merge dedup is not persisted.
 - A subsequent question reuses what a top-up stored.
 - Top-up failure yields a degraded result with limitations and capped confidence, not a full-confidence answer.
-- The kill switch restores legacy behavior exactly.
+- The kill switch restores the legacy retrieval *decision* exactly — it does not, and is not meant to, restore the pre-grounding `synthesize_rag` synthesis path (see section 12).
 - `knowledge_decision` is emitted exactly once per run, before `synthesizing`, with a valid decision/reason pair and counts satisfying `fresh_count <= stored_count`.
 - Cancellation **while the judge call is in flight** is observed without waiting for it to return.
 - `run()` and `run_streaming()` reach the same decision for the same inputs.
+- **End-to-end**: one test drives `run_streaming` with the real `assess`, `_run_judge` (injected deterministic `_call`), and `_top_up` (injected `_search_all`) — no mocking at the seams between them — asserting the source set that reaches synthesis and the source set that gets persisted are both correct for a THIN→top-up run. Per-unit tests at each seam do not catch a wiring bug *between* seams; this test exists specifically to.
 
 All 278 existing tests must remain green.
 
