@@ -26,7 +26,13 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000", "http://127.0.0.1:5173"],
+    allow_origins=["http://localhost:3000"],
+    # Vite falls back to the next free port (5174, 5175, ...) whenever 5173 is
+    # already taken by another dev server — an exact allowlist would silently
+    # break CORS ("Failed to fetch" with no useful error) every time that
+    # happens. A regex covering any localhost/127.0.0.1 port is safe here
+    # because allow_credentials is False (no cookies/auth crossing origins).
+    allow_origin_regex=r"http://(localhost|127\.0\.0\.1):\d+",
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
