@@ -8,16 +8,16 @@
   </head>
   <body>
     <script>
-      // Set theme trước khi React render để tránh nháy sáng→tối (FOUC).
-      // Phải khớp logic initialTheme() trong hooks/useTheme.ts.
+      // Apply the saved theme before React renders; first visit defaults to Light.
+      // Keep this priority identical to initialTheme() in hooks/useTheme.ts.
       (function () {
         try {
           var t = localStorage.getItem("king-theme");
-          if (t !== "light" && t !== "dark") {
-            t = window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
-          }
+          if (t !== "light" && t !== "dark") t = "light";
           document.documentElement.dataset.theme = t;
-        } catch (e) { document.documentElement.dataset.theme = "dark"; }
+        } catch (e) {
+          document.documentElement.dataset.theme = "light";
+        }
       })();
     </script>
     <div id="root"></div>

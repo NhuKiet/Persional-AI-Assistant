@@ -4,12 +4,12 @@ export type Theme = "light" | "dark";
 
 const KEY = "king-theme";
 
-/** Đọc theme khởi tạo: localStorage trước, rồi tới prefers-color-scheme,
- *  mặc định "dark". Khớp với script no-FOUC trong index.html. */
+/** Đọc theme khởi tạo: localStorage được ưu tiên, Light là mặc định lần đầu.
+ *  Khớp với script no-FOUC trong index.html. */
 function initialTheme(): Theme {
   const saved = localStorage.getItem(KEY);
   if (saved === "light" || saved === "dark") return saved;
-  return window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+  return "light";
 }
 
 export function useTheme(): { theme: Theme; toggle: () => void } {
