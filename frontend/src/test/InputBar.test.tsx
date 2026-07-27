@@ -21,3 +21,10 @@ it("không hiện nút đính kèm khi không có onAttach", () => {
   render(<InputBar onSend={() => {}} streaming={false} onStop={() => {}} />);
   expect(screen.queryByRole("button", { name: /đính kèm/i })).toBeNull();
 });
+
+it("dùng class input-bar làm contract giao diện dùng chung", () => {
+  const { container } = render(
+    <InputBar onSend={() => {}} streaming={false} onStop={() => {}} />
+  );
+  expect(container.firstElementChild).toHaveClass("input-bar");
+});
