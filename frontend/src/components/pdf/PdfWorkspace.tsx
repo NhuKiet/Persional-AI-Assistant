@@ -10,6 +10,12 @@ interface PdfWorkspaceProps {
   viewer: ReactNode;
   assistant: ReactNode;
   onCloseOverlays: () => void;
+  /** Drag-resize for the assistant panel — only meaningful (and only
+   *  rendered as a handle) in the side-by-side layouts (desktop/laptop);
+   *  in "narrow" mode the assistant is a transient overlay instead. */
+  assistantWidth?: number;
+  assistantContainerRef?: React.RefObject<HTMLDivElement>;
+  onAssistantResizeStart?: (e: React.MouseEvent | React.TouchEvent) => void;
 }
 
 const FOCUSABLE_SELECTOR = [
@@ -30,6 +36,9 @@ export default function PdfWorkspace({
   viewer,
   assistant,
   onCloseOverlays,
+  assistantWidth,
+  assistantContainerRef,
+  onAssistantResizeStart,
 }: PdfWorkspaceProps) {
   const activeOverlayRef = useRef<HTMLElement>(null);
   const lastOverlayPanelRef = useRef<HTMLElement | null>(null);
@@ -119,7 +128,7 @@ export default function PdfWorkspace({
   return (
     <section className={`pdf-workspace pdf-workspace-${mode}`}>
       <div className="pdf-workspace-toolbar">{toolbar}</div>
-      <div className="pdf-workspace-body">
+      <div className="pdf-workspace-body" ref={mode !== "narrow" ? assistantContainerRef : undefined}>
         <div className="pdf-outline-slot">
           {outlineOpen ? (
             <nav
@@ -140,11 +149,29 @@ export default function PdfWorkspace({
               className="pdf-assistant-panel"
               ref={activeOverlay === "assistant" ? activeOverlayRef : undefined}
               tabIndex={activeOverlay === "assistant" ? -1 : undefined}
+              style={mode !== "narrow" && assistantWidth ? { width: assistantWidth } : undefined}
             >
               {assistant}
             </aside>
           ) : null}
         </div>
+        {/* Absolutely positioned (not a grid item) so it can be conditionally
+           rendered without disturbing pdf-workspace-body's 3-column grid track
+           count. Positioned by `right` at the assistant panel's own width, so
+           it sits exactly at the viewer/assistant boundary regardless of the
+           column-gap value. */}
+        {assistantOpen && mode !== "narrow" && onAssistantResizeStart ? (
+          <div
+            className="pdf-assistant-resize-handle"
+            onMouseDown={onAssistantResizeStart}
+            onTouchStart={onAssistantResizeStart}
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Kéo để đổi độ rộng khung trợ lý"
+            tabIndex={-1}
+            style={{ right: assistantWidth ?? 360 }}
+          />
+        ) : null}
         {showBackdrop ? (
           <button
             aria-label="Đóng bảng đang mở"

@@ -258,10 +258,16 @@
 }
 .input-bar:focus-within {
   border-color: color-mix(in srgb, var(--composer-accent) 48%, var(--composer-edge));
+  /* Order matters: --composer-shadow is itself a comma-list with its own
+     nested color-mix() — some engines mis-resolve color-mix() terms placed
+     AFTER it in the same box-shadow list (verified: swapping order fixes
+     it — the ring silently computed to transparent). Keep the ring layer
+     first; --focus-ring itself is a deliberate design-system token (see
+     liquidGlassTheme.contract.test.ts), not something to swap out here. */
   box-shadow:
-    var(--composer-shadow),
     0 0 0 3px var(--focus-ring),
-    0 0 32px color-mix(in srgb, var(--composer-accent) 10%, transparent);
+    0 0 32px color-mix(in srgb, var(--composer-accent) 10%, transparent),
+    var(--composer-shadow);
 }
 .input-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
 .input-tools { display: flex; align-items: center; gap: 6px; min-width: 0; }
