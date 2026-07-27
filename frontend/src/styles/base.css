@@ -399,6 +399,34 @@ body::before {
   gap: 0;
 }
 
+/* ── Time + weather widget — idle hero, top-left corner ─────
+   Absolutely positioned relative to .page (already position:relative — see
+   the .page rule above), independent of .home-idle's own centered flex
+   column, so it sits in the empty corner next to the logo instead of
+   stacking above/inside the centered hero content. Idle-only: HomePage.tsx
+   only renders it in the !chatActive branch. */
+.home-time-weather {
+  position: absolute;
+  top: 20px;
+  left: var(--page-padding-x);
+  z-index: 5;
+  background: var(--glass);
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 14px 18px;
+}
+.htw-time    { font-family: var(--display); font-size: 28px; font-weight: 600; color: var(--text); line-height: 1.1; }
+.htw-date    { font-size: 12px; color: var(--text2); margin-top: 2px; }
+.htw-weather { font-size: 13px; color: var(--text2); margin-top: 8px; }
+.htw-weather-loading { opacity: 0.5; }
+
+/* Mirrors the .sb-open-btn + .page .tool-header fix in sidebar.css — when
+   the sidebar is closed, its reopen chevron (left:14px, width:28px) would
+   otherwise sit under/against this widget's default left offset. */
+.sb-open-btn + .page .home-time-weather { left: calc(var(--page-padding-x) + 32px); }
+
 
 /* ── Vào sân: trang chủ hiện dần theo bậc ──────────────────
    Chỉ chạy khi .home-idle được mount (tức là lúc chưa có tin nhắn nào),
