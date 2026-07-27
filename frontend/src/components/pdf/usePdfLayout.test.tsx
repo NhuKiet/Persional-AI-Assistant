@@ -98,7 +98,7 @@ describe("usePdfLayout", () => {
   });
 
   it("writes a toggled preference once under StrictMode", () => {
-    const setItem = vi.spyOn(localStorage, "setItem");
+    const setItem = vi.spyOn(window.localStorage, "setItem");
     const { result } = renderHook(() => usePdfLayout("desktop"), {
       wrapper: StrictMode,
     });
@@ -110,18 +110,22 @@ describe("usePdfLayout", () => {
   });
 
   it("uses defaults when storage is unavailable", () => {
-    const availableStorage = localStorage;
-    Object.defineProperty(window, "localStorage", { configurable: true, value: undefined });
+    const availableStorage = window.localStorage;
+    for (const target of [window, globalThis]) {
+      Object.defineProperty(target, "localStorage", { configurable: true, value: undefined });
+    }
     try {
       const { result } = renderHook(() => usePdfLayout("desktop"));
 
       expect(result.current.outlineOpen).toBe(true);
       expect(result.current.assistantOpen).toBe(true);
     } finally {
-      Object.defineProperty(window, "localStorage", {
-        configurable: true,
-        value: availableStorage,
-      });
+      for (const target of [window, globalThis]) {
+        Object.defineProperty(target, "localStorage", {
+          configurable: true,
+          value: availableStorage,
+        });
+      }
     }
   });
 });
