@@ -67,12 +67,18 @@ describe("useTimeAndWeather", () => {
     expect(result.current.weather.failed).toBe(true);
   });
 
-  it("ticks the clock forward once a minute", () => {
+  it("ticks the clock forward once a minute", async () => {
     vi.useFakeTimers();
     mockGeolocation("success");
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }));
 
     const { result } = renderHook(() => useTimeAndWeather());
+    // getCurrentPosition's success callback fires synchronously on mount,
+    // kicking off fetchWeather's promise chain. Fake timers only virtualize
+    // setInterval/setTimeout, not native Promise microtasks — flush those
+    // (still wrapped in act) before advancing the clock, so the eventual
+    // setWeather call from that chain doesn't land outside any act() scope.
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
     const first = result.current.now;
 
     act(() => { vi.advanceTimersByTime(60_000); });
