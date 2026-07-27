@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import ModelPicker from "../components/ModelPicker";
 import { MicButton } from "../components/MicButton";
 import { Message } from "../components/Message";
@@ -7,7 +7,7 @@ import { CodingResult } from "../components/coding/CodingResult";
 import { EventRow } from "../components/coding/EventRow";
 import { FileUploadZone, type UploadedFile } from "../components/coding/FileUploadZone";
 import { PhaseBar } from "../components/coding/PhaseBar";
-import { SUGGESTIONS } from "../config/tools";
+import { shuffle, SUGGESTIONS } from "../config/tools";
 import { fetchSessionHistory, SESSION_RECOVERY_NOTICE, useChatHistory } from "../hooks/useChatHistory";
 import { isBusyPhase, useCoding } from "../hooks/useCoding";
 import { useDragResize } from "../hooks/useDragResize";
@@ -28,6 +28,7 @@ export function CodingPage() {
   const accentColor = "#A8E6A3";
   const isRunning  = isBusyPhase(phase);
   const { pct, containerRef, onMouseDown } = useDragResize();
+  const suggestions = useMemo(() => shuffle(SUGGESTIONS.coding), []);
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [showUpload, setShowUpload] = useState(false);
 
@@ -149,7 +150,7 @@ export function CodingPage() {
           {phase === "idle" && !chatMsgs.length && (
             <div className="tool-suggestions">
               <p className="tool-suggestions-label">Try one</p>
-              {SUGGESTIONS.coding.map(s => (
+              {suggestions.map(s => (
                 <button key={s} className="tool-suggestion-pill" style={{ borderColor: accentColor + "44" }}
                   onClick={() => handleSend(s)}>
                   <span style={{ color: accentColor }}>›</span> {s}

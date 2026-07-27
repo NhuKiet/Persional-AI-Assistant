@@ -1,57 +1,34 @@
-"""tools/search/community.py — nguon cong dong: Wikipedia, HuggingFace, GitHub."""
+"""tools/search/community.py — nguon cong dong: HuggingFace, Stack Overflow."""
 import logging
+import re
 
 import httpx
 
-from backend.app.core.config import settings
 from backend.app.features.research.models import SearchResult
 
 logger = logging.getLogger(__name__)
 
-try:
-    import wikipedia
-    _WIKIPEDIA_OK = True
-except ImportError:
-    _WIKIPEDIA_OK = False
+_DAILY_PAPERS_URL = "https://huggingface.co/api/daily_papers"
 
 
-class WikipediaSearcher:
-    def search(self, query: str, k: int = 2) -> list[SearchResult]:
-        if not _WIKIPEDIA_OK:
-            return []
-        try:
-            wikipedia.set_lang("en")
-            titles  = wikipedia.search(query, results=k + 2)
-            results = []
-            for title in titles:
-                try:
-                    page = wikipedia.page(title, auto_suggest=False)
-                    results.append(SearchResult(
-                        source="wikipedia",
-                        title=page.title,
-                        url=page.url,
-                        content=page.summary[:2000],
-                    ))
-                    if len(results) >= k:
-                        break
-                except wikipedia.exceptions.DisambiguationError as e:
-                    try:
-                        page = wikipedia.page(e.options[0], auto_suggest=False)
-                        results.append(SearchResult(
-                            source="wikipedia",
-                            title=page.title,
-                            url=page.url,
-                            content=page.summary[:2000],
-                        ))
-                    except Exception:
-                        continue
-                except Exception:
-                    continue
-            return results
-        except Exception as e:
-            logger.error("Wikipedia search failed: %s", e)
-            return []
-
+def fetch_trending_papers(k: int = 6) -> list[str]:
+    """Tiêu đề các paper nổi bật hôm nay trên HuggingFace — dùng làm gợi ý
+    'nghiên cứu mới' ở trang Research, độc lập với HuggingFaceSearcher (không
+    cần query). Không cần key, không cache ở tầng này — caller (router) tự
+    cache theo TTL để tránh gọi HF mỗi lần tải trang."""
+    try:
+        resp = httpx.get(_DAILY_PAPERS_URL, params={"limit": k}, timeout=8)
+        resp.raise_for_status()
+        titles = []
+        for item in resp.json()[:k]:
+            title = (item.get("paper") or {}).get("title") or item.get("title") or ""
+            title = title.strip()
+            if title:
+                titles.append(title)
+        return titles
+    except Exception as e:
+        logger.error("Fetch trending papers failed: %s", e)
+        return []
 
 
 class HuggingFaceSearcher:
@@ -127,72 +104,48 @@ class HuggingFaceSearcher:
 
 
 
-class GitHubSearcher:
-    _SEARCH_URL = "https://api.github.com/search/repositories"
-    _README_URL = "https://api.github.com/repos/{owner}/{repo}/readme"
+class StackOverflowSearcher:
+    """Stack Exchange API (site=stackoverflow) — không cần API key cho search cơ bản."""
+    _SEARCH_URL = "https://api.stackexchange.com/2.3/search/advanced"
 
-    def __init__(self):
-        token = settings.GITHUB_TOKEN
-        self.headers = {
-            "Accept":               "application/vnd.github+json",
-            "X-GitHub-Api-Version": "2022-11-28",
-        }
-        if token:
-            self.headers["Authorization"] = f"Bearer {token}"
-        else:
-            logger.warning("GITHUB_TOKEN not set — rate limited to 60 req/hr")
-
-    def search(self, query: str, k: int = 5) -> list[SearchResult]:
+    def search(self, query: str, k: int = 4) -> list[SearchResult]:
         try:
             resp = httpx.get(
                 self._SEARCH_URL,
-                params={"q": query, "sort": "stars", "order": "desc", "per_page": k},
-                headers=self.headers,
+                params={
+                    "q":        query,
+                    "site":     "stackoverflow",
+                    "pagesize": k,
+                    "order":    "desc",
+                    "sort":     "relevance",
+                    "filter":   "!9_bDE(fI5",  # includes body
+                },
                 timeout=10,
             )
             resp.raise_for_status()
             results = []
-            for repo in resp.json().get("items", [])[:k]:
-                full_name   = repo.get("full_name", "")
-                description = repo.get("description") or ""
-                stars       = repo.get("stargazers_count", 0)
-                language    = repo.get("language") or ""
-                topics      = repo.get("topics", [])[:5]
-                readme      = self._fetch_readme(full_name)
-                content = (
-                    f"{description}\n\n"
-                    f"Stars: {stars:,} | Language: {language} | Topics: {', '.join(topics)}\n\n"
-                    f"{readme}"
-                )[:2000]
+            for item in resp.json().get("items", [])[:k]:
+                title      = item.get("title", "")
+                score      = item.get("score", 0)
+                answered    = item.get("is_answered", False)
+                answers    = item.get("answer_count", 0)
+                tags       = item.get("tags", [])[:5]
+                body       = (item.get("body") or "")
+                snippet = re.sub("<[^<]+?>", " ", body).strip()[:2000]
                 results.append(SearchResult(
-                    source="github",
-                    title=full_name,
-                    url=repo.get("html_url", ""),
-                    content=content,
-                    score=min(1.0, stars / 10000),
+                    source="stackoverflow",
+                    title=title,
+                    url=item.get("link", ""),
+                    content=snippet or title,
+                    score=min(1.0, score / 50),
                     extra={
-                        "stars":       stars,
-                        "language":    language,
-                        "topics":      topics,
-                        "description": description,
+                        "score":       score,
+                        "answered":    answered,
+                        "answers":     answers,
+                        "tags":        tags,
                     },
                 ))
             return results
         except Exception as e:
-            logger.error("GitHub search failed: %s", e)
+            logger.error("Stack Overflow search failed: %s", e)
             return []
-
-    def _fetch_readme(self, full_name: str) -> str:
-        try:
-            owner, repo = full_name.split("/", 1)
-            resp = httpx.get(
-                self._README_URL.format(owner=owner, repo=repo),
-                headers={**self.headers, "Accept": "application/vnd.github.raw+json"},
-                timeout=8,
-            )
-            resp.raise_for_status()
-            return resp.text[:1000]
-        except Exception:
-            return ""
-
-

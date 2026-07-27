@@ -17,13 +17,12 @@ from langchain_text_splitters import (
 
 # source → category (4 nhóm cố định)
 CATEGORY_MAP: dict[str, str] = {
-    "arxiv":       "academic",
-    "semantic":    "academic",
-    "openalex":    "academic",
-    "github":      "code",
-    "wiki":        "reference",
-    "web":         "web",
-    "huggingface": "web",
+    "arxiv":         "academic",
+    "semantic":      "academic",
+    "huggingface":   "web",
+    "web":           "web",
+    "duckduckgo":    "web",
+    "stackoverflow": "code",
 }
 
 

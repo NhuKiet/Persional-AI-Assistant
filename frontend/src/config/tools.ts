@@ -9,7 +9,7 @@ export interface Tool {
 }
 
 export const TOOLS: Tool[] = [
-  { id: "research", label: "Research",  icon: "🔍", color: "#7C9EFF", desc: "Deep research từ Arxiv, GitHub, HuggingFace & Web" },
+  { id: "research", label: "Research",  icon: "🔍", color: "#7C9EFF", desc: "Deep research từ Arxiv, HuggingFace, Stack Overflow & Web" },
   { id: "coding",   label: "Coding",    icon: "💻", color: "#A8E6A3", desc: "AI coding agent: plan → code → execute → debug" },
   { id: "homework", label: "Bài tập",   icon: "📘", color: "#FFB085", desc: "Giải toán, lý, hóa, lập trình" },
   { id: "essay",    label: "Nghị luận", icon: "✍️", color: "#E8A0FF", desc: "Viết văn nghị luận, luận điểm" },
@@ -33,18 +33,27 @@ export const SUGGESTIONS: Record<string, string[]> = {
   pdf:      ["Tóm tắt tài liệu này cho tôi", "Các điểm chính trong tài liệu là gì?", "Giải thích phần ... trong tài liệu", "So sánh các khái niệm được đề cập"],
 };
 
+/** Fisher-Yates — không mutate mảng gốc, gọi lại cho thứ tự khác mỗi lần. */
+export function shuffle<T>(arr: T[]): T[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
 export interface SourceLabel {
   label: string;
   icon: string;
 }
 
 export const SOURCE_LABELS: Record<string, SourceLabel> = {
-  web:         { label: "Web",              icon: "🌐" },
-  arxiv:       { label: "Arxiv",            icon: "📄" },
-  huggingface: { label: "HuggingFace",      icon: "🤗" },
-  github:      { label: "GitHub",           icon: "⌥" },
-  openalex:    { label: "OpenAlex",         icon: "📚" },
-  semantic:    { label: "Semantic Scholar", icon: "🔬" },
-  wiki:        { label: "Wikipedia",        icon: "📖" },
-  llm:         { label: "Synthesizing",     icon: "◆" },
+  web:           { label: "Web",              icon: "🌐" },
+  arxiv:         { label: "Arxiv",            icon: "📄" },
+  huggingface:   { label: "HuggingFace",      icon: "🤗" },
+  semantic:      { label: "Semantic Scholar", icon: "🔬" },
+  duckduckgo:    { label: "DuckDuckGo",       icon: "🦆" },
+  stackoverflow: { label: "Stack Overflow",   icon: "💬" },
+  llm:           { label: "Synthesizing",     icon: "◆" },
 };

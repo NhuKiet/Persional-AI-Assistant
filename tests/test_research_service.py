@@ -229,7 +229,7 @@ def test_search_all_survives_a_hung_source_without_raising(monkeypatch):
         return _fake_result("web")
 
     monkeypatch.setattr(agent.web, "search", slow_search)
-    for attr in ("arxiv", "hf", "github", "openalex", "semantic", "wiki"):
+    for attr in ("arxiv", "hf", "ddg", "so", "semantic"):
         monkeypatch.setattr(getattr(agent, attr), "search",
                              lambda q, k, n=attr: _fake_result(n))
 
@@ -277,8 +277,8 @@ def test_run_streaming_degrades_gracefully_on_search_timeout(monkeypatch):
     web = type("S", (), {"search": staticmethod(slow_search)})()
     fast = lambda n: type("S", (), {"search": staticmethod(lambda q, k, n=n: _fake_result(n))})()
     agent.web, agent.arxiv, agent.hf = web, fast("arxiv"), fast("hf")
-    agent.github, agent.openalex = fast("github"), fast("openalex")
-    agent.semantic, agent.wiki = fast("semantic"), fast("wiki")
+    agent.ddg, agent.so = fast("duckduckgo"), fast("stackoverflow")
+    agent.semantic = fast("semantic")
 
     events = list(agent.run_streaming("q"))
 
@@ -311,7 +311,7 @@ def test_run_streaming_emits_a_dedicated_synthesizing_event(monkeypatch):
     monkeypatch.setattr(ra, "_enrich_web_results", lambda r: r)
     monkeypatch.setattr(ra, "deduplicate_results", lambda r, threshold=0.92: r)
     monkeypatch.setattr(ra, "rerank_results", lambda q, r, top_k=15: r)
-    for attr in ("web", "arxiv", "wiki", "semantic", "hf", "github", "openalex"):
+    for attr in ("web", "arxiv", "semantic", "hf", "ddg", "so"):
         setattr(agent, attr, type("S", (), {"search": lambda self, q, k=4: []})())
 
     events = list(agent.run_streaming("q"))
@@ -367,7 +367,7 @@ def test_run_streaming_threads_the_selected_provider_into_query_expansion(monkey
     monkeypatch.setattr(ra, "_enrich_web_results", lambda r: r)
     monkeypatch.setattr(ra, "deduplicate_results", lambda r, threshold=0.92: r)
     monkeypatch.setattr(ra, "rerank_results", lambda q, r, top_k=15: r)
-    for attr in ("web", "arxiv", "wiki", "semantic", "hf", "github", "openalex"):
+    for attr in ("web", "arxiv", "semantic", "hf", "ddg", "so"):
         setattr(agent, attr, type("S", (), {"search": lambda self, q, k=4: []})())
 
     list(agent.run_streaming("q", provider="anthropic", model="claude-sonnet-5"))

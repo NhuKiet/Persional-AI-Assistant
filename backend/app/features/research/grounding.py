@@ -50,7 +50,7 @@ def derive_limitations(sources: list[SearchResult], claims: list[Claim]) -> list
         lims.append(f"{len(ungrounded)} nhận định không tìm được nguồn hỗ trợ trực tiếp.")
     if len(sources) < 3:
         lims.append(f"Chỉ có {len(sources)} nguồn — độ đa dạng bằng chứng thấp.")
-    abstract_only = [s for s in sources if s.source in ("arxiv", "semantic_scholar", "huggingface", "openalex") and len(s.content) < 400]
+    abstract_only = [s for s in sources if s.source in ("arxiv", "semantic_scholar", "huggingface") and len(s.content) < 400]
     if abstract_only:
         lims.append(f"{len(abstract_only)} nguồn học thuật chỉ có tóm tắt (abstract), không phải toàn văn.")
     grounded_claims = [c for c in claims if c.grounded]

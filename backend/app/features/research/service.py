@@ -8,6 +8,7 @@ from backend.app.features.research.agent import ResearchAgent
 from backend.app.features.research.schemas import DeepDiveRequest, ResearchRequest
 from backend.app.features.research.search.crawl import _crawl_url
 from backend.app.features.research.security import frame_untrusted, UNTRUSTED_GUARD
+from backend.app.features.research.synthesizer import NO_SUMMARY_FALLBACK
 from backend.app.shared.conversation_store import ConversationManager
 from backend.app.shared.session_locks import KeyedLockRegistry, SessionBusyError
 
@@ -34,11 +35,18 @@ _STORAGE_ERROR = {
 def _stringify_turn_content(content) -> str:
     """Turns can hold plain text (deep-dive Q&A) or the full research-result
     dict (main flow, so session restore can rebuild the UI) — flatten either
-    shape into a short text usable as LLM conversation context."""
+    shape into a short text usable as LLM conversation context.
+
+    A turn whose synthesis failed carries NO_SUMMARY_FALLBACK instead of real
+    content — feeding that back into contextualize_query/expand_query as if
+    it were the assistant's actual answer only confuses reference resolution
+    on the next turn, so it's dropped like empty content.
+    """
     if isinstance(content, str):
         return content
     if isinstance(content, dict):
-        return content.get("summary_short") or content.get("summary_detailed") or ""
+        text = content.get("summary_short") or content.get("summary_detailed") or ""
+        return "" if text.strip() == NO_SUMMARY_FALLBACK else text
     return ""
 
 

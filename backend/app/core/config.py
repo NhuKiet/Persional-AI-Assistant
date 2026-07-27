@@ -76,7 +76,6 @@ class Settings(BaseSettings):
     # ── Search APIs ─────────────────────────────────────────────────
     TAVILY_API_KEY: str | None = None
     TAVILY_BOOST_BLOGS: bool = False
-    GITHUB_TOKEN: str | None = None
     S2_API_KEY: str | None = None
 
     # ── Coding agent ────────────────────────────────────────────────

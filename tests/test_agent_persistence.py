@@ -41,7 +41,7 @@ def _run(monkeypatch, candidates, judge_verdict=(True, None), topup_new=None):
         def search(self, *a, **kw): return [_sr("live")]
 
     a.web = _WebSearcher()
-    a.arxiv = a.wiki = a.semantic = a.hf = a.github = a.openalex = _NullSearcher()
+    a.arxiv = a.semantic = a.hf = a.ddg = a.so = _NullSearcher()
 
     monkeypatch.setattr(agent_mod, "expand_query", lambda q, **kw: [q])
     monkeypatch.setattr(agent_mod, "needs_iteration", lambda *args, **kw: False)

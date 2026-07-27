@@ -17,11 +17,10 @@ logger = logging.getLogger(__name__)
 _CREDIBILITY: dict[str, float] = {
     "arxiv":            1.0,
     "semantic_scholar": 0.95,
-    "openalex":         0.90,
     "huggingface":      0.80,
-    "wikipedia":        0.75,
-    "github":           0.65,
+    "stackoverflow":    0.70,
     "web":              0.55,
+    "duckduckgo":       0.50,
 }
 
 

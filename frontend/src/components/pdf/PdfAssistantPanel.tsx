@@ -1,6 +1,6 @@
-import { useEffect, useRef, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, type KeyboardEvent } from "react";
 import { MicButton } from "../MicButton";
-import { SUGGESTIONS } from "../../config/tools";
+import { shuffle, SUGGESTIONS } from "../../config/tools";
 import type { ChatMessage, PdfSource } from "../../types";
 import ContextPins from "./ContextPins";
 import PdfMessage from "./PdfMessage";
@@ -41,6 +41,7 @@ export default function PdfAssistantPanel({
 }: PdfAssistantPanelProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const busy = streaming || summarizing;
+  const suggestions = useMemo(() => shuffle(SUGGESTIONS.pdf), []);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -83,7 +84,7 @@ export default function PdfAssistantPanel({
         {messages.length === 0 ? (
           <div className="tool-suggestions">
             <p className="tool-suggestions-label">Thử hỏi ngay</p>
-            {SUGGESTIONS.pdf.map((suggestion) => (
+            {suggestions.map((suggestion) => (
               <button
                 className="tool-suggestion-pill"
                 key={suggestion}

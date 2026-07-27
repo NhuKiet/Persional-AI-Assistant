@@ -109,11 +109,10 @@ def _build_agent(store, stub_web_results):
     agent._pool = ThreadPoolExecutor(max_workers=4)
     agent.web = _Searcher(stub_web_results)
     agent.arxiv = _Searcher([])
-    agent.wiki = _Searcher([])
     agent.semantic = _Searcher([])
     agent.hf = _Searcher([])
-    agent.github = _Searcher([])
-    agent.openalex = _Searcher([])
+    agent.ddg = _Searcher([])
+    agent.so = _Searcher([])
     agent.synth = Synthesizer(llm=object())  # llm unused; _call is faked
     return agent
 

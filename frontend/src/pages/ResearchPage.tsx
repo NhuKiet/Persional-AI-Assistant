@@ -1,14 +1,18 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import ModelPicker from "../components/ModelPicker";
 import { AppShell } from "../components/AppShell";
 import { InputBar } from "../components/InputBar";
 import { ResearchProgress } from "../components/research/ResearchProgress";
 import { ResearchResult, type ResearchResultData } from "../components/research/ResearchResult";
-import { SUGGESTIONS } from "../config/tools";
+import { shuffle, SUGGESTIONS } from "../config/tools";
 import { fetchSessionHistory, SESSION_RECOVERY_NOTICE, useChatHistory } from "../hooks/useChatHistory";
 import { useResearch, type ResearchProgressItem } from "../hooks/useResearch";
+import { useTrendingSuggestions } from "../hooks/useTrendingSuggestions";
 import { SESSION_ID } from "../lib/api";
 import type { ModelSelection } from "../types";
+
+/** Số gợi ý tối đa hiển thị — trộn tĩnh + trending rồi cắt bớt để không tràn UI. */
+const MAX_SUGGESTIONS = 6;
 
 interface ResearchMessage {
   id: string;
@@ -34,6 +38,13 @@ export function ResearchPage() {
   const [notice, setNotice]           = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
   const accentColor = "#7C9EFF";
+  const trending = useTrendingSuggestions();
+  // Trộn gợi ý tĩnh với paper nổi bật hôm nay, random thứ tự mỗi lần mount —
+  // vừa là gợi ý vừa cho biết gần đây có nghiên cứu gì mới.
+  const suggestions = useMemo(
+    () => shuffle([...SUGGESTIONS.research, ...trending]).slice(0, MAX_SUGGESTIONS),
+    [trending],
+  );
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -179,7 +190,7 @@ export function ResearchPage() {
         {messages.length === 0 && (
           <div className="tool-suggestions">
             <p className="tool-suggestions-label">Thử ngay</p>
-            {SUGGESTIONS.research.map(s => (
+            {suggestions.map(s => (
               <button key={s} className="tool-suggestion-pill"
                 style={{ borderColor: accentColor + "44" }}
                 onClick={() => handleSearch(s)}>

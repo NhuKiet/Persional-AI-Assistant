@@ -42,7 +42,7 @@ export function InputBar({ onSend, streaming, onStop, placeholder, accentColor, 
         <button className="input-send" onClick={submit} style={{ background: streaming ? "#2a2a2e" : accentColor }}
           aria-label={streaming ? "Dừng" : "Gửi"}>
           {streaming
-            ? <span style={{ fontSize: 12, color: "#fff" }}>■</span>
+            ? <span style={{ width: 12, height: 12, borderRadius: 3, background: "#fff", display: "block" }} />
             : <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true"><path d="M1 7.5h13M8 1.5l6 6-6 6" stroke="#000" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>}
         </button>
       </div>

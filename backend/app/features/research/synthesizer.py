@@ -31,6 +31,12 @@ _CTX_POINTS  = 5000   # tăng từ 3500
 _CTX_CMP     = 3500   # tăng từ 2500
 _CTX_CHART   = 2500   # tăng từ 2000
 
+# Placeholder used when the LLM call fails entirely (_call swallows the
+# exception and returns ""). Exported so callers building conversation
+# history (service.py) can recognize and drop these — a failed turn is not
+# real content and must not be fed back as context for follow-up questions.
+NO_SUMMARY_FALLBACK = "No summary available."
+
 
 class Synthesizer:
     def __init__(self, llm=None):
@@ -177,7 +183,7 @@ class Synthesizer:
 
         if not out.summary_short:
             lines = [l.strip() for l in raw1.splitlines() if l.strip() and len(l.strip()) > 20]
-            out.summary_short = lines[0] if lines else "No summary available."
+            out.summary_short = lines[0] if lines else NO_SUMMARY_FALLBACK
 
         if not out.summary_medium:
             out.summary_medium = raw1.strip() or out.summary_short
@@ -297,7 +303,7 @@ class Synthesizer:
                 "source":  s.source,
                 "snippet": s.content[:200],
             }
-            if s.source in ("arxiv", "semantic_scholar", "huggingface", "openalex"):
+            if s.source in ("arxiv", "semantic_scholar", "huggingface"):
                 ref.update(s.extra)
                 if s.extra.get("pdf_url"):
                     ref["pdf_filename"] = (

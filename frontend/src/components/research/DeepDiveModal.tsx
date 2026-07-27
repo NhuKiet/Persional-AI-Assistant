@@ -34,7 +34,7 @@ export function DeepDiveModal({ source, onClose, model }: DeepDiveModalProps) {
 
   const sourceColor = ({
     arxiv: "#7C9EFF", semantic_scholar: "#A8E6A3", huggingface: "#FFB085",
-    openalex: "#E8A0FF", web: "#60D9FA", github: "#F9E04B", wiki: "#B8E0B8",
+    web: "#60D9FA", duckduckgo: "#F9E04B", stackoverflow: "#B8E0B8",
   } as Record<string, string>)[source?.source || ""] || "#888";
 
   const ask = async (q?: string) => {

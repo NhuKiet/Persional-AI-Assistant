@@ -1,9 +1,9 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import ModelPicker from "../components/ModelPicker";
 import { InputBar } from "../components/InputBar";
 import { Message } from "../components/Message";
 import { AppShell } from "../components/AppShell";
-import { SUGGESTIONS } from "../config/tools";
+import { shuffle, SUGGESTIONS } from "../config/tools";
 import type { Tool } from "../config/tools";
 import { useChat } from "../hooks/useChat";
 import { fetchSessionHistory, SESSION_RECOVERY_NOTICE, useChatHistory } from "../hooks/useChatHistory";
@@ -22,6 +22,7 @@ export function ToolPage({ tool }: ToolPageProps) {
   const [model, setModel] = useState<ModelSelection | null>(null);
   const [notice, setNotice] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
+  const suggestions = useMemo(() => shuffle(SUGGESTIONS[tool.id] || []), [tool.id]);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
@@ -82,7 +83,7 @@ export function ToolPage({ tool }: ToolPageProps) {
             {messages.length === 0 && (
               <div className="tool-suggestions">
                 <p className="tool-suggestions-label">Thử ngay</p>
-                {(SUGGESTIONS[tool.id] || []).map(s => (
+                {suggestions.map(s => (
                   <button key={s} className="tool-suggestion-pill" style={{ borderColor: tool.color + "44" }} onClick={() => handleSend(s)}>
                     <span style={{ color: tool.color }}>›</span> {s}
                   </button>

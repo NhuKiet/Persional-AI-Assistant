@@ -5,29 +5,28 @@ Trước đây tất cả nằm trong tools/searchers.py (726 dòng). Tách theo
     query.py      phân loại query → k động, mở rộng query
     ranking.py    rerank + credibility (ủy quyền BGE về backend/app/features/research/reranker.py)
     crawl.py      crawl full-text làm giàu kết quả web
-    web.py        WebSearcher (Tavily)
-    academic.py   Arxiv, Semantic Scholar, OpenAlex
-    community.py  Wikipedia, HuggingFace, GitHub
+    web.py        WebSearcher (Tavily), DuckDuckGoSearcher
+    academic.py   Arxiv, Semantic Scholar
+    community.py  HuggingFace, Stack Overflow
 
 Mặt tiền công khai giữ nguyên như searchers.py cũ để research_agent không phải
 biết bố cục bên trong.
 """
 from backend.app.features.research.reranker import _CREDIBILITY
-from backend.app.features.research.search.academic import ArxivSearcher, OpenAlexSearcher, SemanticScholarSearcher
-from backend.app.features.research.search.community import GitHubSearcher, HuggingFaceSearcher, WikipediaSearcher
+from backend.app.features.research.search.academic import ArxivSearcher, SemanticScholarSearcher
+from backend.app.features.research.search.community import HuggingFaceSearcher, StackOverflowSearcher
 from backend.app.features.research.search.crawl import _crawl_url, _enrich_web_results
 from backend.app.features.research.search.query import contextualize_query, expand_query, get_dynamic_k
 from backend.app.features.research.search.ranking import _get_reranker, rerank_results
-from backend.app.features.research.search.web import WebSearcher
+from backend.app.features.research.search.web import DuckDuckGoSearcher, WebSearcher
 
 __all__ = [
     "ArxivSearcher",
-    "GitHubSearcher",
+    "DuckDuckGoSearcher",
     "HuggingFaceSearcher",
-    "OpenAlexSearcher",
     "SemanticScholarSearcher",
+    "StackOverflowSearcher",
     "WebSearcher",
-    "WikipediaSearcher",
     "contextualize_query",
     "expand_query",
     "get_dynamic_k",

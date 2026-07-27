@@ -68,3 +68,24 @@ class WebSearcher:
             return []
 
 
+class DuckDuckGoSearcher:
+    """Không cần API key — backup/song song với Tavily."""
+
+    def search(self, query: str, k: int = 6) -> list[SearchResult]:
+        try:
+            from ddgs import DDGS
+            results = []
+            with DDGS() as ddgs:
+                for r in ddgs.text(query, max_results=k):
+                    results.append(SearchResult(
+                        source="duckduckgo",
+                        title=r.get("title", ""),
+                        url=r.get("href", ""),
+                        content=(r.get("body", "") or "")[:2000],
+                    ))
+            return results
+        except Exception as e:
+            logger.error("DuckDuckGo search failed: %s", e)
+            return []
+
+

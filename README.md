@@ -37,7 +37,7 @@ Trang `/` là landing page và nơi chọn công cụ. URL không hợp lệ đ�
 
 ### Research
 
-- Tìm kiếm song song từ Tavily Web, arXiv, Wikipedia, Semantic Scholar, Hugging Face Papers, GitHub và OpenAlex.
+- Tìm kiếm song song từ Tavily Web, DuckDuckGo, arXiv, Semantic Scholar, Hugging Face Papers và Stack Overflow.
 - Query expansion cho các nguồn học thuật.
 - Làm giàu nội dung web, loại kết quả gần trùng và rerank theo độ liên quan/độ tin cậy nguồn.
 - Tổng hợp các mức tóm tắt, key points, bảng so sánh, dữ liệu biểu đồ, tài liệu tham khảo và câu hỏi tiếp theo.
@@ -71,7 +71,7 @@ Trang `/` là landing page và nơi chọn công cụ. URL không hợp lệ đ�
 | Backend | FastAPI, Uvicorn, Pydantic Settings |
 | Streaming | Server-Sent Events (SSE) |
 | LLM | Ollama, Anthropic Claude, OpenAI/OpenAI-compatible qua LangChain |
-| Research | Tavily, arXiv, Wikipedia, Semantic Scholar, Hugging Face, GitHub, OpenAlex |
+| Research | Tavily, DuckDuckGo, arXiv, Semantic Scholar, Hugging Face, Stack Overflow |
 | Retrieval | OpenAI embeddings, Weaviate hybrid search, BGE rerank và adapter Cohere tùy chọn |
 | PDF | PyMuPDF, PDF.js/react-pdf |
 | Storage | Supabase (Postgres), browser `localStorage`, Weaviate Cloud tùy chọn |
@@ -93,8 +93,7 @@ Các API key là tùy chọn theo tính năng:
 | `ANTHROPIC_API_KEY` | Hiển thị và gọi các model Anthropic |
 | `OPENAI_API_KEY` | Model OpenAI và OpenAI embeddings cho Knowledge Store |
 | `WEAVIATE_URL`, `WEAVIATE_API_KEY` | Lưu/tìm lại knowledge chunks trên Weaviate Cloud |
-| `TAVILY_API_KEY` | Nguồn web trong Research; thiếu key thì riêng nguồn web bị tắt |
-| `GITHUB_TOKEN` | Tăng rate limit của GitHub Search |
+| `TAVILY_API_KEY` | Nguồn web (Tavily) trong Research; thiếu key thì riêng nguồn web bị tắt (DuckDuckGo vẫn chạy không cần key) |
 | `S2_API_KEY` | Tăng rate limit của Semantic Scholar |
 | `COHERE_API_KEY` | Dùng adapter Cohere rerank khi đã cài thêm SDK `cohere`; mặc định thử BGE local rồi fallback về base score |
 
@@ -507,7 +506,7 @@ Anthropic/OpenAI chỉ xuất hiện khi API key tương ứng có trong `.env`.
 
 ### Research thiếu kết quả web
 
-Kiểm tra `TAVILY_API_KEY`. Nếu thiếu, WebSearcher bị tắt nhưng arXiv, Wikipedia, Hugging Face, OpenAlex và các nguồn còn lại vẫn có thể chạy.
+Kiểm tra `TAVILY_API_KEY`. Nếu thiếu, WebSearcher (Tavily) bị tắt nhưng DuckDuckGo, arXiv, Hugging Face, Semantic Scholar và Stack Overflow vẫn có thể chạy.
 
 ### Knowledge Store luôn báo skip
 

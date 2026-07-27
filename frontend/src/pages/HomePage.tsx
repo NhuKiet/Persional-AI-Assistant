@@ -1,11 +1,11 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import ModelPicker from "../components/ModelPicker";
 import mainlogo from "../assets/mainlogo.png";
 import { AppShell } from "../components/AppShell";
 import { InputBar } from "../components/InputBar";
 import { Message } from "../components/Message";
 import { ToolDock } from "../components/ToolDock";
-import { SUGGESTIONS, toolPath } from "../config/tools";
+import { shuffle, SUGGESTIONS, toolPath } from "../config/tools";
 import { ACCENT } from "../config/theme";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useChat } from "../hooks/useChat";
@@ -24,6 +24,7 @@ export function HomePage() {
   const [notice, setNotice] = useState("");
   const chatActive = messages.length > 0;
   const bottomRef  = useRef<HTMLDivElement>(null);
+  const suggestions = useMemo(() => shuffle(SUGGESTIONS.home), []);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
@@ -134,7 +135,7 @@ export function HomePage() {
                 </div>
                 <ToolDock onSelect={(tool) => navigate(toolPath(tool))} visible={true} />
                 <div className="suggestions-grid">
-                  {SUGGESTIONS.home.map(s => (
+                  {suggestions.map(s => (
                     <button key={s} className="suggestion-card" onClick={() => handleSend(s)}>
                       <span className="suggestion-arrow" aria-hidden="true">
                         <svg width="12" height="12" viewBox="0 0 12 12" fill="none">

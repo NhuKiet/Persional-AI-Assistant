@@ -12,12 +12,11 @@ from backend.app.features.research.models import ResearchOutput, SearchResult
 from backend.app.features.research import sufficiency
 from backend.app.features.research.search import (
     ArxivSearcher,
-    GitHubSearcher,
+    DuckDuckGoSearcher,
     HuggingFaceSearcher,
-    OpenAlexSearcher,
     SemanticScholarSearcher,
+    StackOverflowSearcher,
     WebSearcher,
-    WikipediaSearcher,
     # New helpers
     contextualize_query,
     expand_query,
@@ -32,13 +31,12 @@ logger = logging.getLogger(__name__)
 
 # Source registry: (name, agent_attr, default_k)
 _SOURCES = [
-    ("web",         "web",       6),
-    ("arxiv",       "arxiv",     4),
-    ("huggingface", "hf",        4),
-    ("github",      "github",    3),
-    ("openalex",    "openalex",  4),
-    ("semantic",    "semantic",  4),
-    ("wiki",        "wiki",      2),
+    ("web",           "web",       6),
+    ("arxiv",         "arxiv",     4),
+    ("huggingface",   "hf",        4),
+    ("semantic",      "semantic",  4),
+    ("duckduckgo",    "ddg",       4),
+    ("stackoverflow", "so",        3),
 ]
 
 # Overall deadline for a round of parallel source search. A hung/slow source
@@ -52,13 +50,12 @@ _JUDGE_TIMEOUT_SECONDS = getattr(settings, "RESEARCH_JUDGE_TIMEOUT_SECONDS", 20)
 _JUDGE_POLL_SECONDS    = 0.1
 
 _SSE_STATUS = {
-    "web":         "Searching web sources…",
-    "arxiv":       "Searching Arxiv papers…",
-    "huggingface": "Searching HuggingFace papers…",
-    "github":      "Searching GitHub repos…",
-    "openalex":    "Searching OpenAlex…",
-    "semantic":    "Searching Semantic Scholar…",
-    "wiki":        "Fetching Wikipedia…",
+    "web":           "Searching web sources…",
+    "arxiv":         "Searching Arxiv papers…",
+    "huggingface":   "Searching HuggingFace papers…",
+    "semantic":      "Searching Semantic Scholar…",
+    "duckduckgo":    "Searching DuckDuckGo…",
+    "stackoverflow": "Searching Stack Overflow…",
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -115,11 +112,10 @@ class ResearchAgent:
     def __init__(self, llm=None):
         self.web      = WebSearcher()
         self.arxiv    = ArxivSearcher()
-        self.wiki     = WikipediaSearcher()
         self.semantic = SemanticScholarSearcher()
         self.hf       = HuggingFaceSearcher()
-        self.github   = GitHubSearcher()
-        self.openalex = OpenAlexSearcher()
+        self.ddg      = DuckDuckGoSearcher()
+        self.so       = StackOverflowSearcher()
         self.synth    = Synthesizer(llm)
         self._pool    = ThreadPoolExecutor(max_workers=8)
 
@@ -196,7 +192,7 @@ class ResearchAgent:
                 # Primary query
                 futures[ex.submit(_run_search, name, attr, query)] = (name, query)
                 # Expansion queries — only for academic sources to avoid API overuse
-                if len(queries) > 1 and name in ("arxiv", "semantic", "openalex"):
+                if len(queries) > 1 and name in ("arxiv", "semantic"):
                     for eq in queries[1:]:
                         futures[ex.submit(_run_search, name, attr, eq)] = (name, eq)
 
@@ -474,7 +470,7 @@ class ResearchAgent:
                             getattr(getattr(self, attr), "search"), query, k
                         )] = name
                         # Expansions for academic sources
-                        if len(expansions) > 1 and name in ("arxiv", "semantic", "openalex"):
+                        if len(expansions) > 1 and name in ("arxiv", "semantic"):
                             for eq in expansions[1:]:
                                 futures[ex.submit(
                                     getattr(getattr(self, attr), "search"), eq, max(2, k // 2)

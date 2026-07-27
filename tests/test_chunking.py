@@ -6,10 +6,9 @@ from backend.app.features.research.chunking import (
 def test_category_map_covers_sources():
     assert category_for("arxiv") == "academic"
     assert category_for("semantic") == "academic"
-    assert category_for("openalex") == "academic"
-    assert category_for("github") == "code"
-    assert category_for("wiki") == "reference"
+    assert category_for("stackoverflow") == "code"
     assert category_for("web") == "web"
+    assert category_for("duckduckgo") == "web"
     assert category_for("huggingface") == "web"
     # unknown → default web
     assert category_for("totally-unknown") == "web"

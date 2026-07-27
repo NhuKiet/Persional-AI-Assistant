@@ -34,6 +34,7 @@ PUBLIC_ROUTES = {
     ("POST", "/api/research/stream"),
     ("POST", "/api/research/deep-dive"),
     ("GET", "/api/paper/{filename}"),
+    ("GET", "/api/research/trending"),
     ("DELETE", "/api/research/cache"),
     ("GET", "/api/research/sessions/{session_id}"),
     ("POST", "/api/coding/upload"),
@@ -69,6 +70,7 @@ def test_research_routes_remain_registered():
         ("POST", "/api/research/stream"),
         ("POST", "/api/research/deep-dive"),
         ("GET", "/api/paper/{filename}"),
+        ("GET", "/api/research/trending"),
         ("DELETE", "/api/research/cache"),
         ("GET", "/api/research/sessions/{session_id}"),
     }

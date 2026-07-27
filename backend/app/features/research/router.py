@@ -1,12 +1,15 @@
 import json
 import logging
 import os
+import threading
+import time
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 
 from backend.app.features.research.prompts import DEEP_DIVE_SYSTEM
 from backend.app.features.research.schemas import DeepDiveRequest, ResearchRequest, SessionHistoryResponse
+from backend.app.features.research.search.community import fetch_trending_papers
 from backend.app.features.research.service import ResearchService, SessionBusyError
 from backend.app.shared.session_locks import log_concurrent_rejection
 
@@ -15,6 +18,14 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["research"])
 
 _service: ResearchService | None = None
+
+# Trending-papers cache: HuggingFace's daily_papers list changes at most once
+# a day, and the endpoint is flaky over some networks — cache successful
+# responses for an hour and keep serving stale data on failure rather than
+# ever surfacing an empty suggestion list to the frontend.
+_TRENDING_TTL_SECONDS = 3600
+_trending_cache: dict = {"ts": 0.0, "titles": []}
+_trending_lock = threading.Lock()
 
 
 def get_service() -> ResearchService:
@@ -100,6 +111,25 @@ async def serve_paper(filename: str):
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="Paper not found")
     return FileResponse(path, media_type="application/pdf")
+
+
+@router.get("/api/research/trending")
+async def get_trending_papers():
+    """Tiêu đề paper nổi bật hôm nay — frontend trộn vào gợi ý research để
+    vừa gợi ý chủ đề vừa cho biết có nghiên cứu gì mới. Cache 1h; nếu
+    HuggingFace lỗi/timeout thì trả cache cũ (rỗng nếu chưa từng fetch được)
+    thay vì lỗi cả request — đây chỉ là gợi ý, không phải dữ liệu bắt buộc."""
+    now = time.time()
+    with _trending_lock:
+        stale = now - _trending_cache["ts"] > _TRENDING_TTL_SECONDS
+    if stale:
+        titles = fetch_trending_papers(k=6)
+        if titles:
+            with _trending_lock:
+                _trending_cache["titles"] = titles
+                _trending_cache["ts"] = now
+    with _trending_lock:
+        return {"suggestions": list(_trending_cache["titles"])}
 
 
 @router.delete("/api/research/cache")

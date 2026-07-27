@@ -196,7 +196,7 @@ def test_run_streaming_iterates_once_when_first_result_weak(monkeypatch):
     monkeypatch.setattr(ra, "deduplicate_results", lambda r, threshold=0.92: r)
     monkeypatch.setattr(ra, "rerank_results", lambda q, r, top_k=15: r)
     # ép các searcher inline trả rỗng để vòng 1 dùng nguồn tối thiểu
-    for attr in ("web", "arxiv", "wiki", "semantic", "hf", "github", "openalex"):
+    for attr in ("web", "arxiv", "semantic", "hf", "ddg", "so"):
         setattr(agent, attr, type("S", (), {"search": lambda self, q, k=4: []})())
 
     events = list(agent.run_streaming("q"))
@@ -231,7 +231,7 @@ def test_run_streaming_no_iteration_when_first_result_strong(monkeypatch):
     monkeypatch.setattr(ra, "_enrich_web_results", lambda r: r)
     monkeypatch.setattr(ra, "deduplicate_results", lambda r, threshold=0.92: r)
     monkeypatch.setattr(ra, "rerank_results", lambda q, r, top_k=15: r)
-    for attr in ("web", "arxiv", "wiki", "semantic", "hf", "github", "openalex"):
+    for attr in ("web", "arxiv", "semantic", "hf", "ddg", "so"):
         setattr(agent, attr, type("S", (), {"search": lambda self, q, k=4: []})())
 
     events = list(agent.run_streaming("q"))
@@ -286,7 +286,7 @@ def test_run_iterates_once_when_first_result_weak(monkeypatch):
     monkeypatch.setattr(ra, "_enrich_web_results", lambda r: r)
     monkeypatch.setattr(ra, "deduplicate_results", lambda r, threshold=0.92: r)
     monkeypatch.setattr(ra, "rerank_results", lambda q, r, top_k=15: r)
-    for attr in ("web", "arxiv", "wiki", "semantic", "hf", "github", "openalex"):
+    for attr in ("web", "arxiv", "semantic", "hf", "ddg", "so"):
         setattr(agent, attr, type("S", (), {"search": lambda self, q, k=4: []})())
 
     output = agent.run("q")
@@ -323,7 +323,7 @@ def test_run_and_run_streaming_reach_the_same_decision(monkeypatch):
             SearchResult(source="web", title="new", url="u2", content="quantum error correction")
         ]
         agent._process_pipeline = lambda q, raw, **k: raw
-        for attr in ("web", "arxiv", "wiki", "semantic", "hf", "github", "openalex"):
+        for attr in ("web", "arxiv", "semantic", "hf", "ddg", "so"):
             setattr(agent, attr, type("S", (), {"search": lambda self, q, k=4: []})())
 
         stored = SearchResult(
@@ -418,7 +418,7 @@ def test_run_streaming_stops_early_when_cancelled(monkeypatch):
     monkeypatch.setattr(ra, "_enrich_web_results", lambda r: r)
     monkeypatch.setattr(ra, "deduplicate_results", lambda r, threshold=0.92: r)
     monkeypatch.setattr(ra, "rerank_results", lambda q, r, top_k=15: r)
-    for attr in ("web", "arxiv", "wiki", "semantic", "hf", "github", "openalex"):
+    for attr in ("web", "arxiv", "semantic", "hf", "ddg", "so"):
         setattr(agent, attr, type("S", (), {"search": lambda self, q, k=4: []})())
 
     ev = threading.Event()
@@ -452,7 +452,7 @@ def test_run_streaming_normal_when_not_cancelled(monkeypatch):
     monkeypatch.setattr(ra, "_enrich_web_results", lambda r: r)
     monkeypatch.setattr(ra, "deduplicate_results", lambda r, threshold=0.92: r)
     monkeypatch.setattr(ra, "rerank_results", lambda q, r, top_k=15: r)
-    for attr in ("web", "arxiv", "wiki", "semantic", "hf", "github", "openalex"):
+    for attr in ("web", "arxiv", "semantic", "hf", "ddg", "so"):
         setattr(agent, attr, type("S", (), {"search": lambda self, q, k=4: []})())
 
     events = list(agent.run_streaming("q"))

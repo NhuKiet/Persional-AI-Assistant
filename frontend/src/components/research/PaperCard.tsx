@@ -14,7 +14,7 @@ interface PaperCardProps {
 }
 
 export function PaperCard({ paper, onDeepDive }: PaperCardProps) {
-  const sourceColor = ({ arxiv: "#7C9EFF", semantic_scholar: "#A8E6A3", huggingface: "#FFB085", openalex: "#E8A0FF" } as Record<string, string>)[paper.source || ""] || "#888";
+  const sourceColor = ({ arxiv: "#7C9EFF", semantic_scholar: "#A8E6A3", huggingface: "#FFB085", stackoverflow: "#B8E0B8" } as Record<string, string>)[paper.source || ""] || "#888";
   return (
     <div className="paper-card" onClick={() => onDeepDive?.(paper)} style={{ cursor: "pointer" }} title="Click to deep dive">
       <div className="paper-top">

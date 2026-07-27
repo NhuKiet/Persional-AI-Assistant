@@ -25,10 +25,9 @@ _DEFAULT_K: dict[str, int] = {
     "web":         6,
     "arxiv":       4,
     "huggingface": 4,
-    "github":      3,
-    "openalex":    4,
     "semantic":    4,
-    "wiki":        2,
+    "duckduckgo":  4,
+    "stackoverflow": 3,
 }
 
 
@@ -50,20 +49,19 @@ def get_dynamic_k(query: str) -> dict[str, int]:
     k = dict(_DEFAULT_K)
 
     if qtype == "academic":
-        k["arxiv"]       = 8
-        k["semantic"]    = 6
-        k["openalex"]    = 6
-        k["huggingface"] = 5
-        k["web"]         = 4
-        k["github"]      = 2
+        k["arxiv"]         = 8
+        k["semantic"]      = 6
+        k["huggingface"]   = 5
+        k["web"]           = 4
+        k["duckduckgo"]    = 2
+        k["stackoverflow"] = 1
         logger.info("Query type: ACADEMIC")
     elif qtype == "practical":
-        k["web"]         = 8
-        k["github"]      = 6
-        k["wiki"]        = 3
-        k["arxiv"]       = 2
-        k["semantic"]    = 2
-        k["openalex"]    = 2
+        k["web"]           = 8
+        k["duckduckgo"]    = 6
+        k["stackoverflow"] = 6
+        k["arxiv"]         = 2
+        k["semantic"]      = 2
         logger.info("Query type: PRACTICAL")
     else:
         logger.info("Query type: GENERAL")
