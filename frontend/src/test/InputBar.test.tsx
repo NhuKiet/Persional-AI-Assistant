@@ -21,3 +21,18 @@ it("không hiện nút đính kèm khi không có onAttach", () => {
   render(<InputBar onSend={() => {}} streaming={false} onStop={() => {}} />);
   expect(screen.queryByRole("button", { name: /đính kèm/i })).toBeNull();
 });
+
+it("dùng class input-bar làm contract giao diện dùng chung", () => {
+  const { container } = render(
+    <InputBar onSend={() => {}} streaming={false} onStop={() => {}} />
+  );
+  expect(container.firstElementChild).toHaveClass("input-bar");
+});
+
+it("exposes its provided accent as the composer accent custom property", () => {
+  const { container } = render(
+    <InputBar onSend={() => {}} streaming={false} onStop={() => {}} accentColor="#7C9EFF" />
+  );
+
+  expect(container.firstElementChild).toHaveStyle("--composer-accent: #7C9EFF");
+});

@@ -215,7 +215,7 @@ export function CodingPage() {
       {/* Input */}
       <div className="input-wrap" style={{ paddingTop: 8 }}>
         <div className="coding-input-wrap">
-          <div className="input-bar" style={{ opacity: isRunning ? 0.5 : 1 }}>
+          <div className="input-bar" style={{ opacity: isRunning ? 0.5 : 1, "--composer-accent": accentColor } as React.CSSProperties}>
             <textarea
               ref={inputRef}
               className="input-textarea"

@@ -42,6 +42,15 @@
   .phase-label               { display: none; }
   .mode-hint                 { display: none; }
 
+  .input-bar {
+    gap: 5px;
+    padding: 7px;
+  }
+
+  .input-bar .mp-trigger {
+    max-width: 132px;
+  }
+
   /* Sidebar overlay trên mobile */
   .sidebar {
     position: fixed;
