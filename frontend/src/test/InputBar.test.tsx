@@ -28,3 +28,11 @@ it("dùng class input-bar làm contract giao diện dùng chung", () => {
   );
   expect(container.firstElementChild).toHaveClass("input-bar");
 });
+
+it("exposes its provided accent as the composer accent custom property", () => {
+  const { container } = render(
+    <InputBar onSend={() => {}} streaming={false} onStop={() => {}} accentColor="#7C9EFF" />
+  );
+
+  expect(container.firstElementChild).toHaveStyle("--composer-accent: #7C9EFF");
+});

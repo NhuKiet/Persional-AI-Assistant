@@ -196,6 +196,7 @@
 .input-wrap { padding: 8px 0 20px; flex-shrink: 0; position: relative; z-index: 20; }
 
 .input-bar {
+  --composer-accent: var(--accent);
   position: relative;
   isolation: isolate;
   display: flex;
@@ -225,11 +226,11 @@
   pointer-events: none;
 }
 .input-bar:focus-within {
-  border-color: color-mix(in srgb, var(--accent) 48%, var(--composer-edge));
+  border-color: color-mix(in srgb, var(--composer-accent) 48%, var(--composer-edge));
   box-shadow:
     var(--composer-shadow),
-    0 0 0 3px color-mix(in srgb, var(--accent) 8%, transparent),
-    0 0 32px color-mix(in srgb, var(--accent) 10%, transparent);
+    0 0 0 3px color-mix(in srgb, var(--composer-accent) 8%, transparent),
+    0 0 32px color-mix(in srgb, var(--composer-accent) 10%, transparent);
 }
 .input-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
 .input-tools { display: flex; align-items: center; gap: 6px; min-width: 0; }
@@ -251,13 +252,13 @@
 .mic-btn {
   border: 1px solid var(--composer-control-edge);
   background: var(--composer-control);
-  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--composer-highlight) 68%, transparent);
+  box-shadow: var(--composer-control-inset);
 }
 .input-attach:hover,
-.mic-btn:hover:not(:disabled) {
+.mic-btn:hover:not(:disabled):not(.mic-btn-active) {
   color: var(--text);
-  border-color: color-mix(in srgb, var(--accent) 28%, var(--composer-control-edge));
-  background: color-mix(in srgb, var(--composer-control) 82%, var(--accent-soft));
+  border-color: color-mix(in srgb, var(--composer-accent) 28%, var(--composer-control-edge));
+  background: color-mix(in srgb, var(--composer-control) 82%, color-mix(in srgb, var(--composer-accent) 8%, transparent));
 }
 
 .input-textarea {
@@ -289,7 +290,7 @@
   justify-content: center;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.62),
-    0 6px 18px color-mix(in srgb, var(--accent) 22%, transparent);
+    0 6px 18px color-mix(in srgb, var(--composer-accent) 22%, transparent);
   transition:
     filter var(--dur) var(--ease),
     transform var(--dur) var(--ease),
@@ -315,12 +316,12 @@
 }
 .mic-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .mic-btn-active {
-  color: var(--accent);
-  background: var(--accent-soft);
+  color: var(--composer-accent);
+  background: color-mix(in srgb, var(--composer-accent) 8%, transparent);
   animation: mic-pulse 1.4s var(--ease) infinite;
 }
 @keyframes mic-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 var(--accent-soft); }
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--composer-accent) 8%, transparent); }
   50%      { box-shadow: 0 0 0 5px transparent; }
 }
 
@@ -362,7 +363,7 @@
 .input-bar .mp-trigger {
   border-color: var(--composer-control-edge);
   background: var(--composer-control);
-  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--composer-highlight) 68%, transparent);
+  box-shadow: var(--composer-control-inset);
 }
 .mp-trigger:hover {
   color: var(--text);
@@ -374,6 +375,15 @@
   color: var(--text);
   border-color: color-mix(in srgb, var(--accent) 55%, transparent);
   background: var(--bg3);
+}
+.input-bar .mp-trigger:hover {
+  border-color: color-mix(in srgb, var(--composer-accent) 40%, transparent);
+  background: color-mix(in srgb, var(--composer-control) 82%, color-mix(in srgb, var(--composer-accent) 8%, transparent));
+}
+.input-bar .mp-trigger:focus-visible { outline-color: var(--composer-accent); }
+.input-bar .mp-trigger[aria-expanded="true"] {
+  border-color: color-mix(in srgb, var(--composer-accent) 55%, transparent);
+  background: color-mix(in srgb, var(--composer-control) 82%, color-mix(in srgb, var(--composer-accent) 8%, transparent));
 }
 
 .mp-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -427,6 +437,7 @@
 .mp-active   { background: var(--bg4); color: var(--text); }
 .mp-selected { color: var(--text); }
 .mp-check    { flex-shrink: 0; color: var(--accent); }
+.input-bar .mp-check { color: var(--composer-accent); }
 .mp-option-label { overflow: hidden; text-overflow: ellipsis; }
 
 .tool-title-wrap  { display: flex; align-items: center; gap: 8px; }

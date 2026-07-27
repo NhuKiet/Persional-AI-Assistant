@@ -110,7 +110,7 @@ export default function PdfAssistantPanel({
       </div>
 
       <div className="input-wrap">
-        <div className="input-bar">
+        <div className="input-bar" style={{ "--composer-accent": accentColor } as React.CSSProperties}>
           <textarea
             className="input-textarea"
             disabled={busy}

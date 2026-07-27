@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { MicButton } from "./MicButton";
 
 interface InputBarProps {
@@ -24,7 +24,10 @@ export function InputBar({ onSend, streaming, onStop, placeholder, accentColor, 
     onSend(val.trim()); setVal("");
   };
   return (
-    <div className="input-bar">
+    <div
+      className="input-bar"
+      style={accentColor ? ({ "--composer-accent": accentColor } as CSSProperties) : undefined}
+    >
       {onAttach && (
         <button type="button" className="input-attach" onClick={onAttach} aria-label="Đính kèm file">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
