@@ -73,9 +73,13 @@ export function useTimeAndWeather(): TimeAndWeather {
     }
 
     navigator.geolocation.getCurrentPosition(
+      // Current-weather forecasts don't need house-level GPS precision —
+      // round to ~1.1km before it leaves the browser in a URL query string
+      // to a third party (Open-Meteo). Same forecast, far less precise
+      // location leaked.
       (position) => applyResult({
-        latitude: position.coords.latitude,
-        longitude: position.coords.longitude,
+        latitude: Math.round(position.coords.latitude * 100) / 100,
+        longitude: Math.round(position.coords.longitude * 100) / 100,
       }),
       () => applyResult(HANOI_FALLBACK),
       { timeout: GEOLOCATION_TIMEOUT_MS },

@@ -449,7 +449,8 @@ body::before {
 }
 
 .home-logo,
-.home-center > * {
+.home-center > *,
+.home-time-weather {
   animation: rise var(--dur-slow) var(--ease-out) backwards;
 }
 

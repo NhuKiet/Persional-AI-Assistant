@@ -13,11 +13,14 @@ export default function TimeWeatherWidget() {
       {weather.loading ? (
         <div className="htw-weather htw-weather-loading">…</div>
       ) : !weather.failed ? (
-        <div className="htw-weather">
-          {weatherCodeToDisplay(weather.code).icon} {Math.round(weather.tempC)}°C
-          {" · "}
-          {weatherCodeToDisplay(weather.code).label}
-        </div>
+        (() => {
+          const { icon, label } = weatherCodeToDisplay(weather.code);
+          return (
+            <div className="htw-weather">
+              {icon} {Math.round(weather.tempC)}°C · {label}
+            </div>
+          );
+        })()
       ) : null}
     </div>
   );

@@ -33,6 +33,19 @@ describe("TimeWeatherWidget", () => {
     expect(screen.getByText(/Nắng/)).toBeInTheDocument();
   });
 
+  it("rounds a fractional Open-Meteo temperature for display", async () => {
+    mockGeolocation("success");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ current_weather: { temperature: 27.6, weathercode: 3 } }),
+    }));
+
+    render(<TimeWeatherWidget />);
+
+    await waitFor(() => expect(screen.getByText(/28°C/)).toBeInTheDocument());
+    expect(screen.queryByText(/27\.6/)).not.toBeInTheDocument();
+  });
+
   it("omits the weather row (keeping the clock) when the fetch fails", async () => {
     mockGeolocation("success");
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network down")));
