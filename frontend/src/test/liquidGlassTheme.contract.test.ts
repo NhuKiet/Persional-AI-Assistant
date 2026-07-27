@@ -40,4 +40,13 @@ describe("Pearl Aurora Glass CSS contract", () => {
     expect(chat).toMatch(/background:\s*var\(--composer-specular\);/);
     expect(chat).toMatch(/backdrop-filter:\s*var\(--composer-blur\);/);
   });
+
+  it("applies the secondary material to Home actions and suggestions", () => {
+    const chat = readStyle("chat.css");
+
+    expect(chat).toMatch(/\.suggestion-card\s*\{[^}]*background:\s*var\(--secondary-glass-surface\);/s);
+    expect(chat).toMatch(/\.dock-item\s*\{[^}]*background:\s*var\(--secondary-glass-surface\);/s);
+    expect(chat).toMatch(/\.suggestion-card::before/);
+    expect(chat).toMatch(/\.dock-item::before/);
+  });
 });
