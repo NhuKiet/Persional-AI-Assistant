@@ -6,10 +6,12 @@
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  background: var(--bg2);
-  border-right: 1px solid var(--border);
-  transition: width 0.22s var(--ease),
-              opacity 0.18s var(--ease);
+  background: var(--shell-surface);
+  border-right: 1px solid var(--shell-edge);
+  backdrop-filter: var(--shell-blur);
+  -webkit-backdrop-filter: var(--shell-blur);
+  transition: width var(--dur-slow) var(--ease),
+              opacity var(--dur) var(--ease);
   overflow: hidden;
 }
 

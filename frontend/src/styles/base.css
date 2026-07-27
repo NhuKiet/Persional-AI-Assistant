@@ -69,7 +69,24 @@
   --glass-hi:   rgba(255, 255, 255, 0.075);   /* kính khi hover */
   --glass-lit:  rgba(255, 255, 255, 0.28);    /* cạnh bắt sáng — viền trên thẻ kính khi hover */
   --blur:       blur(20px) saturate(150%);
-  --canvas-background: var(--bg);
+  --canvas-background:
+    radial-gradient(64rem 42rem at 24% 8%, rgba(77, 117, 153, 0.13), transparent 64%),
+    radial-gradient(58rem 40rem at 82% 76%, rgba(30, 209, 194, 0.07), transparent 66%),
+    radial-gradient(38rem 30rem at 91% 12%, rgba(115, 87, 156, 0.07), transparent 70%),
+    linear-gradient(145deg, #07080b, #090c12 52%, #07090d);
+  --shell-surface: rgba(8, 11, 16, 0.54);
+  --shell-edge: rgba(255, 255, 255, 0.09);
+  --shell-blur: blur(24px) saturate(145%);
+  --secondary-glass-surface:
+    linear-gradient(155deg, rgba(255, 255, 255, 0.11), transparent 54%),
+    linear-gradient(180deg, transparent, rgba(95, 140, 170, 0.045)),
+    rgba(255, 255, 255, 0.035);
+  --secondary-glass-edge: rgba(255, 255, 255, 0.16);
+  --secondary-glass-highlight: rgba(255, 255, 255, 0.22);
+  --secondary-glass-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.19),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.025),
+    0 10px 28px rgba(0, 0, 0, 0.24);
   --composer-surface:
     linear-gradient(180deg, rgba(255, 255, 255, 0.105), rgba(255, 255, 255, 0.04)),
     rgba(8, 12, 18, 0.42);
@@ -180,6 +197,18 @@
     radial-gradient(54rem 31rem at 76% 72%, rgba(219, 235, 170, 0.44), transparent 70%),
     radial-gradient(30rem 24rem at 96% 16%, rgba(251, 222, 179, 0.22), transparent 74%),
     linear-gradient(145deg, #f9faf9, #edf2f2 52%, #f7f7f6);
+  --shell-surface: rgba(247, 251, 252, 0.48);
+  --shell-edge: rgba(255, 255, 255, 0.72);
+  --secondary-glass-surface:
+    linear-gradient(155deg, rgba(255, 255, 255, 0.55), transparent 54%),
+    linear-gradient(180deg, transparent, rgba(178, 224, 255, 0.10)),
+    rgba(242, 249, 250, 0.27);
+  --secondary-glass-edge: rgba(255, 255, 255, 0.78);
+  --secondary-glass-highlight: rgba(255, 255, 255, 0.72);
+  --secondary-glass-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.94),
+    inset 0 -1px 0 rgba(83, 112, 126, 0.07),
+    0 12px 30px rgba(72, 105, 119, 0.11);
   --composer-surface:
     linear-gradient(180deg, rgba(255, 255, 255, 0.64), rgba(255, 255, 255, 0.31)),
     rgba(232, 242, 244, 0.34);

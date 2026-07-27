@@ -370,7 +370,7 @@
   height: 100vh;
   height: 100dvh;
   overflow: hidden;
-  background: var(--bg);
+  background: transparent;
 }
 
 .app-main {
