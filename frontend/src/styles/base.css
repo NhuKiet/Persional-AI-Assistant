@@ -69,19 +69,46 @@
   --glass-hi:   rgba(255, 255, 255, 0.075);   /* kính khi hover */
   --glass-lit:  rgba(255, 255, 255, 0.28);    /* cạnh bắt sáng — viền trên thẻ kính khi hover */
   --blur:       blur(20px) saturate(150%);
-  --canvas-background: var(--bg);
+  --canvas-background:
+    radial-gradient(64rem 42rem at 24% 8%, rgba(77, 117, 153, 0.13), transparent 64%),
+    radial-gradient(58rem 40rem at 82% 76%, rgba(30, 209, 194, 0.07), transparent 66%),
+    radial-gradient(38rem 30rem at 91% 12%, rgba(115, 87, 156, 0.07), transparent 70%),
+    linear-gradient(145deg, #07080b, #090c12 52%, #07090d);
+  --shell-surface: rgba(8, 11, 16, 0.54);
+  --shell-edge: rgba(255, 255, 255, 0.09);
+  --shell-blur: blur(24px) saturate(145%);
+  --secondary-glass-surface:
+    linear-gradient(155deg, rgba(255, 255, 255, 0.11), transparent 54%),
+    linear-gradient(180deg, transparent, rgba(95, 140, 170, 0.045)),
+    rgba(255, 255, 255, 0.035);
+  --secondary-glass-edge: rgba(255, 255, 255, 0.16);
+  --secondary-glass-highlight: rgba(255, 255, 255, 0.22);
+  --secondary-glass-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.19),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.025),
+    0 10px 28px rgba(0, 0, 0, 0.24);
   --composer-surface:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.105), rgba(255, 255, 255, 0.04)),
-    rgba(8, 12, 18, 0.42);
-  --composer-highlight: rgba(255, 255, 255, 0.17);
-  --composer-edge: rgba(255, 255, 255, 0.20);
-  --composer-control: rgba(255, 255, 255, 0.065);
-  --composer-control-edge: rgba(255, 255, 255, 0.14);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.052)),
+    rgba(8, 12, 18, 0.36);
+  --composer-specular:
+    radial-gradient(ellipse at 50% 0%, rgba(255, 255, 255, 0.27), transparent 72%);
+  --composer-blur: blur(30px) saturate(175%);
+  --composer-highlight: rgba(255, 255, 255, 0.24);
+  --composer-edge: rgba(255, 255, 255, 0.31);
+  --composer-control: rgba(255, 255, 255, 0.075);
+  --composer-control-edge: rgba(255, 255, 255, 0.16);
   --composer-control-inset: inset 0 1px 0 color-mix(in srgb, var(--composer-highlight) 68%, transparent);
+  /* Composer text is measured against its brightest blurred/specular composite,
+     not against --bg2: #f7f9fb stays >= 4.9:1 at the measured #696d72 peak. */
+  --composer-foreground: #ffffff;
+  --composer-muted: #f7f9fb;
+  /* Outside edge must stay visible across both the glass and the aurora canvas. */
+  --focus-ring: #67fff0;
   --composer-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.26),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.04),
-    0 18px 48px rgba(0, 0, 0, 0.42);
+    inset 0 1px 0 rgba(255, 255, 255, 0.34),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.045),
+    0 20px 52px rgba(0, 0, 0, 0.38),
+    0 0 30px color-mix(in srgb, var(--composer-accent, var(--accent)) 8%, transparent);
 
   /* --- Viền --- */
   --border:  rgba(255, 255, 255, 0.08);   /* viền nhạt */
@@ -180,18 +207,35 @@
     radial-gradient(54rem 31rem at 76% 72%, rgba(219, 235, 170, 0.44), transparent 70%),
     radial-gradient(30rem 24rem at 96% 16%, rgba(251, 222, 179, 0.22), transparent 74%),
     linear-gradient(145deg, #f9faf9, #edf2f2 52%, #f7f7f6);
+  --shell-surface: rgba(247, 251, 252, 0.48);
+  --shell-edge: rgba(255, 255, 255, 0.72);
+  --secondary-glass-surface:
+    linear-gradient(155deg, rgba(255, 255, 255, 0.55), transparent 54%),
+    linear-gradient(180deg, transparent, rgba(178, 224, 255, 0.10)),
+    rgba(242, 249, 250, 0.27);
+  --secondary-glass-edge: rgba(255, 255, 255, 0.78);
+  --secondary-glass-highlight: rgba(255, 255, 255, 0.72);
+  --secondary-glass-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.94),
+    inset 0 -1px 0 rgba(83, 112, 126, 0.07),
+    0 12px 30px rgba(72, 105, 119, 0.11);
   --composer-surface:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.64), rgba(255, 255, 255, 0.31)),
-    rgba(232, 242, 244, 0.34);
-  --composer-highlight: rgba(255, 255, 255, 0.82);
-  --composer-edge: rgba(255, 255, 255, 0.86);
-  --composer-control: rgba(255, 255, 255, 0.40);
-  --composer-control-edge: rgba(255, 255, 255, 0.80);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.50), rgba(255, 255, 255, 0.20)),
+    rgba(226, 242, 245, 0.22);
+  --composer-specular:
+    radial-gradient(ellipse at 50% 0%, rgba(255, 255, 255, 0.88), transparent 72%);
+  --composer-highlight: rgba(255, 255, 255, 0.88);
+  --composer-edge: rgba(255, 255, 255, 0.82);
+  --composer-control: rgba(255, 255, 255, 0.33);
+  --composer-control-edge: rgba(255, 255, 255, 0.76);
+  --composer-foreground: #182028;
+  --composer-muted: #4b5660;
+  --focus-ring: #006b63;
   --composer-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.98),
-    inset 0 -1px 0 rgba(100, 121, 132, 0.08),
-    0 20px 50px rgba(75, 104, 117, 0.15),
-    0 2px 8px rgba(70, 96, 108, 0.08);
+    inset 0 -1px 0 rgba(78, 110, 125, 0.08),
+    0 22px 52px rgba(68, 103, 119, 0.13),
+    0 0 32px color-mix(in srgb, var(--composer-accent, var(--accent)) 7%, transparent);
 
   --border:  rgba(20, 24, 33, 0.10);
   --border2: rgba(20, 24, 33, 0.16);

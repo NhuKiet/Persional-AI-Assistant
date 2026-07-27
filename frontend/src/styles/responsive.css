@@ -34,6 +34,10 @@
   .suggestions-grid          { grid-template-columns: 1fr; }
   .dock                      { gap: 4px; }
   .dock-item                 { min-width: 60px; padding: 8px 10px 6px; }
+  .dock-item:hover,
+  .suggestion-card:hover {
+    transform: none;
+  }
   .dock-label                { font-size: 10px; }
   .coding-body               { flex-direction: column; }
   .coding-split .coding-left { flex: 0 0 auto; }

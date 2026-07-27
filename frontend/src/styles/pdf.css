@@ -9,7 +9,7 @@
   grid-template-rows: minmax(0, 1fr);
   column-gap: 10px;
   position: relative;
-  background: var(--bg);
+  background: transparent;
   overflow: hidden;
 }
 .pdf-outline-panel {
