@@ -30,12 +30,20 @@ describe("Pearl Aurora Glass CSS contract", () => {
       "--secondary-glass-highlight",
       "--secondary-glass-shadow",
       "--composer-surface",
+      "--composer-specular",
       "--composer-edge",
       "--composer-highlight",
+      "--composer-control",
+      "--composer-control-edge",
       "--composer-shadow",
       "--composer-foreground",
       "--composer-muted",
       "--focus-ring",
+    ];
+    const sharedGeometryTokens = [
+      "--shell-blur",
+      "--composer-blur",
+      "--composer-control-inset",
     ];
 
     for (const token of requiredTokens) {
@@ -43,6 +51,11 @@ describe("Pearl Aurora Glass CSS contract", () => {
         new RegExp(`${token}\\s*:`),
       );
       expect(light, `Light theme must define ${token}`).toMatch(
+        new RegExp(`${token}\\s*:`),
+      );
+    }
+    for (const token of sharedGeometryTokens) {
+      expect(dark, `Shared root must define ${token}`).toMatch(
         new RegExp(`${token}\\s*:`),
       );
     }
@@ -94,6 +107,18 @@ describe("Pearl Aurora Glass CSS contract", () => {
     );
     expect(chat).toMatch(
       /\.dock-item:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--focus-ring\);/s,
+    );
+    expect(chat).toMatch(
+      /\.input-bar:focus-within\s*\{[^}]*0 0 0 3px var\(--focus-ring\)/s,
+    );
+    expect(chat).toMatch(
+      /\.input-bar \.mp-trigger:focus-visible\s*\{[^}]*outline-color:\s*var\(--focus-ring\);/s,
+    );
+    expect(chat).toMatch(
+      /\.mic-btn-active\s*\{[^}]*color:\s*var\(--focus-ring\);/s,
+    );
+    expect(chat).toMatch(
+      /\.input-bar \.mp-check\s*\{[^}]*color:\s*var\(--focus-ring\);/s,
     );
   });
 

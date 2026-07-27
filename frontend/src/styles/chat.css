@@ -260,7 +260,7 @@
   border-color: color-mix(in srgb, var(--composer-accent) 48%, var(--composer-edge));
   box-shadow:
     var(--composer-shadow),
-    0 0 0 3px color-mix(in srgb, var(--composer-accent) 8%, transparent),
+    0 0 0 3px var(--focus-ring),
     0 0 32px color-mix(in srgb, var(--composer-accent) 10%, transparent);
 }
 .input-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
@@ -347,7 +347,7 @@
 }
 .mic-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .mic-btn-active {
-  color: var(--composer-accent);
+  color: var(--focus-ring);
   background: color-mix(in srgb, var(--composer-accent) 8%, transparent);
   animation: mic-pulse 1.4s var(--ease) infinite;
 }
@@ -413,7 +413,7 @@
   border-color: color-mix(in srgb, var(--composer-accent) 40%, transparent);
   background: color-mix(in srgb, var(--composer-control) 82%, color-mix(in srgb, var(--composer-accent) 8%, transparent));
 }
-.input-bar .mp-trigger:focus-visible { outline-color: var(--composer-accent); }
+.input-bar .mp-trigger:focus-visible { outline-color: var(--focus-ring); }
 .input-bar .mp-trigger[aria-expanded="true"] {
   color: var(--composer-foreground);
   border-color: color-mix(in srgb, var(--composer-accent) 55%, transparent);
@@ -474,7 +474,7 @@
 .input-bar .mp-active,
 .input-bar .mp-selected { color: var(--composer-foreground); }
 .mp-check    { flex-shrink: 0; color: var(--accent); }
-.input-bar .mp-check { color: var(--composer-accent); }
+.input-bar .mp-check { color: var(--focus-ring); }
 .mp-option-label { overflow: hidden; text-overflow: ellipsis; }
 
 .tool-title-wrap  { display: flex; align-items: center; gap: 8px; }
