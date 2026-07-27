@@ -68,7 +68,7 @@
     0 14px 32px color-mix(in srgb, var(--accent) 8%, transparent);
 }
 .suggestion-card:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 .suggestion-arrow {
@@ -154,7 +154,7 @@
 }
 .dock-item:hover::after { opacity: 1; }
 .dock-item:focus-visible {
-  outline: 2px solid var(--tint);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 .dock-icon  { font-size: 18px; line-height: 1; position: relative; z-index: 1; color: var(--tint); }
@@ -270,7 +270,7 @@
   width: 34px;
   height: 34px;
   border-radius: 50%;
-  color: var(--text2);
+  color: var(--composer-muted);
   cursor: pointer;
   flex-shrink: 0;
   display: flex;
@@ -287,7 +287,7 @@
 }
 .input-attach:hover,
 .mic-btn:hover:not(:disabled):not(.mic-btn-active) {
-  color: var(--text);
+  color: var(--composer-foreground);
   border-color: color-mix(in srgb, var(--composer-accent) 28%, var(--composer-control-edge));
   background: color-mix(in srgb, var(--composer-control) 82%, color-mix(in srgb, var(--composer-accent) 8%, transparent));
 }
@@ -297,7 +297,7 @@
   background: none;
   border: none;
   outline: none;
-  color: var(--text);
+  color: var(--composer-foreground);
   font-family: var(--sans);
   font-size: 15px;
   resize: none;
@@ -307,7 +307,7 @@
   padding: 6px 4px;
   align-self: center;
 }
-.input-textarea::placeholder { color: var(--text3); }
+.input-textarea::placeholder { color: var(--composer-muted); }
 
 .input-send {
   width: 38px;
@@ -336,7 +336,7 @@
   width: 34px;
   height: 34px;
   border-radius: 50%;
-  color: var(--text2);
+  color: var(--composer-muted);
   cursor: pointer;
   flex-shrink: 0;
   display: flex;
@@ -395,6 +395,7 @@
   border-color: var(--composer-control-edge);
   background: var(--composer-control);
   box-shadow: var(--composer-control-inset);
+  color: var(--composer-muted);
 }
 .mp-trigger:hover {
   color: var(--text);
@@ -408,11 +409,13 @@
   background: var(--bg3);
 }
 .input-bar .mp-trigger:hover {
+  color: var(--composer-foreground);
   border-color: color-mix(in srgb, var(--composer-accent) 40%, transparent);
   background: color-mix(in srgb, var(--composer-control) 82%, color-mix(in srgb, var(--composer-accent) 8%, transparent));
 }
 .input-bar .mp-trigger:focus-visible { outline-color: var(--composer-accent); }
 .input-bar .mp-trigger[aria-expanded="true"] {
+  color: var(--composer-foreground);
   border-color: color-mix(in srgb, var(--composer-accent) 55%, transparent);
   background: color-mix(in srgb, var(--composer-control) 82%, color-mix(in srgb, var(--composer-accent) 8%, transparent));
 }
@@ -464,9 +467,12 @@
   cursor: pointer;
   white-space: nowrap;
 }
+.input-bar .mp-option { color: var(--composer-muted); }
 /* .mp-active theo cả chuột lẫn bàn phím — một trạng thái, hai đường vào. */
 .mp-active   { background: var(--bg4); color: var(--text); }
 .mp-selected { color: var(--text); }
+.input-bar .mp-active,
+.input-bar .mp-selected { color: var(--composer-foreground); }
 .mp-check    { flex-shrink: 0; color: var(--accent); }
 .input-bar .mp-check { color: var(--composer-accent); }
 .mp-option-label { overflow: hidden; text-overflow: ellipsis; }

@@ -9,16 +9,43 @@ const stylesDirectory = path.resolve(
 );
 const readStyle = (name: string) =>
   readFileSync(path.join(stylesDirectory, name), "utf8");
+const tokenBlock = (css: string, selector: string) => {
+  const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = css.match(new RegExp(`${escapedSelector}\\s*\\{([^}]*)\\}`, "s"));
+
+  expect(match, `Expected ${selector} token block`).not.toBeNull();
+  return match?.[1] ?? "";
+};
 
 describe("Pearl Aurora Glass CSS contract", () => {
-  it("defines shared shell and secondary-glass tokens in base.css", () => {
+  it("defines complete shared glass materials in both theme token blocks", () => {
     const css = readStyle("base.css");
+    const dark = tokenBlock(css, ":root");
+    const light = tokenBlock(css, ':root[data-theme="light"]');
+    const requiredTokens = [
+      "--shell-surface",
+      "--shell-edge",
+      "--secondary-glass-surface",
+      "--secondary-glass-edge",
+      "--secondary-glass-highlight",
+      "--secondary-glass-shadow",
+      "--composer-surface",
+      "--composer-edge",
+      "--composer-highlight",
+      "--composer-shadow",
+      "--composer-foreground",
+      "--composer-muted",
+      "--focus-ring",
+    ];
 
-    expect(css).toMatch(/--shell-surface\s*:/);
-    expect(css).toMatch(/--shell-edge\s*:/);
-    expect(css).toMatch(/--shell-blur\s*:/);
-    expect(css).toMatch(/--secondary-glass-surface\s*:/);
-    expect(css).toMatch(/--secondary-glass-edge\s*:/);
+    for (const token of requiredTokens) {
+      expect(dark, `Dark theme must define ${token}`).toMatch(
+        new RegExp(`${token}\\s*:`),
+      );
+      expect(light, `Light theme must define ${token}`).toMatch(
+        new RegExp(`${token}\\s*:`),
+      );
+    }
   });
 
   it("does not cover the app-wide canvas with opaque outer shells", () => {
@@ -39,6 +66,35 @@ describe("Pearl Aurora Glass CSS contract", () => {
     expect(base).toMatch(/--composer-blur\s*:/);
     expect(chat).toMatch(/background:\s*var\(--composer-specular\);/);
     expect(chat).toMatch(/backdrop-filter:\s*var\(--composer-blur\);/);
+  });
+
+  it("uses theme-aware composer text and focus-ring tokens", () => {
+    const chat = readStyle("chat.css");
+
+    expect(chat).toMatch(
+      /\.input-textarea\s*\{[^}]*color:\s*var\(--composer-foreground\);/s,
+    );
+    expect(chat).toMatch(
+      /\.input-textarea::placeholder\s*\{[^}]*color:\s*var\(--composer-muted\);/s,
+    );
+    expect(chat).toMatch(
+      /\.input-bar \.mp-trigger\s*\{[^}]*color:\s*var\(--composer-muted\);/s,
+    );
+    expect(chat).toMatch(
+      /\.input-attach\s*\{[^}]*color:\s*var\(--composer-muted\);/s,
+    );
+    expect(chat).toMatch(
+      /\.mic-btn\s*\{[^}]*color:\s*var\(--composer-muted\);/s,
+    );
+    expect(chat).toMatch(
+      /\.input-bar \.mp-option\s*\{[^}]*color:\s*var\(--composer-muted\);/s,
+    );
+    expect(chat).toMatch(
+      /\.suggestion-card:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--focus-ring\);/s,
+    );
+    expect(chat).toMatch(
+      /\.dock-item:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--focus-ring\);/s,
+    );
   });
 
   it("applies the secondary material to Home actions and suggestions", () => {
