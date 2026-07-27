@@ -30,4 +30,14 @@ describe("Pearl Aurora Glass CSS contract", () => {
     expect(pdf).toMatch(/\.pdf-workspace-body\s*\{[^}]*background:\s*transparent;/s);
     expect(sidebar).toMatch(/\.sidebar\s*\{[^}]*background:\s*var\(--shell-surface\);/s);
   });
+
+  it("keeps composer optics tokenized and consumed by chat.css", () => {
+    const base = readStyle("base.css");
+    const chat = readStyle("chat.css");
+
+    expect(base).toMatch(/--composer-specular\s*:/);
+    expect(base).toMatch(/--composer-blur\s*:/);
+    expect(chat).toMatch(/background:\s*var\(--composer-specular\);/);
+    expect(chat).toMatch(/backdrop-filter:\s*var\(--composer-blur\);/);
+  });
 });
