@@ -78,6 +78,14 @@ class Settings(BaseSettings):
     TAVILY_BOOST_BLOGS: bool = False
     S2_API_KEY: str | None = None
 
+    # ── News digest ──────────────────────────────────────────────────
+    NEWS_REFRESH_INTERVAL_SECONDS: int = 6 * 3600
+    NEWS_MANUAL_COOLDOWN_SECONDS: int = 60
+    NEWS_MAX_ITEMS_PER_FEED: int = 20
+    NEWS_MAX_ITEM_AGE_DAYS: int = 14
+    NEWS_MAX_NEW_ITEMS_PER_RUN: int = 100
+    NEWS_DESCRIPTION_TRUNCATE_CHARS: int = 1800
+
     # ── Coding agent ────────────────────────────────────────────────
     CODE_TIMEOUT: int = 30
     MAX_OUTPUT_LEN: int = 8000
