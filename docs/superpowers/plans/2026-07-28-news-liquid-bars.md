@@ -108,8 +108,10 @@ it("keeps the refresh label fixed while loading and announces the busy state", a
   await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
 
   const refresh = screen.getByRole("button", { name: /Làm mới/i });
+  await waitFor(() => expect(refresh).toBeEnabled());
   await user.click(refresh);
 
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
   await waitFor(() => expect(refresh).toBeDisabled());
   expect(refresh).toHaveAttribute("aria-busy", "true");
   expect(container.querySelector(".news-refresh-label")?.textContent).toBe("Làm mới");
@@ -246,10 +248,10 @@ loading label:
     />
   </svg>
   <span className="news-refresh-label">Làm mới</span>
-  {refreshState === "loading" && (
-    <span className="news-sr-only" role="status">Đang làm mới…</span>
-  )}
 </button>
+{refreshState === "loading" && (
+  <span className="news-sr-only" role="status">Đang làm mới…</span>
+)}
 ```
 
 - [ ] **Step 5: Verify the semantic task**
@@ -719,6 +721,12 @@ to one pixel:
   .news-page {
     --news-refraction: none;
     --news-refraction-soft: none;
+  }
+
+  .news-back,
+  .news-refresh-btn,
+  .news-tab {
+    transition: none;
   }
 
   .news-back:hover,
