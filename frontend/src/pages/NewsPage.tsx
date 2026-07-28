@@ -1,6 +1,10 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useNews, type NewsTopic } from "../hooks/useNews";
+import communityVisual from "../assets/news/community.png";
+import modelReleaseVisual from "../assets/news/model-release.png";
+import researchVisual from "../assets/news/research.png";
+import roboticsVisual from "../assets/news/robotics.png";
 
 const TOPIC_TABS: { id: NewsTopic | null; label: string }[] = [
   { id: null, label: "Tất cả" },
@@ -15,6 +19,13 @@ const TOPIC_BADGE: Record<NewsTopic, string> = {
   research: "Nghiên cứu",
   robotics: "Robotics",
   community: "Cộng đồng",
+};
+
+const NEWS_TOPIC_VISUALS: Record<NewsTopic, string> = {
+  model_release: modelReleaseVisual,
+  research: researchVisual,
+  robotics: roboticsVisual,
+  community: communityVisual,
 };
 
 function relativeTime(iso: string): string {
@@ -32,7 +43,12 @@ export function NewsPage() {
   const navigate = useNavigate();
 
   return (
-    <div className="news-page">
+    <main className="news-page news-white-liquid-page">
+      <div className="news-liquid-ambient" aria-hidden="true">
+        <span className="news-liquid-ribbon" />
+        <span className="news-liquid-orb news-liquid-orb-one" />
+        <span className="news-liquid-orb news-liquid-orb-two" />
+      </div>
       <header className="news-header">
         <button className="news-back" onClick={() => navigate("/")} aria-label="Về trang chủ">←</button>
         <h1>Tin tức AI &amp; Robotics</h1>
@@ -70,18 +86,24 @@ export function NewsPage() {
       <ul className="news-list">
         {(items ?? []).map(item => (
           <li key={item.url} className="news-card">
-            <a href={item.url} target="_blank" rel="noopener noreferrer" className="news-card-title">
-              {item.title_vi}
-            </a>
-            <p className="news-card-summary">{item.summary_vi}</p>
-            <div className="news-card-meta">
-              <span className="news-badge">{TOPIC_BADGE[item.topic]}</span>
-              <span className="news-source">{item.source}</span>
-              <span className="news-time">{relativeTime(item.published_at ?? item.fetched_at)}</span>
+            <div className="news-card-visual" aria-hidden="true">
+              <img src={NEWS_TOPIC_VISUALS[item.topic]} alt="" />
             </div>
+            <div className="news-card-content">
+              <a href={item.url} target="_blank" rel="noopener noreferrer" className="news-card-title">
+                {item.title_vi || item.title}
+              </a>
+              <p className="news-card-summary">{item.summary_vi || item.title}</p>
+              <div className="news-card-meta">
+                <span className="news-badge">{TOPIC_BADGE[item.topic]}</span>
+                <span className="news-source">{item.source}</span>
+                <span className="news-time">{relativeTime(item.published_at ?? item.fetched_at)}</span>
+              </div>
+            </div>
+            <span className="news-card-link-cue" aria-hidden="true">â†’</span>
           </li>
         ))}
       </ul>
-    </div>
+    </main>
   );
 }

@@ -52,6 +52,50 @@ describe("NewsPage", () => {
     expect(await screen.findByText(/Chưa có tin nào/i)).toBeInTheDocument();
   });
 
+  it("renders a scrollable main region and falls back to the original title for legacy empty summaries", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () =>
+      jsonResponse({
+        items: [{ ...SAMPLE_ITEM, title: "Original fallback", title_vi: "", summary_vi: "" }],
+        limit: 20, offset: 0, has_more: false,
+      }),
+    ));
+    renderPage();
+    expect(await screen.findByRole("main")).toHaveClass("news-page");
+    expect(screen.getByRole("link", { name: "Original fallback" })).toBeInTheDocument();
+  });
+
+  it("renders the liquid-glass ambient layer behind the digest", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () =>
+      jsonResponse({ items: [SAMPLE_ITEM], limit: 20, offset: 0, has_more: false }),
+    ));
+    const { container } = renderPage();
+
+    await screen.findByRole("link");
+    expect(container.querySelector(".news-liquid-ambient")).not.toBeNull();
+  });
+
+  it("renders a decorative topic visual and a non-interactive external-link cue for every article", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () =>
+      jsonResponse({ items: [SAMPLE_ITEM], limit: 20, offset: 0, has_more: false }),
+    ));
+    const { container } = renderPage();
+
+    await screen.findByRole("link");
+    const visual = container.querySelector(".news-card-visual");
+    expect(visual).toHaveAttribute("aria-hidden", "true");
+    expect(visual?.querySelector("img")).toHaveAttribute("alt", "");
+    expect(container.querySelector(".news-card-link-cue")).toHaveAttribute("aria-hidden", "true");
+  });
+
+  it("marks the digest as a theme-independent white liquid canvas", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () =>
+      jsonResponse({ items: [SAMPLE_ITEM], limit: 20, offset: 0, has_more: false }),
+    ));
+    renderPage();
+
+    expect(await screen.findByRole("main")).toHaveClass("news-white-liquid-page");
+  });
+
   it("switching topic tabs re-fetches with the right query param", async () => {
     const fetchMock = vi.fn(async (_input: RequestInfo | URL) =>
       jsonResponse({ items: [], limit: 20, offset: 0, has_more: false }),
