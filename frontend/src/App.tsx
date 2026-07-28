@@ -16,6 +16,7 @@ import { LandingPage } from "./pages/LandingPage";
 const ResearchPage = lazy(() => import("./pages/ResearchPage").then(m => ({ default: m.ResearchPage })));
 const CodingPage   = lazy(() => import("./pages/CodingPage").then(m => ({ default: m.CodingPage })));
 const PDFPage      = lazy(() => import("./pages/PdfPage").then(m => ({ default: m.PDFPage })));
+const NewsPage    = lazy(() => import("./pages/NewsPage").then(m => ({ default: m.NewsPage })));
 const ToolPage     = lazy(() => import("./pages/ToolPage").then(m => ({ default: m.ToolPage })));
 
 /** Fallback trong lúc chunk route đang tải. Spinner tự chứa (dùng keyframe
@@ -59,6 +60,7 @@ export function AppRoutes() {
       <Route path="/research"     element={guarded(<ResearchPage />, "Research")} />
       <Route path="/coding"       element={guarded(<CodingPage />, "Coding")} />
       <Route path="/pdf"          element={guarded(<PDFPage />, "PDF Chat")} />
+      <Route path="/news"         element={guarded(<NewsPage />, "News")} />
       <Route path="/tool/:toolId" element={guarded(<ToolRoute />)} />
       <Route path="*"             element={<Navigate to="/" replace />} />
     </Routes>

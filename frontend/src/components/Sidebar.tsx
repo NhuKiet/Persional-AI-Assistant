@@ -46,6 +46,13 @@ export function Sidebar({ open, onToggle, sessions, activeId, onSelect, onDelete
           Trang chủ
         </button>
 
+        <button className="sb-home-link" onClick={() => navigate("/news")}>
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+            <path d="M2 3.5h10M2 7h10M2 10.5h6" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
+          </svg>
+          Tin tức
+        </button>
+
         <button className="sb-new-chat" onClick={onNewChat} style={{ borderColor: accentColor + "44" }}>
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
             <path d="M7 1v12M1 7h12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
