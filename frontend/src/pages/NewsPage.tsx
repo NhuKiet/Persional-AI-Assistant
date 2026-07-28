@@ -44,6 +44,59 @@ export function NewsPage() {
 
   return (
     <main className="news-page news-white-liquid-page">
+      <svg className="news-liquid-defs" width="0" height="0" aria-hidden="true" focusable="false">
+        <defs>
+          {/* Decorative refraction for glass highlights only — never applied to text or icons. */}
+          <filter
+            id="news-liquid-refraction"
+            x="-25%"
+            y="-25%"
+            width="150%"
+            height="150%"
+            colorInterpolationFilters="sRGB"
+          >
+            <feTurbulence
+              type="fractalNoise"
+              baseFrequency="0.009 0.016"
+              numOctaves="2"
+              seed="9"
+              result="news-noise"
+            />
+            <feGaussianBlur in="news-noise" stdDeviation="1.8" result="news-noise-soft" />
+            <feDisplacementMap
+              in="SourceGraphic"
+              in2="news-noise-soft"
+              scale="7"
+              xChannelSelector="R"
+              yChannelSelector="G"
+            />
+          </filter>
+          <filter
+            id="news-liquid-refraction-soft"
+            x="-25%"
+            y="-25%"
+            width="150%"
+            height="150%"
+            colorInterpolationFilters="sRGB"
+          >
+            <feTurbulence
+              type="fractalNoise"
+              baseFrequency="0.014 0.024"
+              numOctaves="2"
+              seed="4"
+              result="news-noise-tight"
+            />
+            <feGaussianBlur in="news-noise-tight" stdDeviation="1.4" result="news-noise-tight-soft" />
+            <feDisplacementMap
+              in="SourceGraphic"
+              in2="news-noise-tight-soft"
+              scale="4"
+              xChannelSelector="R"
+              yChannelSelector="G"
+            />
+          </filter>
+        </defs>
+      </svg>
       <div className="news-liquid-ambient" aria-hidden="true">
         <span className="news-liquid-ribbon" />
         <span className="news-liquid-orb news-liquid-orb-one" />
@@ -51,27 +104,62 @@ export function NewsPage() {
       </div>
       <div className="news-command-shell">
         <header className="news-header news-command-bar">
-          <button className="news-back" onClick={() => navigate("/")} aria-label="Về trang chủ">←</button>
+          <button className="news-back" onClick={() => navigate("/")} aria-label="Về trang chủ">
+            <svg
+              className="news-back-icon"
+              viewBox="0 0 24 24"
+              width="22"
+              height="22"
+              aria-hidden="true"
+              focusable="false"
+            >
+              <path
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M19 12H5.6M12 5.6 5.6 12l6.4 6.4"
+              />
+            </svg>
+          </button>
           <h1>Tin tức AI &amp; Robotics</h1>
           <button
             className="news-refresh-btn"
             onClick={refresh}
             disabled={refreshState === "loading"}
+            aria-busy={refreshState === "loading"}
           >
             <svg
               className="news-refresh-icon"
               viewBox="0 0 24 24"
-              width="16"
-              height="16"
+              width="17"
+              height="17"
               aria-hidden="true"
+              focusable="false"
             >
               <path
-                fill="currentColor"
-                d="M12 5V2L8 6l4 4V7c3.31 0 6 2.69 6 6a6 6 0 0 1-6 6 6 6 0 0 1-6-6H4a8 8 0 0 0 8 8 8 8 0 0 0 8-8 8 8 0 0 0-8-8Z"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M20.4 11.4a8.4 8.4 0 1 1-2.5-5.9"
+              />
+              <path
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M20.6 3.4v5.2h-5.2"
               />
             </svg>
-            {refreshState === "loading" ? "Đang làm mới…" : "Làm mới"}
+            <span className="news-refresh-label">Làm mới</span>
           </button>
+          {refreshState === "loading" && (
+            <span className="news-sr-only" role="status">Đang làm mới…</span>
+          )}
         </header>
       </div>
 

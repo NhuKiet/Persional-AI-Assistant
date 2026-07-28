@@ -108,6 +108,70 @@ describe("NewsPage", () => {
     expect(container.querySelectorAll(".news-tab-row .news-tab")).toHaveLength(5);
   });
 
+  it("draws the bar controls with stroked icons instead of text glyphs", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () =>
+      jsonResponse({ items: [SAMPLE_ITEM], limit: 20, offset: 0, has_more: false }),
+    ));
+    const { container } = renderPage();
+
+    const back = await screen.findByRole("button", { name: "Về trang chủ" });
+    const backIcon = back.querySelector(".news-back-icon");
+    expect(backIcon).not.toBeNull();
+    expect(back.textContent).toBe("");
+    expect(backIcon).toHaveAttribute("aria-hidden", "true");
+    expect(backIcon).toHaveAttribute("focusable", "false");
+    expect(backIcon?.querySelectorAll("path")).toHaveLength(1);
+    const backPath = backIcon?.querySelector("path");
+    expect(backPath).toHaveAttribute("fill", "none");
+    expect(backPath).toHaveAttribute("stroke", "currentColor");
+    // Two-stroke circular arrow: the open arc plus its arrowhead.
+    const refreshIcon = container.querySelector(".news-refresh-icon");
+    expect(refreshIcon).toHaveAttribute("aria-hidden", "true");
+    expect(refreshIcon).toHaveAttribute("focusable", "false");
+    const refreshPaths = refreshIcon?.querySelectorAll("path");
+    expect(refreshPaths).toHaveLength(2);
+    refreshPaths?.forEach(path => {
+      expect(path).toHaveAttribute("fill", "none");
+      expect(path).toHaveAttribute("stroke", "currentColor");
+    });
+  });
+
+  it("hides the decorative refraction filters from assistive technology", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () =>
+      jsonResponse({ items: [SAMPLE_ITEM], limit: 20, offset: 0, has_more: false }),
+    ));
+    const { container } = renderPage();
+
+    await screen.findByRole("button", { name: /Làm mới/i });
+    const defs = container.querySelector(".news-liquid-defs");
+    expect(defs).toHaveAttribute("aria-hidden", "true");
+    expect(defs).toHaveAttribute("focusable", "false");
+    expect(defs?.querySelector("#news-liquid-refraction")).not.toBeNull();
+    expect(defs?.querySelector("#news-liquid-refraction-soft")).not.toBeNull();
+  });
+
+  it("keeps the refresh label fixed while loading and announces the busy state", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ items: [], limit: 20, offset: 0, has_more: false }))
+      .mockImplementation(() => new Promise(() => {}));
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    const { container } = renderPage();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+
+    const refresh = screen.getByRole("button", { name: /Làm mới/i });
+    await waitFor(() => expect(refresh).toBeEnabled());
+    await user.click(refresh);
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(refresh).toHaveAttribute("aria-busy", "true");
+    expect(refresh).toBeDisabled();
+    expect(container.querySelector(".news-refresh-label")?.textContent).toBe("Làm mới");
+    const status = screen.getByRole("status");
+    expect(status).toHaveTextContent("Đang làm mới…");
+    expect(refresh).not.toContainElement(status);
+  });
+
   it("identifies the header as the dedicated command glass bar", async () => {
     vi.stubGlobal("fetch", vi.fn(async () =>
       jsonResponse({ items: [SAMPLE_ITEM], limit: 20, offset: 0, has_more: false }),
