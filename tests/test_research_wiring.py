@@ -20,7 +20,10 @@ def test_run_streaming_done_includes_grounding_keys(monkeypatch):
     import backend.app.features.research.agent as ra
     from backend.app.features.research.models import ResearchOutput, Claim, SearchResult
 
+    from concurrent.futures import ThreadPoolExecutor
+
     agent = ra.ResearchAgent.__new__(ra.ResearchAgent)  # tránh __init__ nặng
+    agent._pool = ThreadPoolExecutor(max_workers=2)
 
     class _Synth:
         def synthesize_grounded(self, q, s):
@@ -312,8 +315,11 @@ def test_run_and_run_streaming_reach_the_same_decision(monkeypatch):
     import backend.app.features.research.agent as ra
     from backend.app.features.research.models import ResearchOutput, SearchResult
 
+    from concurrent.futures import ThreadPoolExecutor
+
     def _make_agent(stored_calls):
         agent = ra.ResearchAgent.__new__(ra.ResearchAgent)
+        agent._pool = ThreadPoolExecutor(max_workers=2)
 
         class _Synth:
             def synthesize_grounded(self, q, s): return ResearchOutput(query=q)

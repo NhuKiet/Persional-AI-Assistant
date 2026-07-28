@@ -77,3 +77,57 @@ def test_live_search_stores_once_not_twice(monkeypatch):
     """Hai call site cũ phải bị xoá — nếu còn, live search ghi hai lần."""
     stored = _run(monkeypatch, [])
     assert len(stored) == 1
+
+
+def test_iteration_sources_are_stored_exactly_once(monkeypatch):
+    """Lô đầu được gửi đi lưu SONG SONG với synthesis, nên nguồn mà vòng
+    iteration lấy về sau đó nằm ngoài lô ấy. Phần dôi ra phải được ghi, và
+    không nguồn nào được ghi hai lần.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+    from backend.app.features.research.agent import ResearchAgent
+
+    stored = []
+    a = ResearchAgent.__new__(ResearchAgent)
+    a._pool = ThreadPoolExecutor(max_workers=2)
+
+    class _Store:
+        def retrieve_candidates(self, q, top_k=None): return []
+        def retrieve(self, q): return []
+        def add_results(self, q, s):
+            stored.append(list(s))
+            return len(s)
+
+    class _NullSearcher:
+        def search(self, *a, **kw): return []
+
+    class _WebSearcher:
+        def search(self, *a, **kw): return [_sr("live")]
+
+    a.web = _WebSearcher()
+    a.arxiv = a.semantic = a.hf = a.ddg = a.so = _NullSearcher()
+
+    monkeypatch.setattr(agent_mod, "get_store", lambda: _Store())
+    monkeypatch.setattr(agent_mod, "expand_query", lambda q, **kw: [q])
+    monkeypatch.setattr(agent_mod, "deduplicate_results", lambda r, threshold=0.92: r)
+    monkeypatch.setattr(agent_mod, "rerank_results", lambda q, r, top_k=15: r)
+    monkeypatch.setattr(agent_mod, "_enrich_web_results", lambda r: r)
+
+    # Đúng một vòng iteration, mang về một nguồn mới.
+    rounds_seen = []
+    monkeypatch.setattr(agent_mod, "needs_iteration",
+                        lambda out, rounds, mx: rounds_seen.append(rounds) or rounds == 0)
+    extra = _sr("từ-iteration")
+    monkeypatch.setattr(a, "_iteration_step",
+                        lambda q, s, o, sy: (s + [extra], o, [extra]), raising=False)
+
+    class _Synth:
+        def synthesize_rag_grounded(self, q, s): return ResearchOutput(query=q)
+        def synthesize_grounded(self, q, s):     return ResearchOutput(query=q)
+
+    a.synth = _Synth()
+    list(a.run_streaming("transformer attention"))
+
+    titles = [s.title for batch in stored for s in batch]
+    assert titles == ["live", "từ-iteration"]
+    assert len(titles) == len(set(titles))

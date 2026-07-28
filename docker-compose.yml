@@ -9,9 +9,11 @@ services:
     env_file:
       - .env
     environment:
-      # Trong container, "localhost" trỏ về chính container. Ollama chạy trên
-      # MÁY HOST nên phải gọi qua host.docker.internal. Ghi đè giá trị trong .env.
+      # Trong container, "localhost"/127.0.0.1 trỏ về chính container. Ollama
+      # và Supabase Postgres (local, qua `supabase start`) đều chạy trên MÁY
+      # HOST nên phải gọi qua host.docker.internal. Ghi đè giá trị trong .env.
       OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
+      SUPABASE_DB_URL: ${SUPABASE_DB_URL_DOCKER}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:

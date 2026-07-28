@@ -274,6 +274,18 @@ class ResearchAgent:
                     len(base_sources), len(extra), len(merged), len(newly))
         return merged, newly
 
+    def _store_sources(self, knowledge, query: str, sources: list) -> None:
+        """Ghi nguồn mới vào knowledge store. Non-fatal — lưu hỏng thì câu
+        trả lời vẫn trả về bình thường, chỉ lần hỏi sau không tận dụng được.
+        """
+        if not sources:
+            return
+        try:
+            n = knowledge.add_results(query, sources)
+            logger.info("[KNOWLEDGE] STORED: %d chunks from %d new sources", n, len(sources))
+        except Exception as e:  # noqa: BLE001
+            logger.warning("[KNOWLEDGE] STORE failed (non-fatal): %s", e)
+
     def _iteration_step(self, query, sources, output, synth):
         """Một vòng search bù nhắm vào khoảng trống grounding.
 
@@ -442,13 +454,6 @@ class ResearchAgent:
                 # expansion actually reflects what they picked in the UI
                 # rather than only settings.DEFAULT_PROVIDER.
                 yield {"type": "status", "message": "Expanding query…", "source": "llm"}
-                expansions = expand_query(query, provider=provider, model=model)
-                if len(expansions) > 1:
-                    yield {
-                        "type":    "status",
-                        "message": f"Generated {len(expansions) - 1} query expansion(s)",
-                        "source":  "llm",
-                    }
 
                 dynamic_k = get_dynamic_k(query)
 
@@ -463,14 +468,37 @@ class ResearchAgent:
                 futures: dict = {}
                 ex = ThreadPoolExecutor(max_workers=10)
                 cancelled_mid_search = False
+                expansions = [query]
                 try:
+                    # Expansion is an LLM round-trip, but only the *extra*
+                    # academic queries depend on it — the searches for the
+                    # user's own query don't. Kick those off first so the
+                    # expansion call overlaps them instead of delaying every
+                    # source by a full LLM latency.
+                    exp_future = ex.submit(expand_query, query, provider=provider, model=model)
+
                     for name, attr, _ in _SOURCES:
                         k = dynamic_k.get(name, 4)
                         futures[ex.submit(
                             getattr(getattr(self, attr), "search"), query, k
                         )] = name
+
+                    try:
+                        expansions = exp_future.result()
+                    except Exception as e:  # noqa: BLE001 — expansion is nice-to-have
+                        logger.warning("[SEARCH] query expansion failed (non-fatal): %s", e)
+
+                    if len(expansions) > 1:
+                        yield {
+                            "type":    "status",
+                            "message": f"Generated {len(expansions) - 1} query expansion(s)",
+                            "source":  "llm",
+                        }
                         # Expansions for academic sources
-                        if len(expansions) > 1 and name in ("arxiv", "semantic"):
+                        for name, attr, _ in _SOURCES:
+                            if name not in ("arxiv", "semantic"):
+                                continue
+                            k = dynamic_k.get(name, 4)
                             for eq in expansions[1:]:
                                 futures[ex.submit(
                                     getattr(getattr(self, attr), "search"), eq, max(2, k // 2)
@@ -546,6 +574,17 @@ class ResearchAgent:
 
             yield {"type": "synthesizing", "message": "Synthesizing with AI…", "source": "llm"}
 
+            # Embedding + writing the new sources doesn't feed synthesis — it
+            # only pays off for *future* queries. Start it now so it runs under
+            # the LLM calls below instead of making the user wait for it after
+            # their answer is already finished. Joined before "done" is
+            # emitted, so a run still ends with its sources persisted.
+            dispatched  = len(newly_fetched)
+            store_future = (
+                self._pool.submit(self._store_sources, knowledge, query, list(newly_fetched))
+                if newly_fetched else None
+            )
+
             if rag_path:
                 output = synth.synthesize_rag_grounded(query, all_sources)
             else:
@@ -584,18 +623,20 @@ class ResearchAgent:
 
             output.query = original_query
 
-            # ── Persistence: một điểm duy nhất, sau grounding ────────────────
-            # Trước đây có HAI call site (run và run_streaming), cả hai nằm
-            # trong nhánh live search và chạy TRƯỚC synthesis — vừa ghi đúp
-            # khi thêm điểm lưu mới, vừa bắt người dùng đợi qua phần việc
-            # không đóng góp gì cho câu trả lời của họ.
-            if newly_fetched:
-                try:
-                    n = knowledge.add_results(query, newly_fetched)
-                    logger.info("[KNOWLEDGE] STORED: %d chunks from %d new sources",
-                                n, len(newly_fetched))
-                except Exception as e:
-                    logger.warning("[KNOWLEDGE] STORE failed (non-fatal): %s", e)
+            # ── Persistence ──────────────────────────────────────────────────
+            # Một điểm duy nhất cho mỗi tập nguồn. Trước đây có HAI call site
+            # (run và run_streaming), cả hai nằm trong nhánh live search và
+            # chạy TRƯỚC synthesis — vừa ghi đúp khi thêm điểm lưu mới, vừa
+            # bắt người dùng đợi qua phần việc không đóng góp gì cho câu trả
+            # lời của họ.
+            if store_future is not None:
+                store_future.result()
+
+            # Iteration có thể đã lấy thêm nguồn SAU khi lô trên được gửi đi;
+            # ghi phần dôi ra, và chỉ phần dôi ra — hai lô luôn rời nhau nên
+            # không nguồn nào bị ghi hai lần.
+            if len(newly_fetched) > dispatched:
+                self._store_sources(knowledge, query, newly_fetched[dispatched:])
 
             yield {
                 "type": "done",

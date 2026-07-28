@@ -12,6 +12,7 @@ import hashlib
 import json
 import logging
 import re
+from concurrent.futures import ThreadPoolExecutor
 
 from backend.app.core.config import settings
 from backend.app.core.llm import get_llm
@@ -172,8 +173,12 @@ class Synthesizer:
     # ── Summary ───────────────────────────────────────────────────────────────
 
     def _make_summaries(self, query: str, ctx: str, out: ResearchOutput) -> None:
-        # Call 1: short + medium
-        raw1 = self._call(prompts.summary_short_medium_prompt(query, ctx))
+        # Both prompts are independent; fire them together and parse in order.
+        with ThreadPoolExecutor(max_workers=2) as ex:
+            f_short_medium = ex.submit(self._call, prompts.summary_short_medium_prompt(query, ctx))
+            f_detailed     = ex.submit(self._call, prompts.summary_detailed_prompt(query, ctx))
+            raw1 = f_short_medium.result()
+            raw2 = f_detailed.result()
 
         m = re.search(r"SUMMARY:\s*(.+?)(?=OVERVIEW:|$)", raw1, re.DOTALL | re.IGNORECASE)
         out.summary_short = m.group(1).strip() if m else ""
@@ -188,8 +193,6 @@ class Synthesizer:
         if not out.summary_medium:
             out.summary_medium = raw1.strip() or out.summary_short
 
-        # Call 2: detailed analysis
-        raw2 = self._call(prompts.summary_detailed_prompt(query, ctx))
         out.summary_detailed = raw2.strip() if raw2.strip() else out.summary_medium
 
         logger.info(
@@ -382,6 +385,37 @@ class Synthesizer:
         )
         return out
 
+    def _run_sections(self, query: str, sources: list[SearchResult], out: ResearchOutput) -> None:
+        """Fill `out` with every synthesis section.
+
+        Steps touch disjoint fields of `out` and never read each other's
+        results, so they run concurrently; one failure won't block others.
+        """
+        logger.info("Synthesizing %d sources for: %s", len(sources), query)
+        ranked = sorted(sources, key=lambda s: s.score, reverse=True)
+
+        steps = [
+            ("summaries",    self._make_summaries,          (query, self._ctx(ranked, _CTX_SUMMARY), out)),
+            ("key_points",   self._make_key_points,         (query, self._ctx(ranked, _CTX_POINTS),  out)),
+            ("comparison",   self._make_comparison_table,   (query, ranked, out)),
+            ("chart",        self._make_chart_data,         (query, self._ctx(ranked, _CTX_CHART),   out)),
+            ("follow_ups",   self._make_follow_up_questions, (query, out)),
+            ("papers",       self._make_papers_and_refs,    (ranked, out)),
+        ]
+
+        with ThreadPoolExecutor(max_workers=len(steps)) as ex:
+            futures = {ex.submit(fn, *args): name for name, fn, args in steps}
+            for future, step_name in futures.items():
+                try:
+                    future.result()
+                except Exception as e:
+                    logger.error("Step '%s' failed: %s", step_name, e, exc_info=True)
+
+        logger.info(
+            "Done — short: %r… | points: %d | papers: %d",
+            out.summary_short[:60], len(out.key_points), len(out.papers),
+        )
+
     def synthesize(self, query: str, sources: list[SearchResult]) -> ResearchOutput:
         """Run all synthesis steps. Each step is independent — one failure won't block others."""
         out = ResearchOutput(query=query)
@@ -391,26 +425,7 @@ class Synthesizer:
             out.summary_short = "No sources found. Try a different query."
             return out
 
-        logger.info("Synthesizing %d sources for: %s", len(sources), query)
-        ranked = sorted(sources, key=lambda s: s.score, reverse=True)
-
-        for step_name, fn, args in [
-            ("summaries",    self._make_summaries,         (query, self._ctx(ranked, _CTX_SUMMARY), out)),
-            ("key_points",   self._make_key_points,        (query, self._ctx(ranked, _CTX_POINTS),  out)),
-            ("comparison",   self._make_comparison_table,  (query, ranked, out)),
-            ("chart",        self._make_chart_data,        (query, self._ctx(ranked, _CTX_CHART),   out)),
-            ("follow_ups",   self._make_follow_up_questions,(query, out)),
-            ("papers",       self._make_papers_and_refs,   (ranked, out)),
-        ]:
-            try:
-                fn(*args)
-            except Exception as e:
-                logger.error("Step '%s' failed: %s", step_name, e, exc_info=True)
-
-        logger.info(
-            "Done — short: %r… | points: %d | papers: %d",
-            out.summary_short[:60], len(out.key_points), len(out.papers),
-        )
+        self._run_sections(query, sources, out)
         return out
 
     def _attach_grounding(self, out: ResearchOutput, query: str, sources: list[SearchResult]) -> None:
@@ -431,9 +446,22 @@ class Synthesizer:
             logger.error("Grounding failed (non-fatal): %s", e, exc_info=True)
 
     def synthesize_grounded(self, query: str, sources: list[SearchResult]) -> ResearchOutput:
-        """Đường structured (6 call) + grounding."""
-        out = self.synthesize(query, sources)
-        self._attach_grounding(out, query, sources)
+        """Đường structured (6 call) + grounding.
+
+        Grounding chỉ đọc query + sources nên chạy song song với các section.
+        """
+        out = ResearchOutput(query=query)
+
+        if not sources:
+            logger.warning("Synthesize called with 0 sources")
+            out.summary_short = "No sources found. Try a different query."
+            return out
+
+        with ThreadPoolExecutor(max_workers=1) as ex:
+            grounding = ex.submit(self._attach_grounding, out, query, sources)
+            self._run_sections(query, sources, out)
+            grounding.result()
+
         return out
 
     def synthesize_rag_grounded(self, query: str, sources: list[SearchResult]) -> ResearchOutput:

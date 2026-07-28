@@ -252,6 +252,8 @@ def test_run_streaming_degrades_gracefully_on_search_timeout(monkeypatch):
 
     monkeypatch.setattr(ra, "_SEARCH_TIMEOUT_SECONDS", 0.05)
 
+    from concurrent.futures import ThreadPoolExecutor
+
     agent = ra.ResearchAgent.__new__(ra.ResearchAgent)
 
     class _Synth:
@@ -259,7 +261,7 @@ def test_run_streaming_degrades_gracefully_on_search_timeout(monkeypatch):
             return ResearchOutput(query=q)
 
     agent.synth = _Synth()
-    agent._pool = None
+    agent._pool = ThreadPoolExecutor(max_workers=2)
 
     monkeypatch.setattr(ra, "get_store", lambda: type("K", (), {
         "retrieve": lambda self, q: [], "add_results": lambda self, q, s: 0,
