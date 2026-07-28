@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend.app.features.chat.router import router as chat_router
 from backend.app.features.coding.router import router as coding_router
 from backend.app.features.models.router import router as models_router
+from backend.app.features.news.router import router as news_router
 from backend.app.features.pdf.router import router as pdf_router
 from backend.app.features.research.router import router as research_router
 from backend.app.core.lifespan import lifespan
@@ -20,7 +21,7 @@ logging.basicConfig(
 app = FastAPI(
     title="KiNg AI Backend",
     version="3.0.0",
-    description="Research + Chat + Coding Agent + PDF Chat",
+    description="Research + Chat + Coding Agent + PDF Chat + News Digest",
     lifespan=lifespan,
 )
 
@@ -43,6 +44,7 @@ app.include_router(chat_router)
 app.include_router(coding_router)
 app.include_router(pdf_router)
 app.include_router(models_router)
+app.include_router(news_router)
 
 
 @app.get("/health")

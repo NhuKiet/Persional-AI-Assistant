@@ -51,6 +51,8 @@ PUBLIC_ROUTES = {
     ("POST", "/api/pdf/stream"),
     ("POST", "/api/pdf/summarize"),
     ("GET", "/api/pdf/sessions/{session_id}"),
+    ("GET", "/api/news"),
+    ("POST", "/api/news/refresh"),
 }
 
 
