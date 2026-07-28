@@ -92,6 +92,13 @@
   pointer-events: none;
 }
 
+.news-command-shell,
+.news-tab-shell {
+  left: 50%;
+  width: calc(100% + 30px);
+  transform: translateX(-50%);
+}
+
 .news-sr-only {
   position: absolute;
   width: 1px;
@@ -102,9 +109,9 @@
 }
 
 .news-command-shell {
-  width: 100%;
   box-sizing: border-box;
-  margin-bottom: 17px;
+  margin-top: 12px;
+  margin-bottom: 29px;
 }
 
 .news-command-bar {
@@ -116,7 +123,7 @@
   height: 76px;
   min-height: 76px;
   box-sizing: border-box;
-  padding: 10px 13px;
+  padding: 10px 43px 10px 29px;
   border: 1px solid var(--news-glass-edge);
   border-radius: 28px;
   background:
@@ -167,10 +174,10 @@
 .news-header h1 {
   flex: 1;
   min-width: 0;
-  margin: 0 0 0 14px;
+  margin: 0 0 0 29px;
   color: var(--news-ink);
   font-family: var(--display);
-  font-size: clamp(1.45rem, 2.7vw, 2rem);
+  font-size: clamp(1.45rem, 2.4vw, 1.8rem);
   font-weight: 650;
   letter-spacing: -0.045em;
 }
@@ -332,20 +339,31 @@
   gap: 16px;
   margin-bottom: 24px;
   padding-top: 4px;
+  padding-right: 16px;
 }
 
-/* Width follows the label: `Tất cả` stays the compact capsule. */
+/* Reference-calibrated desktop rhythm; intrinsic widths return below 1099px. */
 .news-tab {
   display: inline-grid;
+  width: 184px;
   height: 48px;
   flex: 0 0 auto;
   place-items: center;
   box-sizing: border-box;
+  min-width: 184px;
   min-height: 48px;
-  padding-inline: clamp(22px, 5vw, 60px);
+  padding-inline: clamp(24px, 4vw, 52px);
   border-radius: 999px;
   font-size: 1rem;
   font-weight: 520;
+}
+
+.news-tab:nth-child(2) {
+  width: 190px;
+}
+
+.news-tab:nth-child(3) {
+  width: 196px;
 }
 
 .news-tab::after {
@@ -564,13 +582,27 @@
     padding-left: 26px;
   }
 
+  .news-command-shell,
+  .news-tab-shell {
+    left: auto;
+    width: 100%;
+    transform: none;
+  }
+
   /* Gaps and capsule padding close up before the row wraps or scrolls. */
   .news-tab-row {
     gap: 10px;
   }
 
   .news-tab {
+    width: auto;
+    min-width: 0;
     padding-inline: clamp(20px, 3vw, 40px);
+  }
+
+  .news-tab:nth-child(2),
+  .news-tab:nth-child(3) {
+    width: auto;
   }
 
   .news-card {
@@ -631,9 +663,18 @@
     font-size: 0.86rem;
   }
 
+  .news-command-shell {
+    left: auto;
+    width: 100%;
+    transform: none;
+  }
+
   .news-tab-shell {
+    left: auto;
+    width: auto;
     margin-right: -16px;
     margin-left: -16px;
+    transform: none;
   }
 
   /* One scrollable line; page-edge padding keeps rims and focus rings unclipped. */
@@ -642,6 +683,7 @@
     justify-content: flex-start;
     overflow-x: auto;
     padding: 9px 16px 12px;
+    scroll-padding-inline: 8px;
     scrollbar-width: none;
   }
 
@@ -654,6 +696,7 @@
     min-width: max-content;
     min-height: 48px;
     padding-inline: 22px;
+    scroll-margin-inline: 8px;
     font-size: 0.91rem;
   }
 

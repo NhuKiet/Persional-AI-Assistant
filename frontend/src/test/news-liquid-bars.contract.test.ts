@@ -103,6 +103,60 @@ describe("News liquid bars CSS contract", () => {
     expect(topic).toMatch(/border-radius:\s*999px;/);
   });
 
+  it("calibrates the desktop bars without leaking expansion into tablet", () => {
+    const shells = groupedSelectorBlock(newsCss, [
+      ".news-command-shell",
+      ".news-tab-shell",
+    ]);
+    const commandShell = selectorBlock(newsCss, ".news-command-shell");
+    const title = selectorBlock(newsCss, ".news-header h1");
+    const topic = selectorBlock(newsCss, ".news-tab");
+    const secondTopic = selectorBlock(newsCss, ".news-tab:nth-child(2)");
+    const thirdTopic = selectorBlock(newsCss, ".news-tab:nth-child(3)");
+    const tablet = atRuleBlock(newsCss, "@media (max-width: 1099px)");
+    const tabletShells = groupedSelectorBlock(tablet, [
+      ".news-command-shell",
+      ".news-tab-shell",
+    ]);
+    const tabletTopic = selectorBlock(tablet, ".news-tab");
+    const tabletSizedTopics = groupedSelectorBlock(tablet, [
+      ".news-tab:nth-child(2)",
+      ".news-tab:nth-child(3)",
+    ]);
+
+    expect(shells).toMatch(/width:\s*calc\(100% \+ 30px\);/);
+    expect(shells).toMatch(/left:\s*50%;/);
+    expect(shells).toMatch(/transform:\s*translateX\(-50%\);/);
+    expect(commandShell).toMatch(/margin-top:\s*12px;/);
+    expect(commandShell).toMatch(/margin-bottom:\s*29px;/);
+    expect(title).toMatch(
+      /font-size:\s*clamp\(1\.45rem, 2\.4vw, 1\.8rem\);/,
+    );
+    expect(topic).toMatch(/width:\s*184px;/);
+    expect(topic).toMatch(/min-width:\s*184px;/);
+    expect(topic).toMatch(
+      /padding-inline:\s*clamp\(24px, 4vw, 52px\);/,
+    );
+    expect(secondTopic).toMatch(/width:\s*190px;/);
+    expect(thirdTopic).toMatch(/width:\s*196px;/);
+    expect(tabletShells).toMatch(/width:\s*100%;/);
+    expect(tabletShells).toMatch(/left:\s*auto;/);
+    expect(tabletShells).toMatch(/transform:\s*none;/);
+    expect(tabletTopic).toMatch(/width:\s*auto;/);
+    expect(tabletTopic).toMatch(/min-width:\s*0;/);
+    expect(tabletSizedTopics).toMatch(/width:\s*auto;/);
+  });
+
+  it("aligns desktop command contents and the topic group to the reference", () => {
+    const command = selectorBlock(newsCss, ".news-command-bar");
+    const title = selectorBlock(newsCss, ".news-header h1");
+    const topics = selectorBlock(newsCss, ".news-tab-row");
+
+    expect(command).toMatch(/padding:\s*10px 43px 10px 29px;/);
+    expect(title).toMatch(/margin:\s*0 0 0 29px;/);
+    expect(topics).toMatch(/padding-right:\s*16px;/);
+  });
+
   it("keeps every refraction filter on decorative highlight layers only", () => {
     const commandHighlight = selectorBlock(newsCss, ".news-command-bar::after");
     const controlHighlights = groupedSelectorBlock(newsCss, [
@@ -196,12 +250,15 @@ describe("News liquid bars CSS contract", () => {
   it("keeps mobile topics in a padded scrolling row with 46px targets", () => {
     const mobile = atRuleBlock(newsCss, "@media (max-width: 700px)");
     const topics = selectorBlock(mobile, ".news-tab-row");
+    const topic = selectorBlock(mobile, ".news-tab");
     const back = selectorBlock(mobile, ".news-back");
     const refresh = selectorBlock(mobile, ".news-refresh-btn");
 
     expect(topics).toMatch(/flex-wrap:\s*nowrap;/);
     expect(topics).toMatch(/overflow-x:\s*auto;/);
     expect(topics).toMatch(/padding:\s*9px 16px 12px;/);
+    expect(topics).toMatch(/scroll-padding-inline:\s*8px;/);
+    expect(topic).toMatch(/scroll-margin-inline:\s*8px;/);
     expect(back).toMatch(/width:\s*46px;/);
     expect(back).toMatch(/height:\s*46px;/);
     expect(refresh).toMatch(/min-width:\s*46px;/);
