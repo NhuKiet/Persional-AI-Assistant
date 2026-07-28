@@ -145,6 +145,74 @@ def test_run_refresh_pipeline_skips_already_stored_urls(monkeypatch):
     assert summarized_urls == ["https://example.com/new"]
 
 
+def test_cancelled_awaiter_does_not_detach_the_inflight_pipeline(monkeypatch):
+    call_count = 0
+
+    async def fake_pipeline():
+        nonlocal call_count
+        call_count += 1
+        await asyncio.sleep(0.1)
+        return RefreshResult(new_count=7)
+
+    monkeypatch.setattr(scheduler, "_run_refresh_pipeline", fake_pipeline)
+
+    async def scenario():
+        with pytest.raises(asyncio.TimeoutError):
+            await asyncio.wait_for(scheduler.refresh_news(), timeout=0.02)
+        # The pipeline task must still be running/known, so this second
+        # call awaits the SAME task instead of starting a new pipeline run.
+        return await scheduler.refresh_news()
+
+    result = asyncio.run(scenario())
+    assert call_count == 1
+    assert result.new_count == 7
+
+
+def test_last_completed_at_updates_even_when_pipeline_raises(monkeypatch):
+    async def fake_pipeline():
+        raise RuntimeError("transient DB error")
+
+    monkeypatch.setattr(scheduler, "_run_refresh_pipeline", fake_pipeline)
+
+    with pytest.raises(RuntimeError):
+        asyncio.run(scheduler.refresh_news())
+
+    assert scheduler.seconds_since_last_refresh() < 1.0
+
+
+def test_run_refresh_pipeline_dedupes_same_url_within_a_fetch_batch(monkeypatch):
+    fetched = [
+        NewsItem(url="https://arxiv.org/abs/1234", title="From cs.AI", description_raw="D", source="S1", topic="research", published_at=None, fetched_at=None),
+        NewsItem(url="https://arxiv.org/abs/1234", title="From cs.RO", description_raw="D", source="S2", topic="research", published_at=None, fetched_at=None),
+    ]
+
+    async def fake_fetch():
+        return fetched
+
+    summarized_items = []
+
+    async def fake_summarize(items, provider=None, model=None):
+        summarized_items.extend(items)
+        for i in items:
+            i.title_vi, i.summary_vi = "TV", "SV"
+        return items
+
+    class _FakeStore:
+        def existing_urls(self, candidate_urls):
+            return set()
+
+        def add_new(self, items):
+            return len(items)
+
+    monkeypatch.setattr(scheduler, "fetch_all_sources", fake_fetch)
+    monkeypatch.setattr(scheduler, "summarize_new_items", fake_summarize)
+    monkeypatch.setattr(scheduler, "_store", _FakeStore())
+
+    asyncio.run(scheduler._run_refresh_pipeline())
+    assert len(summarized_items) == 1
+    assert summarized_items[0].title == "From cs.AI"
+
+
 def test_run_refresh_pipeline_caps_new_items_per_run(monkeypatch):
     fetched = [
         NewsItem(url=f"https://example.com/{n}", title=f"T{n}", description_raw="D", source="S", topic="research", published_at=None, fetched_at=None)
