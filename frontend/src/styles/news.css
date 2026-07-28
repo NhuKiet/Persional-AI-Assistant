@@ -10,6 +10,17 @@
   --news-bar-edge: rgba(143, 160, 199, 0.34);
   --news-bar-fill: rgba(249, 252, 255, 0.62);
   --news-bar-shadow: 0 18px 34px rgba(102, 126, 181, 0.2);
+  /* Independently tunable glass layers: outer edge, outer rim, inner rim,
+     specular highlight, underside shading, ambient shadow, refraction. */
+  --news-glass-edge: rgba(143, 160, 199, 0.34);
+  --news-glass-rim-outer: rgba(255, 255, 255, 0.94);
+  --news-glass-rim-inner: rgba(255, 255, 255, 0.78);
+  --news-glass-specular: rgba(255, 255, 255, 0.86);
+  --news-glass-underside: rgba(94, 118, 172, 0.34);
+  --news-glass-ambient: 0 16px 30px rgba(102, 126, 181, 0.2);
+  --news-glass-ambient-lift: 0 20px 36px rgba(88, 118, 182, 0.26);
+  --news-refraction: url(#news-liquid-refraction);
+  --news-refraction-soft: url(#news-liquid-refraction-soft);
   --news-shadow: 0 22px 50px rgba(95, 117, 170, 0.22), 0 4px 12px rgba(95, 117, 170, 0.14);
   --news-shadow-hover: 0 28px 56px rgba(95, 117, 170, 0.28), 0 6px 14px rgba(95, 117, 170, 0.16);
   box-sizing: border-box;
@@ -73,10 +84,27 @@
   margin-left: auto;
 }
 
+.news-liquid-defs {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.news-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .news-command-shell {
   width: 100%;
   box-sizing: border-box;
-  margin-bottom: 20px;
+  margin-bottom: 17px;
 }
 
 .news-command-bar {
@@ -88,23 +116,30 @@
   height: 76px;
   min-height: 76px;
   box-sizing: border-box;
-  padding: 10px 14px;
-  border: 1px solid var(--news-bar-edge);
+  padding: 10px 13px;
+  border: 1px solid var(--news-glass-edge);
   border-radius: 28px;
   background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.86), rgba(239, 246, 255, 0.48)),
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.9) 0%,
+      rgba(255, 255, 255, 0.4) 46%,
+      rgba(237, 244, 255, 0.54) 100%
+    ),
     var(--news-bar-fill);
   box-shadow:
+    0 0 0 2px var(--news-glass-rim-outer),
     inset 0 1px 0 var(--news-bar-rim),
     inset 1px 0 0 rgba(255, 255, 255, 0.72),
-    var(--news-bar-shadow);
+    inset 0 -12px 20px -16px var(--news-glass-underside),
+    var(--news-glass-ambient);
   backdrop-filter: blur(24px) saturate(145%);
 }
 
 .news-command-bar::before {
   position: absolute;
   inset: 2px;
-  border: 1px solid rgba(255, 255, 255, 0.76);
+  border: 1px solid var(--news-glass-rim-inner);
   border-radius: inherit;
   content: "";
   pointer-events: none;
@@ -112,15 +147,16 @@
 
 .news-command-bar::after {
   position: absolute;
-  top: 1px;
-  right: 17%;
-  left: 18%;
-  height: 22px;
+  top: 3px;
+  right: 13%;
+  left: 15%;
+  height: 24px;
   border-radius: 999px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.74), transparent);
+  background: linear-gradient(180deg, var(--news-glass-specular), rgba(255, 255, 255, 0) 88%);
   content: "";
-  opacity: 0.74;
+  opacity: 0.76;
   pointer-events: none;
+  filter: var(--news-refraction);
 }
 
 .news-command-bar > * {
@@ -130,7 +166,8 @@
 
 .news-header h1 {
   flex: 1;
-  margin: 0;
+  min-width: 0;
+  margin: 0 0 0 14px;
   color: var(--news-ink);
   font-family: var(--display);
   font-size: clamp(1.45rem, 2.7vw, 2rem);
@@ -142,49 +179,91 @@
 .news-refresh-btn,
 .news-tab {
   position: relative;
-  overflow: hidden;
-  border: 1px solid var(--news-bar-edge);
+  border: 1px solid var(--news-glass-edge);
   color: var(--news-ink);
   font: inherit;
   cursor: pointer;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.85) 0%, rgba(255, 255, 255, 0) 58%),
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92) 0%,
+      rgba(255, 255, 255, 0.26) 54%,
+      rgba(255, 255, 255, 0.5) 100%
+    ),
     var(--news-bar-fill);
-  box-shadow: inset 0 1px 0 var(--news-bar-rim), 0 6px 16px rgba(95, 117, 170, 0.12);
+  box-shadow:
+    0 0 0 3px var(--news-glass-rim-outer),
+    inset 0 1px 0 var(--news-bar-rim),
+    inset 0 -9px 15px -12px var(--news-glass-underside),
+    0 8px 16px rgba(95, 117, 170, 0.16);
   backdrop-filter: blur(16px) saturate(135%);
   isolation: isolate;
+  transition:
+    transform var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
 }
 
+/* Inner rim — the second of the two rims. */
 .news-back::before,
-.news-refresh-btn::before {
+.news-refresh-btn::before,
+.news-tab::before {
   position: absolute;
+  z-index: 0;
   inset: 2px;
-  border: 1px solid rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--news-glass-rim-inner);
   border-radius: inherit;
   content: "";
   pointer-events: none;
 }
 
+/* Specular highlight — the only refracted layer; carries no text or icon. */
+.news-back::after,
+.news-refresh-btn::after,
+.news-tab::after {
+  position: absolute;
+  z-index: 0;
+  top: 3px;
+  right: 10px;
+  left: 10px;
+  height: 14px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--news-glass-specular), rgba(255, 255, 255, 0) 90%);
+  content: "";
+  pointer-events: none;
+  filter: var(--news-refraction-soft);
+}
+
+.news-back-icon,
+.news-refresh-icon,
+.news-refresh-label,
+.news-tab-label {
+  position: relative;
+  z-index: 1;
+}
+
 .news-back {
   display: grid;
-  width: 52px;
+  width: 58px;
   height: 52px;
   flex: 0 0 auto;
   place-items: center;
-  border-radius: 20px;
-  font-size: 1.35rem;
-  transition: transform var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
+  border-radius: 18px;
 }
 
 .news-refresh-btn {
   display: inline-flex;
+  width: 146px;
+  height: 52px;
+  flex: 0 0 auto;
+  justify-content: center;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
+  box-sizing: border-box;
   min-height: 52px;
-  padding: 0 21px;
-  border-radius: 20px;
+  padding: 0 14px;
+  border-radius: 18px;
   font-weight: 540;
-  transition: transform var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
 }
 
 .news-refresh-icon {
@@ -192,25 +271,46 @@
   color: #1f8fe0;
 }
 
+.news-refresh-btn[aria-busy="true"] .news-refresh-icon {
+  animation: spin 900ms linear infinite;
+}
+
 .news-back:hover,
 .news-refresh-btn:hover:not(:disabled),
 .news-tab:hover:not(.news-tab-active) {
-  border-color: rgba(53, 141, 240, 0.44);
-  box-shadow: inset 0 1px 0 var(--news-bar-rim), 0 12px 22px rgba(78, 130, 206, 0.2);
-  transform: translateY(-2px);
+  border-color: rgba(53, 141, 240, 0.4);
+  box-shadow:
+    0 0 0 3px #fff,
+    inset 0 1px 0 var(--news-bar-rim),
+    inset 0 -9px 15px -12px var(--news-glass-underside),
+    var(--news-glass-ambient-lift);
+  transform: translateY(-1px);
+}
+
+.news-back:active,
+.news-refresh-btn:active:not(:disabled),
+.news-tab:active {
+  box-shadow:
+    0 0 0 3px var(--news-glass-rim-outer),
+    inset 0 1px 0 var(--news-bar-rim),
+    inset 0 -9px 15px -12px var(--news-glass-underside),
+    0 3px 8px rgba(95, 117, 170, 0.14);
+  transform: translateY(1px);
 }
 
 .news-refresh-btn:disabled {
   cursor: default;
-  opacity: 0.62;
+  color: rgba(16, 26, 67, 0.72);
+  opacity: 0.86;
 }
 
 .news-back:focus-visible,
 .news-refresh-btn:focus-visible,
 .news-tab:focus-visible,
 .news-card-title:focus-visible {
-  outline: 3px solid rgba(19, 193, 234, 0.72);
-  outline-offset: 3px;
+  z-index: 2;
+  outline: 3px solid rgba(12, 124, 209, 0.9);
+  outline-offset: 5px;
 }
 
 .news-notice {
@@ -229,68 +329,49 @@
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 14px;
-  margin-bottom: 28px;
+  gap: 16px;
+  margin-bottom: 24px;
+  padding-top: 4px;
 }
 
+/* Width follows the label: `Tất cả` stays the compact capsule. */
 .news-tab {
   display: inline-grid;
-  width: 172px;
-  height: 52px;
-  flex: 0 0 172px;
+  height: 48px;
+  flex: 0 0 auto;
   place-items: center;
   box-sizing: border-box;
-  min-width: 172px;
-  min-height: 52px;
-  padding: 0 22px;
+  min-height: 48px;
+  padding-inline: clamp(22px, 5vw, 60px);
   border-radius: 999px;
   font-size: 1rem;
-  background: var(--news-bar-fill);
-  box-shadow:
-    inset 0 1px 0 var(--news-bar-rim),
-    0 10px 18px rgba(102, 126, 181, 0.16);
-  transition: transform var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
-}
-
-.news-tab::before {
-  position: absolute;
-  inset: 2px;
-  border: 1px solid rgba(255, 255, 255, 0.58);
-  border-radius: inherit;
-  content: "";
-  pointer-events: none;
-  z-index: 0;
+  font-weight: 520;
 }
 
 .news-tab::after {
-  position: absolute;
-  top: 4px;
-  right: 12px;
-  left: 12px;
-  height: 16px;
-  border-radius: 50%;
-  background: radial-gradient(ellipse at center, rgba(255, 255, 255, 0.82), rgba(255, 255, 255, 0) 72%);
-  content: "";
-  pointer-events: none;
-  z-index: 0;
-}
-
-.news-tab-label {
-  position: relative;
-  z-index: 1;
+  right: 14px;
+  left: 14px;
+  height: 12px;
 }
 
 .news-tab-active {
-  border-color: rgba(55, 158, 244, 0.78);
+  border-color: rgba(48, 140, 226, 0.72);
   color: #fff;
-  background: linear-gradient(108deg, #1bd5e4 0%, #29bdef 52%, #4a82ee 100%);
+  background: linear-gradient(100deg, #17c9e2 0%, #1d9ae0 46%, #3f74ea 100%);
+  text-shadow: 0 1px 2px rgba(9, 44, 96, 0.34);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.62),
-    0 12px 21px rgba(31, 154, 236, 0.38);
+    0 0 0 3px var(--news-glass-rim-outer),
+    inset 0 1px 0 rgba(255, 255, 255, 0.66),
+    inset 0 -9px 15px -10px rgba(12, 56, 122, 0.5),
+    0 10px 20px rgba(31, 154, 236, 0.36);
+}
+
+.news-tab-active::before {
+  border-color: rgba(255, 255, 255, 0.5);
 }
 
 .news-tab-active::after {
-  background: radial-gradient(ellipse at center, rgba(255, 255, 255, 0.62), rgba(220, 250, 255, 0) 72%);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.68), rgba(220, 250, 255, 0) 90%);
 }
 
 .news-status {
@@ -434,12 +515,46 @@
   box-shadow: inset 0 1px 0 var(--news-rim), 0 7px 16px rgba(95, 117, 170, 0.14);
 }
 
+/* Browsers without backdrop-filter get the same geometry on an opaque
+   translucent-white fill instead of a frosted one. */
+@supports not (backdrop-filter: blur(2px)) {
+  .news-command-bar,
+  .news-back,
+  .news-refresh-btn,
+  .news-tab {
+    background-color: rgba(255, 255, 255, 0.94);
+  }
+
+  .news-tab-active {
+    background-color: transparent;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .news-page {
+    --news-refraction: none;
+    --news-refraction-soft: none;
+  }
+
+  .news-back,
+  .news-refresh-btn,
+  .news-tab {
+    transition: none;
+  }
+
   .news-back:hover,
   .news-refresh-btn:hover:not(:disabled),
   .news-tab:hover:not(.news-tab-active),
+  .news-back:active,
+  .news-refresh-btn:active:not(:disabled),
+  .news-tab:active,
   .news-card:hover {
     transform: none;
+  }
+
+  .news-refresh-btn[aria-busy="true"] .news-refresh-icon {
+    animation: none;
+    opacity: 0.6;
   }
 }
 
@@ -447,6 +562,15 @@
   .news-page {
     padding-right: 26px;
     padding-left: 26px;
+  }
+
+  /* Gaps and capsule padding close up before the row wraps or scrolls. */
+  .news-tab-row {
+    gap: 10px;
+  }
+
+  .news-tab {
+    padding-inline: clamp(20px, 3vw, 40px);
   }
 
   .news-card {
@@ -472,28 +596,38 @@
     display: none;
   }
 
+  /* Refraction is dropped on small screens to protect rendering cost. */
+  .news-page {
+    --news-refraction: none;
+    --news-refraction-soft: none;
+  }
+
   .news-command-bar {
     gap: 8px;
-    height: 62px;
-    min-height: 62px;
+    height: 64px;
+    min-height: 64px;
     padding: 6px;
     border-radius: 23px;
   }
 
   .news-header h1 {
+    margin-left: 2px;
     font-size: 1.15rem;
   }
 
   .news-back {
-    width: 44px;
-    height: 44px;
-    border-radius: 17px;
+    width: 46px;
+    height: 46px;
+    border-radius: 16px;
   }
 
   .news-refresh-btn {
-    min-height: 44px;
+    width: auto;
+    height: 46px;
+    min-width: 46px;
+    min-height: 46px;
     padding: 0 12px;
-    border-radius: 17px;
+    border-radius: 16px;
     font-size: 0.86rem;
   }
 
@@ -502,11 +636,12 @@
     margin-left: -16px;
   }
 
+  /* One scrollable line; page-edge padding keeps rims and focus rings unclipped. */
   .news-tab-row {
     flex-wrap: nowrap;
     justify-content: flex-start;
     overflow-x: auto;
-    padding: 1px 16px 6px;
+    padding: 9px 16px 12px;
     scrollbar-width: none;
   }
 
@@ -515,11 +650,9 @@
   }
 
   .news-tab {
-    width: auto;
-    height: 52px;
-    flex-basis: auto;
+    height: 48px;
     min-width: max-content;
-    min-height: 52px;
+    min-height: 48px;
     padding-inline: 22px;
     font-size: 0.91rem;
   }
