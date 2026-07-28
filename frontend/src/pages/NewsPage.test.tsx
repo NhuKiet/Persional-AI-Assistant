@@ -96,6 +96,45 @@ describe("NewsPage", () => {
     expect(await screen.findByRole("main")).toHaveClass("news-white-liquid-page");
   });
 
+  it("groups the command controls and topic controls into independent liquid-bar shells", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () =>
+      jsonResponse({ items: [SAMPLE_ITEM], limit: 20, offset: 0, has_more: false }),
+    ));
+    const { container } = renderPage();
+
+    await screen.findByRole("button", { name: /Làm mới/i });
+    expect(container.querySelector(".news-command-shell > .news-command-bar")).not.toBeNull();
+    expect(container.querySelector(".news-tab-shell > .news-tab-row")).not.toBeNull();
+    expect(container.querySelectorAll(".news-tab-row .news-tab")).toHaveLength(5);
+  });
+
+  it("identifies the header as the dedicated command glass bar", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () =>
+      jsonResponse({ items: [SAMPLE_ITEM], limit: 20, offset: 0, has_more: false }),
+    ));
+    renderPage();
+
+    expect(await screen.findByRole("banner")).toHaveClass("news-command-bar");
+  });
+
+  it("moves the liquid active state between standalone topic capsules", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () =>
+      jsonResponse({ items: [], limit: 20, offset: 0, has_more: false }),
+    ));
+    const user = userEvent.setup();
+    renderPage();
+
+    const robotics = await screen.findByRole("button", { name: "Robotics" });
+    const allTopics = screen.getByRole("button", { name: /Tất cả/i });
+    expect(allTopics).toHaveClass("news-tab-active");
+    expect(allTopics).toHaveAttribute("aria-pressed", "true");
+    expect(robotics).toHaveAttribute("aria-pressed", "false");
+    await user.click(robotics);
+    expect(robotics).toHaveClass("news-tab-active");
+    expect(robotics).toHaveAttribute("aria-pressed", "true");
+    expect(allTopics).toHaveAttribute("aria-pressed", "false");
+  });
+
   it("switching topic tabs re-fetches with the right query param", async () => {
     const fetchMock = vi.fn(async (_input: RequestInfo | URL) =>
       jsonResponse({ items: [], limit: 20, offset: 0, has_more: false }),

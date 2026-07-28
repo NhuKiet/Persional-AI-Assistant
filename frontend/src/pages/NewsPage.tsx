@@ -49,33 +49,50 @@ export function NewsPage() {
         <span className="news-liquid-orb news-liquid-orb-one" />
         <span className="news-liquid-orb news-liquid-orb-two" />
       </div>
-      <header className="news-header">
-        <button className="news-back" onClick={() => navigate("/")} aria-label="Về trang chủ">←</button>
-        <h1>Tin tức AI &amp; Robotics</h1>
-        <button
-          className="news-refresh-btn"
-          onClick={refresh}
-          disabled={refreshState === "loading"}
-        >
-          {refreshState === "loading" ? "Đang làm mới…" : "Làm mới"}
-        </button>
-      </header>
+      <div className="news-command-shell">
+        <header className="news-header news-command-bar">
+          <button className="news-back" onClick={() => navigate("/")} aria-label="Về trang chủ">←</button>
+          <h1>Tin tức AI &amp; Robotics</h1>
+          <button
+            className="news-refresh-btn"
+            onClick={refresh}
+            disabled={refreshState === "loading"}
+          >
+            <svg
+              className="news-refresh-icon"
+              viewBox="0 0 24 24"
+              width="16"
+              height="16"
+              aria-hidden="true"
+            >
+              <path
+                fill="currentColor"
+                d="M12 5V2L8 6l4 4V7c3.31 0 6 2.69 6 6a6 6 0 0 1-6 6 6 6 0 0 1-6-6H4a8 8 0 0 0 8 8 8 8 0 0 0 8-8 8 8 0 0 0-8-8Z"
+              />
+            </svg>
+            {refreshState === "loading" ? "Đang làm mới…" : "Làm mới"}
+          </button>
+        </header>
+      </div>
 
       {refreshState === "cooldown" && (
         <p className="news-notice">Vừa mới cập nhật, thử lại sau.</p>
       )}
 
-      <nav className="news-tabs">
-        {TOPIC_TABS.map(t => (
-          <button
-            key={t.label}
-            className={`news-tab ${topic === t.id ? "news-tab-active" : ""}`}
-            onClick={() => setTopic(t.id)}
-          >
-            {t.label}
-          </button>
-        ))}
-      </nav>
+      <div className="news-tab-shell">
+        <nav className="news-tabs news-tab-row" aria-label="Chủ đề tin tức">
+          {TOPIC_TABS.map(t => (
+            <button
+              key={t.label}
+              className={`news-tab ${topic === t.id ? "news-tab-active" : ""}`}
+              onClick={() => setTopic(t.id)}
+              aria-pressed={topic === t.id}
+            >
+              <span className="news-tab-label">{t.label}</span>
+            </button>
+          ))}
+        </nav>
+      </div>
 
       {loading && <p className="news-status">Đang tải…</p>}
       {error && <p className="news-status news-error">{error}</p>}
@@ -100,7 +117,18 @@ export function NewsPage() {
                 <span className="news-time">{relativeTime(item.published_at ?? item.fetched_at)}</span>
               </div>
             </div>
-            <span className="news-card-link-cue" aria-hidden="true">â†’</span>
+            <span className="news-card-link-cue" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="18" height="18">
+                <path
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M9 6l6 6-6 6"
+                />
+              </svg>
+            </span>
           </li>
         ))}
       </ul>
