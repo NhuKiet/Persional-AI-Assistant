@@ -53,7 +53,7 @@ describe("NewsPage", () => {
   });
 
   it("switching topic tabs re-fetches with the right query param", async () => {
-    const fetchMock = vi.fn(async () =>
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL) =>
       jsonResponse({ items: [], limit: 20, offset: 0, has_more: false }),
     );
     vi.stubGlobal("fetch", fetchMock);
