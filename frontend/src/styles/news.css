@@ -2,6 +2,7 @@
   --news-canvas: #f8faff;
   --news-ink: #101a43;
   --news-muted: #68748d;
+  --news-danger: #b32645;
   --news-rim: rgba(255, 255, 255, 0.94);
   --news-edge: rgba(117, 136, 181, 0.27);
   --news-glass: rgba(255, 255, 255, 0.58);
@@ -23,7 +24,7 @@
   position: fixed;
   z-index: -2;
   inset: 0;
-  background: url("../assets/news/white-liquid-scene.png") center top / cover no-repeat;
+  background: url("../assets/news/white-liquid-scene.webp") center top / cover no-repeat;
   content: "";
   pointer-events: none;
 }
@@ -186,7 +187,7 @@
 }
 
 .news-error {
-  color: var(--danger);
+  color: var(--news-danger);
 }
 
 .news-list {
@@ -289,7 +290,7 @@
   padding: 5px 10px;
   border: 1px solid rgba(20, 190, 219, 0.3);
   border-radius: 999px;
-  color: #078da5;
+  color: #087285;
   background: rgba(105, 230, 237, 0.18);
 }
 

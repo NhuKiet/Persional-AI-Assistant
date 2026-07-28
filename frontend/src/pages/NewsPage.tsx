@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useNews, type NewsTopic } from "../hooks/useNews";
-import communityVisual from "../assets/news/community.png";
-import modelReleaseVisual from "../assets/news/model-release.png";
-import researchVisual from "../assets/news/research.png";
-import roboticsVisual from "../assets/news/robotics.png";
+import communityVisual from "../assets/news/community.webp";
+import modelReleaseVisual from "../assets/news/model-release.webp";
+import researchVisual from "../assets/news/research.webp";
+import roboticsVisual from "../assets/news/robotics.webp";
 
 const TOPIC_TABS: { id: NewsTopic | null; label: string }[] = [
   { id: null, label: "Tất cả" },
@@ -87,7 +87,7 @@ export function NewsPage() {
         {(items ?? []).map(item => (
           <li key={item.url} className="news-card">
             <div className="news-card-visual" aria-hidden="true">
-              <img src={NEWS_TOPIC_VISUALS[item.topic]} alt="" />
+              <img src={NEWS_TOPIC_VISUALS[item.topic]} alt="" loading="lazy" decoding="async" />
             </div>
             <div className="news-card-content">
               <a href={item.url} target="_blank" rel="noopener noreferrer" className="news-card-title">
