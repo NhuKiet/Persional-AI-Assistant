@@ -805,12 +805,14 @@
   box-sizing: border-box;
   margin-top: 18px;
   padding: 24px;
-  border: 1px solid rgba(255, 255, 255, 0.56);
   border-radius: 26px;
   color: var(--news-muted);
   text-align: center;
   background: rgba(255, 255, 255, 0.36);
-  box-shadow: 0 13px 28px rgba(32, 57, 92, 0.12);
+  box-shadow:
+    inset 0 -5px 14px rgb(54 79 118 / var(--news-depth-alpha)),
+    0 var(--news-depth-y) var(--news-depth-blur)
+      rgb(17 35 64 / var(--news-depth-alpha));
   backdrop-filter: blur(18px) saturate(130%);
 }
 
@@ -841,15 +843,14 @@
   min-height: 184px;
   padding: 13px 22px 13px 13px;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.58);
   border-radius: 30px;
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.16)),
     rgba(255, 255, 255, 0.13);
   box-shadow:
-    inset 2px 2px 1px rgba(255, 255, 255, 0.72),
-    inset -1px -1px 1px rgba(255, 255, 255, 0.5),
-    0 18px 36px rgba(51, 76, 120, 0.16);
+    inset 0 -7px 16px rgb(54 79 118 / var(--news-depth-alpha)),
+    0 var(--news-depth-y) var(--news-depth-blur)
+      rgb(17 35 64 / var(--news-depth-alpha));
   backdrop-filter: blur(18px) saturate(135%);
   transition:
     transform var(--dur) var(--ease-out),
@@ -858,9 +859,9 @@
 
 .news-card:hover {
   box-shadow:
-    inset 2px 2px 1px rgba(255, 255, 255, 0.78),
-    inset -1px -1px 1px rgba(255, 255, 255, 0.56),
-    0 24px 44px rgba(51, 76, 120, 0.22);
+    inset 0 -10px 20px rgb(54 79 118 / var(--news-depth-alpha)),
+    0 calc(var(--news-depth-y) + 6px) calc(var(--news-depth-blur) + 8px)
+      rgb(17 35 64 / var(--news-depth-alpha));
   transform: translateY(-2px);
 }
 

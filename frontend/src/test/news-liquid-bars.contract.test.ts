@@ -46,6 +46,24 @@ describe("Layered News interface contract", () => {
     expect(active).not.toMatch(/0 0 0 2px rgba\(255, 255, 255/);
   });
 
+  it("removes continuous white perimeters from feed glass surfaces", () => {
+    const feedGlassBlocks = [
+      newsCss.match(/\.news-notice,\s*\n\.news-status\s*\{[\s\S]*?\n\}/)?.[0] ?? "",
+      newsCss.match(/\.news-card\s*\{[\s\S]*?\n\}/)?.[0] ?? "",
+      newsCss.match(/\.news-card:hover\s*\{[\s\S]*?\n\}/)?.[0] ?? "",
+    ];
+
+    for (const block of feedGlassBlocks) {
+      expect(block).not.toMatch(
+        /\bborder\s*:\s*1px solid (?:rgba\(255,\s*255,\s*255|rgb\(255\s+255\s+255)/,
+      );
+      expect(block).not.toMatch(
+        /\binset[^,\n;]*?(?:rgba\(255,\s*255,\s*255|rgb\(255\s+255\s+255)/,
+      );
+      expect(block).toMatch(/var\(--news-depth-alpha\)/);
+    }
+  });
+
   it("styles a responsive seven-value glass instrument panel", () => {
     for (const selector of [
       ".news-light-control",
