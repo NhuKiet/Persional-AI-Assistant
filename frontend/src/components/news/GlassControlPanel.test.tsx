@@ -38,6 +38,11 @@ describe("GlassControlPanel", () => {
     await user.click(screen.getByRole("button", { name: "Nguyên bản" }));
     expect(onPresetChange).toHaveBeenCalledWith("original");
 
+    fireEvent.change(screen.getByRole("spinbutton", { name: "Góc sáng" }), {
+      target: { value: "999" },
+    });
+    expect(onSettingChange).toHaveBeenCalledWith("lightAngle", 360);
+
     fireEvent.change(screen.getByRole("slider", { name: "Dispersion" }), {
       target: { value: "86" },
     });
