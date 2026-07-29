@@ -3,284 +3,129 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-const stylesDirectory = path.resolve(
+const srcDirectory = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
-  "../styles",
+  "..",
 );
-const newsCss = readFileSync(path.join(stylesDirectory, "news.css"), "utf8");
+const newsCss = readFileSync(path.join(srcDirectory, "styles/news.css"), "utf8");
+const newsPage = readFileSync(path.join(srcDirectory, "pages/NewsPage.tsx"), "utf8");
 
-type CssBlock = { prelude: string; body: string };
+describe("Layered News interface contract", () => {
+  it("uses the demo's original material and the approved tuned material", () => {
+    expect(newsCss).toMatch(/\.news-page\s*\{[\s\S]*--news-tint:\s*rgba\(255, 255, 255, 0\.5\);/);
+    expect(newsCss).toMatch(/--news-blur:\s*3px;/);
+    expect(newsCss).toMatch(
+      /\.news-layered-tuned\s*\{[\s\S]*--news-tint:\s*rgba\(255, 255, 255, 0\.17\);/,
+    );
+    expect(newsCss).toMatch(/\.news-layered-tuned\s*\{[\s\S]*--news-blur:\s*1\.25px;/);
+    expect(newsPage).toMatch(/original:\s*\{\s*tint:\s*"50%",\s*blur:\s*"3px",\s*scale:\s*77\s*\}/);
+    expect(newsPage).toMatch(/tuned:\s*\{\s*tint:\s*"17%",\s*blur:\s*"1\.25px",\s*scale:\s*46\s*\}/);
+  });
 
-const normalisePrelude = (prelude: string) =>
-  prelude.replace(/\/\*[\s\S]*?\*\//g, "").trim();
+  it("keeps the four-layer order separate from readable content", () => {
+    expect(newsPage).toMatch(
+      /news-glass-effect[\s\S]*news-glass-tint[\s\S]*news-glass-shine/,
+    );
+    expect(newsCss).toMatch(
+      /\.news-glass-effect,[\s\S]*\.news-glass-tint,[\s\S]*\.news-glass-shine\s*\{[\s\S]*position:\s*absolute;[\s\S]*pointer-events:\s*none;/,
+    );
+    expect(newsCss).toMatch(
+      /\.news-glass-effect\s*\{[\s\S]*backdrop-filter:\s*blur\(var\(--news-blur\)\);[\s\S]*filter:\s*var\(--news-distortion\);/,
+    );
+    expect(newsCss).toMatch(/\.news-glass-tint\s*\{[\s\S]*z-index:\s*1;[\s\S]*background:\s*var\(--news-tint\);/);
+    expect(newsCss).toMatch(/\.news-glass-shine\s*\{[\s\S]*z-index:\s*2;/);
+  });
 
-const cssBlocks = (css: string): CssBlock[] => {
-  const blocks: CssBlock[] = [];
-  let depth = 0;
-  let preludeStart = 0;
-  let bodyStart = 0;
-
-  for (let index = 0; index < css.length; index += 1) {
-    if (css[index] === "{") {
-      if (depth === 0) bodyStart = index + 1;
-      depth += 1;
-    } else if (css[index] === "}") {
-      depth -= 1;
-      if (depth === 0) {
-        blocks.push({
-          prelude: normalisePrelude(css.slice(preludeStart, bodyStart - 1)),
-          body: css.slice(bodyStart, index),
-        });
-        preludeStart = index + 1;
-      }
-    }
-  }
-
-  return blocks;
-};
-
-const splitSelectors = (prelude: string) =>
-  prelude.split(",").map((selector) => selector.trim());
-
-const blockByPrelude = (css: string, prelude: string) => {
-  const matches = cssBlocks(css).filter((block) => block.prelude === prelude);
-
-  expect(matches, `Expected exactly one ${prelude} block`).toHaveLength(1);
-  return matches[0]?.body ?? "";
-};
-
-const selectorBlock = (css: string, selector: string) =>
-  blockByPrelude(css, selector);
-
-const groupedSelectorBlock = (css: string, selectors: string[]) => {
-  const matches = cssBlocks(css).filter(
-    (block) => JSON.stringify(splitSelectors(block.prelude)) === JSON.stringify(selectors),
-  );
-
-  expect(
-    matches,
-    `Expected exactly one grouped selector block: ${selectors.join(", ")}`,
-  ).toHaveLength(1);
-  return matches[0]?.body ?? "";
-};
-
-const atRuleBlock = (css: string, atRule: string) => blockByPrelude(css, atRule);
-
-describe("News liquid bars CSS contract", () => {
-  it("defines the complete local liquid material", () => {
-    const page = selectorBlock(newsCss, ".news-page");
-
-    for (const token of [
-      "--news-glass-edge",
-      "--news-glass-rim-outer",
-      "--news-glass-rim-inner",
-      "--news-glass-specular",
-      "--news-glass-underside",
-      "--news-glass-ambient",
-      "--news-glass-ambient-lift",
-      "--news-refraction",
-      "--news-refraction-soft",
+  it("ports the complete demo composition before the live feed", () => {
+    for (const className of [
+      "news-intro",
+      "news-command-bar",
+      "news-tab-row",
+      "news-glass-comparison",
+      "news-lens",
+      "news-mode-panel",
+      "news-feed",
     ]) {
-      expect(page, `Expected ${token} in .news-page`).toMatch(
-        new RegExp(`${token}\\s*:`),
+      expect(newsPage).toContain(className);
+      expect(newsCss).toContain(`.${className}`);
+    }
+
+    expect(newsPage.indexOf("news-glass-comparison")).toBeLessThan(
+      newsPage.indexOf("news-feed"),
+    );
+    expect(newsPage).toContain("Bốn lớp.");
+    expect(newsPage).toContain("Nhìn xuyên qua khối kính");
+  });
+
+  it("keeps live news behavior and article visuals under the demo", () => {
+    expect(newsPage).toMatch(/useNews\(topic\)/);
+    expect(newsPage).toMatch(/onClick=\{refresh\}/);
+    expect(newsPage).toMatch(/onClick=\{\(\) => setTopic\(tab\.id\)\}/);
+    expect(newsPage).toMatch(/\(items \?\? \[\]\)\.map/);
+    expect(newsPage).toContain("news-card-visual");
+    expect(newsPage).toContain("news-card-title");
+  });
+
+  it("uses a moving pure-CSS aurora with transform-only keyframes", () => {
+    expect(newsCss).toContain(".news-aurora-cyan");
+    expect(newsCss).toContain(".news-aurora-violet");
+    expect(newsCss).toContain(".news-aurora-coral");
+    expect(newsCss).not.toMatch(/url\(["']?.*?\.(?:png|jpe?g|webp)/i);
+
+    const keyframes = [...newsCss.matchAll(/@keyframes news-aurora-[\s\S]*?\n\}/g)]
+      .map((match) => match[0])
+      .join("\n");
+    expect(keyframes).toMatch(/transform:/);
+    expect(keyframes).not.toMatch(
+      /(?:width|height|top|right|bottom|left|margin|padding|background-position)\s*:/,
+    );
+  });
+
+  it("sends defined caustic edges across the glass controls", () => {
+    expect(newsPage.match(/news-caustic news-caustic-/g)).toHaveLength(3);
+    expect(newsCss).toMatch(
+      /\.news-caustic\s*\{[\s\S]*mix-blend-mode:\s*screen;[\s\S]*will-change:\s*transform;/,
+    );
+    expect(newsCss).toMatch(/\.news-caustic-one\s*\{[\s\S]*animation:\s*news-caustic-sweep 14s/);
+    expect(newsCss).toMatch(/\.news-caustic-two\s*\{[\s\S]*animation:\s*news-caustic-sweep 18s/);
+    expect(newsCss).toMatch(/\.news-caustic-three\s*\{[\s\S]*animation:\s*news-caustic-return 16s/);
+
+    const sweep = newsCss.match(/@keyframes news-caustic-sweep\s*\{[\s\S]*?\n\}/)?.[0] ?? "";
+    const returnSweep = newsCss.match(/@keyframes news-caustic-return\s*\{[\s\S]*?\n\}/)?.[0] ?? "";
+    for (const motion of [sweep, returnSweep]) {
+      expect(motion).toMatch(/transform:/);
+      expect(motion).not.toMatch(
+        /(?:width|height|top|right|bottom|left|margin|padding|background-position)\s*:/,
       );
     }
   });
 
-  it("preserves desktop command and topic geometry", () => {
-    const command = selectorBlock(newsCss, ".news-command-bar");
-    const back = selectorBlock(newsCss, ".news-back");
-    const refresh = selectorBlock(newsCss, ".news-refresh-btn");
-    const topic = selectorBlock(newsCss, ".news-tab");
-
-    expect(command).toMatch(/height:\s*76px;/);
-    expect(command).toMatch(/border-radius:\s*28px;/);
-    expect(back).toMatch(/width:\s*58px;/);
-    expect(back).toMatch(/height:\s*52px;/);
-    expect(refresh).toMatch(/width:\s*146px;/);
-    expect(refresh).toMatch(/height:\s*52px;/);
-    expect(topic).toMatch(/flex:\s*0 0 auto;/);
-    expect(topic).toMatch(/border-radius:\s*999px;/);
-  });
-
-  it("calibrates the desktop bars without leaking expansion into tablet", () => {
-    const shells = groupedSelectorBlock(newsCss, [
-      ".news-command-shell",
-      ".news-tab-shell",
-    ]);
-    const commandShell = selectorBlock(newsCss, ".news-command-shell");
-    const title = selectorBlock(newsCss, ".news-header h1");
-    const topic = selectorBlock(newsCss, ".news-tab");
-    const secondTopic = selectorBlock(newsCss, ".news-tab:nth-child(2)");
-    const thirdTopic = selectorBlock(newsCss, ".news-tab:nth-child(3)");
-    const tablet = atRuleBlock(newsCss, "@media (max-width: 1099px)");
-    const tabletShells = groupedSelectorBlock(tablet, [
-      ".news-command-shell",
-      ".news-tab-shell",
-    ]);
-    const tabletTopic = selectorBlock(tablet, ".news-tab");
-    const tabletSizedTopics = groupedSelectorBlock(tablet, [
-      ".news-tab:nth-child(2)",
-      ".news-tab:nth-child(3)",
-    ]);
-
-    expect(shells).toMatch(/width:\s*calc\(100% \+ 30px\);/);
-    expect(shells).toMatch(/left:\s*50%;/);
-    expect(shells).toMatch(/transform:\s*translateX\(-50%\);/);
-    expect(commandShell).toMatch(/margin-top:\s*12px;/);
-    expect(commandShell).toMatch(/margin-bottom:\s*29px;/);
-    expect(title).toMatch(
-      /font-size:\s*clamp\(1\.45rem, 2\.4vw, 1\.8rem\);/,
+  it("keeps refraction on decorative layers and active color on the tint", () => {
+    expect(newsCss).toMatch(/\.news-glass-shine::after\s*\{[\s\S]*filter:\s*url\(#news-liquid-refraction\);/);
+    expect(newsCss).toMatch(
+      /\.news-tab \.news-glass-shine::after\s*\{[\s\S]*filter:\s*url\(#news-liquid-refraction-soft\);/,
     );
-    expect(topic).toMatch(/width:\s*184px;/);
-    expect(topic).toMatch(/min-width:\s*184px;/);
-    expect(topic).toMatch(
-      /padding-inline:\s*clamp\(24px, 4vw, 52px\);/,
+    expect(newsCss).toMatch(
+      /\.news-tab-active \.news-glass-tint\s*\{[\s\S]*linear-gradient\(100deg,/,
     );
-    expect(secondTopic).toMatch(/width:\s*190px;/);
-    expect(thirdTopic).toMatch(/width:\s*196px;/);
-    expect(tabletShells).toMatch(/width:\s*100%;/);
-    expect(tabletShells).toMatch(/left:\s*auto;/);
-    expect(tabletShells).toMatch(/transform:\s*none;/);
-    expect(tabletTopic).toMatch(/width:\s*auto;/);
-    expect(tabletTopic).toMatch(/min-width:\s*0;/);
-    expect(tabletSizedTopics).toMatch(/width:\s*auto;/);
-  });
-
-  it("aligns desktop command contents and the topic group to the reference", () => {
-    const command = selectorBlock(newsCss, ".news-command-bar");
-    const title = selectorBlock(newsCss, ".news-header h1");
-    const topics = selectorBlock(newsCss, ".news-tab-row");
-
-    expect(command).toMatch(/padding:\s*10px 43px 10px 29px;/);
-    expect(title).toMatch(/margin:\s*0 0 0 29px;/);
-    expect(topics).toMatch(/padding-right:\s*16px;/);
-  });
-
-  it("keeps every refraction filter on decorative highlight layers only", () => {
-    const commandHighlight = selectorBlock(newsCss, ".news-command-bar::after");
-    const controlHighlights = groupedSelectorBlock(newsCss, [
-      ".news-back::after",
-      ".news-refresh-btn::after",
-      ".news-tab::after",
-    ]);
-    const labelAndIconLayer = groupedSelectorBlock(newsCss, [
-      ".news-back-icon",
-      ".news-refresh-icon",
-      ".news-refresh-label",
-      ".news-tab-label",
-    ]);
-    const filteredBlocks = cssBlocks(newsCss).filter((block) =>
-      /\bfilter\s*:\s*var\(--news-refraction(?:-soft)?\)\s*;/.test(block.body),
-    );
-
-    expect(commandHighlight).toMatch(/filter:\s*var\(--news-refraction\);/);
-    expect(controlHighlights).toMatch(/filter:\s*var\(--news-refraction-soft\);/);
-    expect(labelAndIconLayer).not.toMatch(/\bfilter\s*:/);
-    expect(filteredBlocks).toHaveLength(2);
-    expect(filteredBlocks.map((block) => splitSelectors(block.prelude))).toEqual([
-      [".news-command-bar::after"],
-      [
-        ".news-back::after",
-        ".news-refresh-btn::after",
-        ".news-tab::after",
-      ],
-    ]);
-  });
-
-  it("keeps the active topic's white text and exact gradient", () => {
-    const activeTopic = selectorBlock(newsCss, ".news-tab-active");
-
-    expect(activeTopic).toMatch(/color:\s*#fff;/);
-    expect(activeTopic).toMatch(
-      /linear-gradient\(100deg, #17c9e2 0%, #1d9ae0 46%, #3f74ea 100%\)/,
+    expect(newsCss).not.toMatch(
+      /\.news-(?:title|tab-label|refresh-label|back-icon|refresh-icon)\s*\{[^}]*\bfilter\s*:/,
     );
   });
 
-  it("provides opaque material when backdrop filters are unavailable", () => {
-    const fallback = atRuleBlock(newsCss, "@supports not (backdrop-filter: blur(2px))");
-    const controls = groupedSelectorBlock(fallback, [
-      ".news-command-bar",
-      ".news-back",
-      ".news-refresh-btn",
-      ".news-tab",
-    ]);
-
-    expect(controls).toMatch(/background-color:\s*rgba\(255, 255, 255, 0\.94\);/);
-    const activeTopic = selectorBlock(fallback, ".news-tab-active");
-
-    expect(activeTopic).toMatch(
-      /background-color:\s*transparent;/,
+  it("supports narrow screens and users who reduce motion", () => {
+    expect(newsCss).toMatch(
+      /@media \(max-width: 900px\)[\s\S]*\.news-tab-row\s*\{[\s\S]*overflow-x:\s*auto;/,
     );
-    expect(activeTopic).not.toMatch(/\bbackground(?:-image)?\s*:/);
+    expect(newsCss).toMatch(
+      /@media \(max-width: 700px\)[\s\S]*\.news-card\s*\{[\s\S]*grid-template-columns:\s*1fr;/,
+    );
+    expect(newsCss).toMatch(
+      /@media \(prefers-reduced-motion: reduce\)[\s\S]*\.news-aurora,[\s\S]*\.news-caustic\s*\{[\s\S]*animation:\s*none;/,
+    );
   });
 
-  it("turns off liquid-bar motion and refraction when motion is reduced", () => {
-    const reducedMotion = atRuleBlock(
-      newsCss,
-      "@media (prefers-reduced-motion: reduce)",
-    );
-    const page = selectorBlock(reducedMotion, ".news-page");
-    const controls = groupedSelectorBlock(reducedMotion, [
-      ".news-back",
-      ".news-refresh-btn",
-      ".news-tab",
-    ]);
-    const movement = groupedSelectorBlock(reducedMotion, [
-      ".news-back:hover",
-      ".news-refresh-btn:hover:not(:disabled)",
-      ".news-tab:hover:not(.news-tab-active)",
-      ".news-back:active",
-      ".news-refresh-btn:active:not(:disabled)",
-      ".news-tab:active",
-      ".news-card:hover",
-    ]);
-    const refreshIcon = selectorBlock(
-      reducedMotion,
-      '.news-refresh-btn[aria-busy="true"] .news-refresh-icon',
-    );
-
-    expect(page).toMatch(/--news-refraction:\s*none;/);
-    expect(page).toMatch(/--news-refraction-soft:\s*none;/);
-    expect(controls).toMatch(/transition:\s*none;/);
-    expect(movement).toMatch(/transform:\s*none;/);
-    expect(refreshIcon).toMatch(/animation:\s*none;/);
-  });
-
-  it("keeps mobile topics in a padded scrolling row with 46px targets", () => {
-    const mobile = atRuleBlock(newsCss, "@media (max-width: 700px)");
-    const topics = selectorBlock(mobile, ".news-tab-row");
-    const topic = selectorBlock(mobile, ".news-tab");
-    const back = selectorBlock(mobile, ".news-back");
-    const refresh = selectorBlock(mobile, ".news-refresh-btn");
-
-    expect(topics).toMatch(/flex-wrap:\s*nowrap;/);
-    expect(topics).toMatch(/overflow-x:\s*auto;/);
-    expect(topics).toMatch(/padding:\s*9px 16px 12px;/);
-    expect(topics).toMatch(/scroll-padding-inline:\s*8px;/);
-    expect(topic).toMatch(/scroll-margin-inline:\s*8px;/);
-    expect(back).toMatch(/width:\s*46px;/);
-    expect(back).toMatch(/height:\s*46px;/);
-    expect(refresh).toMatch(/min-width:\s*46px;/);
-    expect(refresh).toMatch(/min-height:\s*46px;/);
-  });
-
-  it("closes topic gaps and padding at the tablet breakpoint", () => {
-    const tablet = atRuleBlock(newsCss, "@media (max-width: 1099px)");
-    const topics = selectorBlock(tablet, ".news-tab-row");
-    const topic = selectorBlock(tablet, ".news-tab");
-
-    expect(topics).toMatch(/gap:\s*10px;/);
-    expect(topic).toMatch(/padding-inline:\s*clamp\(20px, 3vw, 40px\);/);
-  });
-
-  it("reuses the shared spin keyframe for Refresh", () => {
-    const refreshIcon = selectorBlock(
-      newsCss,
-      '.news-refresh-btn[aria-busy="true"] .news-refresh-icon',
-    );
-
-    expect(newsCss).not.toMatch(/@keyframes\s+news-refresh-spin\b/);
-    expect(refreshIcon).toMatch(/animation:\s*spin\s+900ms linear infinite;/);
+  it("does not animate every property implicitly", () => {
+    expect(newsCss).not.toMatch(/transition:\s*all\b/);
   });
 });

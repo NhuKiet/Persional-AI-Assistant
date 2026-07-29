@@ -44,6 +44,45 @@ describe("NewsPage", () => {
     expect(screen.getByText("Tóm tắt dịch")).toBeInTheDocument();
   });
 
+  it("uses the layered demo as the complete news shell and keeps live articles below it", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () =>
+      jsonResponse({ items: [SAMPLE_ITEM], limit: 20, offset: 0, has_more: false }),
+    ));
+    const { container } = renderPage();
+
+    expect(screen.getByRole("heading", { name: /Bốn lớp.*Một mặt kính/i })).toBeInTheDocument();
+    expect(screen.getByText("Nhìn xuyên qua khối kính")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Nguyên bản" })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("button", { name: "Tinh chỉnh" })).toHaveAttribute("aria-pressed", "true");
+
+    const article = await screen.findByRole("link", { name: "Tiêu đề dịch" });
+    const comparison = container.querySelector(".news-glass-comparison");
+    expect(comparison).not.toBeNull();
+    const documentPosition = comparison?.compareDocumentPosition(article) ?? 0;
+    expect(
+      documentPosition & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("switches the whole layered material between original and tuned modes", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () =>
+      jsonResponse({ items: [], limit: 20, offset: 0, has_more: false }),
+    ));
+    const user = userEvent.setup();
+    const { container } = renderPage();
+
+    const main = screen.getByRole("main");
+    expect(main).toHaveClass("news-layered-tuned");
+    expect(container.querySelector("#news-glass-displacement")).toHaveAttribute("scale", "46");
+
+    await user.click(screen.getByRole("button", { name: "Nguyên bản" }));
+
+    expect(main).not.toHaveClass("news-layered-tuned");
+    expect(container.querySelector("#news-glass-displacement")).toHaveAttribute("scale", "77");
+    expect(screen.getByText("50%")).toBeInTheDocument();
+    expect(screen.getByText("3px")).toBeInTheDocument();
+  });
+
   it("shows the empty state when there are no items", async () => {
     vi.stubGlobal("fetch", vi.fn(async () =>
       jsonResponse({ items: [], limit: 20, offset: 0, has_more: false }),
