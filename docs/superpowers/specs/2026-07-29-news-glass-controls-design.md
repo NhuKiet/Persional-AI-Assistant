@@ -16,6 +16,8 @@ make refraction visible.
 - Replace the current Tint/Blur/Displacement definition list with interactive
   controls.
 - Remove the background grid completely.
+- Remove the continuous white perimeter and thick white lower edge from every
+  glass surface.
 - Do not introduce Canvas, WebGL, a UI library, or a new stylesheet.
 
 ## Control Panel
@@ -66,6 +68,20 @@ Mappings are bounded so the content remains readable at every slider extreme.
 The glass effect stays on decorative layers; text and icons never receive the
 SVG filter.
 
+## Glass Edge Treatment
+
+The current full-perimeter white border and symmetric white inset rim make the
+material read as coated plastic. Remove both from `.news-glass-shine`, and
+remove the active tab's white outer outline. Retain three quieter depth cues:
+
+- a localized directional highlight across part of the upper edge;
+- a subtle cool/dark underside edge controlled by Depth;
+- the existing soft ambient shadow beneath the object.
+
+No glass surface may show an uninterrupted white outline. Active tabs remain
+identifiable through their cyan-to-blue fill, text contrast, and colored
+shadow rather than a white ring.
+
 ## Background
 
 Remove `.news-liquid-ambient::before`, including both linear gradients and its
@@ -86,6 +102,7 @@ and caustic sweeps.
 - Component tests verify both presets load their expected values and moving a
   slider updates the live glass settings.
 - Contract tests verify all seven controls exist, the relevant CSS variables
-  drive glass layers, and the grid background rules are absent.
+  drive glass layers, the grid background rules are absent, and no continuous
+  white glass border or active white outline remains.
 - Existing News loading, topic filtering, refresh, typecheck, build, and full
   frontend tests must continue to pass.
