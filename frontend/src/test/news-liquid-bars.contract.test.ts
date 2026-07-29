@@ -9,17 +9,16 @@ const srcDirectory = path.resolve(
 );
 const newsCss = readFileSync(path.join(srcDirectory, "styles/news.css"), "utf8");
 const newsPage = readFileSync(path.join(srcDirectory, "pages/NewsPage.tsx"), "utf8");
+const glassPanel = readFileSync(
+  path.join(srcDirectory, "components/news/GlassControlPanel.tsx"),
+  "utf8",
+);
 
 describe("Layered News interface contract", () => {
-  it("uses the demo's original material and the approved tuned material", () => {
-    expect(newsCss).toMatch(/\.news-page\s*\{[\s\S]*--news-tint:\s*rgba\(255, 255, 255, 0\.5\);/);
-    expect(newsCss).toMatch(/--news-blur:\s*3px;/);
-    expect(newsCss).toMatch(
-      /\.news-layered-tuned\s*\{[\s\S]*--news-tint:\s*rgba\(255, 255, 255, 0\.17\);/,
-    );
-    expect(newsCss).toMatch(/\.news-layered-tuned\s*\{[\s\S]*--news-blur:\s*1\.25px;/);
-    expect(newsPage).toMatch(/original:\s*\{\s*tint:\s*"50%",\s*blur:\s*"3px",\s*scale:\s*77\s*\}/);
-    expect(newsPage).toMatch(/tuned:\s*\{\s*tint:\s*"17%",\s*blur:\s*"1\.25px",\s*scale:\s*46\s*\}/);
+  it("uses live material defaults without static tuned overrides", () => {
+    expect(newsCss).toMatch(/\.news-page\s*\{[\s\S]*--news-tint-alpha:\s*0\.12;/);
+    expect(newsCss).toMatch(/--news-blur:\s*0\.75px;/);
+    expect(newsCss).not.toMatch(/\.news-layered-tuned\s*\{[\s\S]*--news-(?:tint|blur):/);
   });
 
   it("keeps the four-layer order separate from readable content", () => {
@@ -32,8 +31,47 @@ describe("Layered News interface contract", () => {
     expect(newsCss).toMatch(
       /\.news-glass-effect\s*\{[\s\S]*backdrop-filter:\s*blur\(var\(--news-blur\)\);[\s\S]*filter:\s*var\(--news-distortion\);/,
     );
-    expect(newsCss).toMatch(/\.news-glass-tint\s*\{[\s\S]*z-index:\s*1;[\s\S]*background:\s*var\(--news-tint\);/);
+    expect(newsCss).toMatch(
+      /\.news-glass-tint\s*\{[\s\S]*z-index:\s*1;[\s\S]*background:\s*rgb\(255 255 255 \/ var\(--news-tint-alpha\)\);/,
+    );
     expect(newsCss).toMatch(/\.news-glass-shine\s*\{[\s\S]*z-index:\s*2;/);
+  });
+
+  it("removes the grid and continuous white glass outline", () => {
+    expect(newsCss).not.toContain(".news-liquid-ambient::before");
+    const shine = newsCss.match(/\.news-glass-shine\s*\{[\s\S]*?\n\}/)?.[0] ?? "";
+    const active = newsCss.match(/\.news-tab-active\s*\{[\s\S]*?\n\}/)?.[0] ?? "";
+    expect(shine).not.toMatch(/\bborder\s*:/);
+    expect(shine).not.toMatch(/inset -1px -1px 1px 1px var\(--news-rim-light\)/);
+    expect(active).not.toMatch(/0 0 0 2px rgba\(255, 255, 255/);
+  });
+
+  it("styles a responsive seven-value glass instrument panel", () => {
+    for (const selector of [
+      ".news-light-control",
+      ".news-light-pad",
+      ".news-light-values",
+      ".news-glass-ranges",
+      ".news-range-row",
+    ]) {
+      expect(newsCss).toContain(selector);
+    }
+    expect(glassPanel).toMatch(/type="number"[\s\S]*aria-label="Góc sáng"/);
+    expect(glassPanel).toMatch(/type="number"[\s\S]*aria-label="Cường độ sáng"/);
+    expect(glassPanel.match(/type="range"/g)).toHaveLength(1);
+    expect(glassPanel).toContain("RANGE_CONTROLS.map");
+    expect(newsCss).toMatch(/@media \(max-width: 700px\)[\s\S]*\.news-mode-panel/);
+  });
+
+  it("maps live variables onto only decorative glass layers", () => {
+    expect(newsCss).toMatch(/\.news-glass-effect\s*\{[\s\S]*blur\(var\(--news-blur\)\)/);
+    expect(newsCss).toMatch(/\.news-glass-tint\s*\{[\s\S]*var\(--news-tint-alpha\)/);
+    expect(newsCss).toMatch(
+      /\.news-glass-shine::after\s*\{[\s\S]*var\(--news-light-angle\)[\s\S]*var\(--news-light-alpha\)[\s\S]*var\(--news-splay\)/,
+    );
+    expect(newsCss).toMatch(
+      /\.news-glass-shine::before\s*\{[\s\S]*var\(--news-dispersion-left\)[\s\S]*var\(--news-dispersion-right\)/,
+    );
   });
 
   it("ports the complete demo composition before the live feed", () => {
