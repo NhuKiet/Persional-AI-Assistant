@@ -54,6 +54,10 @@ if (!global.IntersectionObserver) {
 }
 
 // Giả lập react-pdf để tránh crash trong môi trường jsdom (CI/GitHub Actions)
+// JSDOM logs a "not implemented" error before returning from getContext().
+// Canvas-specific tests replace this shim with a complete context mock.
+HTMLCanvasElement.prototype.getContext = vi.fn(() => null);
+
 vi.mock("react-pdf", () => ({
   pdfjs: { GlobalWorkerOptions: { workerSrc: "" } },
   Document: vi.fn(({ children }) => children),
