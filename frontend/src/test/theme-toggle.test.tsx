@@ -24,3 +24,16 @@ it("nút toggle trong sidebar đổi data-theme", async () => {
   await user.click(btn);
   expect(document.documentElement.dataset.theme).not.toBe(before);
 });
+
+it("nút toggle trên landing page đổi data-theme", async () => {
+  window.history.pushState({}, "", "/");
+  const user = userEvent.setup();
+  render(<App />);
+
+  const btn = await screen.findByRole("button", { name: /Đổi giao diện sáng\/tối/i });
+  expect(btn.closest(".ld-nav")).toBeNull();
+  const before = document.documentElement.dataset.theme;
+  await user.click(btn);
+
+  expect(document.documentElement.dataset.theme).not.toBe(before);
+});

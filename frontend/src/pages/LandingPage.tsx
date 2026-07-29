@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import mainlogo from "../assets/mainlogo.png";
 import { TOOLS, toolPath } from "../config/tools";
+import { useTheme } from "../hooks/useTheme";
 
 /** Trang chủ thật — trước đây "/" đi thẳng vào ô chat (HomePage, giờ ở /chat),
  *  không có gì giới thiệu app trước khi vào. Trang này lấp chỗ đó: một câu
@@ -15,6 +16,7 @@ import { TOOLS, toolPath } from "../config/tools";
  *  người dùng qua bản preview.html trước khi áp vào đây. */
 export function LandingPage() {
   const navigate = useNavigate();
+  const { theme, toggle } = useTheme();
   const [query, setQuery] = useState("");
 
   const goToChat = (prefill?: string) => {
@@ -33,6 +35,15 @@ export function LandingPage() {
   return (
     <div className="landing">
       <CursorLight />
+      <div className="ld-theme-corner">
+        <button type="button" className="ld-theme-toggle" onClick={toggle}
+          aria-label="Đổi giao diện sáng/tối"
+          title={theme === "dark" ? "Chuyển sang giao diện sáng" : "Chuyển sang giao diện tối"}>
+          {theme === "dark"
+            ? <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="4.5" stroke="currentColor" strokeWidth="1.6"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></svg>
+            : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round"/></svg>}
+        </button>
+      </div>
 
       <div className="landing-wrap">
         <nav className="ld-nav ld-rise" style={{ "--rd": "0ms" } as CSSProperties}>

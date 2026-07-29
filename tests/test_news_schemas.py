@@ -37,6 +37,17 @@ def test_news_item_out_serializes_timestamps_as_iso8601():
     assert payload["published_at"] is None
 
 
+def test_news_item_out_falls_back_for_legacy_rows_without_vi_content():
+    item = NewsItem(
+        url="https://example.com/a", title="Original title", description_raw="Original description",
+        source="Src", topic="research", published_at=None,
+        fetched_at=datetime(2026, 7, 28, 10, 0, 0, tzinfo=timezone.utc),
+    )
+    out = NewsItemOut.from_news_item(item)
+    assert out.title_vi == "Original title"
+    assert out.summary_vi == "Original description"
+
+
 def test_news_list_response_shape():
     resp = NewsListResponse(items=[], limit=20, offset=0, has_more=False)
     assert resp.model_dump() == {"items": [], "limit": 20, "offset": 0, "has_more": False}

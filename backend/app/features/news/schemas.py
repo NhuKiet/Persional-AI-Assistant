@@ -26,8 +26,9 @@ class NewsItemOut(BaseModel):
     @classmethod
     def from_news_item(cls, item: NewsItem) -> "NewsItemOut":
         return cls(
-            url=item.url, title=item.title, title_vi=item.title_vi,
-            summary_vi=item.summary_vi, source=item.source, topic=item.topic,
+            url=item.url, title=item.title, title_vi=item.title_vi or item.title,
+            summary_vi=item.summary_vi or item.description_raw or item.title,
+            source=item.source, topic=item.topic,
             published_at=item.published_at, fetched_at=item.fetched_at,
         )
 

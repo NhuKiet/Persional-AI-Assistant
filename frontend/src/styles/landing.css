@@ -45,6 +45,24 @@
 }
 .ld-brand { display: flex; align-items: center; gap: 8px; }
 .ld-brand-logo { width: 20px; height: 20px; object-fit: contain; }
+.ld-theme-corner { position: fixed; top: 28px; right: 28px; z-index: 2; }
+
+.ld-theme-toggle {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--glass);
+  color: var(--text2);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease),
+              border-color var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
+}
+.ld-theme-toggle:hover { color: var(--text); background: var(--glass-hi); border-color: var(--border2); transform: translateY(-1px); }
+.ld-theme-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 
 .ld-cta {
   font-family: var(--sans);
