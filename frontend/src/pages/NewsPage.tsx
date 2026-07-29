@@ -1,5 +1,13 @@
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import { useNavigate } from "react-router-dom";
+import { GlassControlPanel } from "../components/news/GlassControlPanel";
+import {
+  GLASS_PRESETS,
+  toGlassVisualValues,
+  type GlassMode,
+  type GlassSettingName,
+  type GlassSettings,
+} from "../components/news/newsGlassSettings";
 import { useNews, type NewsTopic } from "../hooks/useNews";
 import communityVisual from "../assets/news/community.webp";
 import modelReleaseVisual from "../assets/news/model-release.webp";
@@ -28,13 +36,6 @@ const NEWS_TOPIC_VISUALS: Record<NewsTopic, string> = {
   community: communityVisual,
 };
 
-type GlassMode = "original" | "tuned";
-
-const GLASS_MODES = {
-  original: { tint: "50%", blur: "3px", scale: 77 },
-  tuned: { tint: "17%", blur: "1.25px", scale: 46 },
-} as const;
-
 function GlassLayers() {
   return (
     <>
@@ -57,13 +58,38 @@ function relativeTime(iso: string): string {
 export function NewsPage() {
   const [topic, setTopic] = useState<NewsTopic | null>(null);
   const [glassMode, setGlassMode] = useState<GlassMode>("tuned");
+  const [glassSettings, setGlassSettings] = useState<GlassSettings>(() => ({
+    ...GLASS_PRESETS.tuned,
+  }));
   const { items, loading, error, refresh, refreshState } = useNews(topic);
   const navigate = useNavigate();
-  const mode = GLASS_MODES[glassMode];
+  const visualValues = toGlassVisualValues(glassSettings);
+  const glassStyle = {
+    "--news-light-angle": `${glassSettings.lightAngle}deg`,
+    "--news-light-alpha": visualValues.lightAlpha,
+    "--news-blur": visualValues.blur,
+    "--news-tint-alpha": visualValues.tintAlpha,
+    "--news-depth-y": visualValues.depthY,
+    "--news-depth-blur": visualValues.depthBlur,
+    "--news-depth-alpha": visualValues.depthAlpha,
+    "--news-dispersion-left": visualValues.dispersionLeft,
+    "--news-dispersion-right": visualValues.dispersionRight,
+    "--news-splay": visualValues.splay,
+  } as CSSProperties;
+
+  const selectGlassPreset = (mode: GlassMode) => {
+    setGlassMode(mode);
+    setGlassSettings({ ...GLASS_PRESETS[mode] });
+  };
+
+  const updateGlassSetting = (name: GlassSettingName, value: number) => {
+    setGlassSettings((current) => ({ ...current, [name]: value }));
+  };
 
   return (
     <main
       className={`news-page news-white-liquid-page ${glassMode === "tuned" ? "news-layered-tuned" : ""}`}
+      style={glassStyle}
     >
       <svg className="news-liquid-defs" width="0" height="0" aria-hidden="true" focusable="false">
         <defs>
@@ -84,7 +110,7 @@ export function NewsPage() {
               id="news-glass-displacement"
               in="SourceGraphic"
               in2="news-glass-noise-soft"
-              scale={mode.scale}
+              scale={glassSettings.refraction}
               xChannelSelector="R"
               yChannelSelector="G"
             />
@@ -248,27 +274,12 @@ export function NewsPage() {
 
         <aside className="news-mode-panel">
           <GlassLayers />
-          <div className="news-mode-content">
-            <span className="news-mode-label">So sánh trực tiếp</span>
-            <div className="news-mode-buttons">
-              {(["original", "tuned"] as GlassMode[]).map((name) => (
-                <button
-                  key={name}
-                  className="news-mode-button"
-                  type="button"
-                  onClick={() => setGlassMode(name)}
-                  aria-pressed={glassMode === name}
-                >
-                  {name === "original" ? "Nguyên bản" : "Tinh chỉnh"}
-                </button>
-              ))}
-            </div>
-            <dl className="news-mode-readout">
-              <div><dt>Tint</dt><dd>{mode.tint}</dd></div>
-              <div><dt>Blur</dt><dd>{mode.blur}</dd></div>
-              <div><dt>Displacement</dt><dd>{mode.scale}</dd></div>
-            </dl>
-          </div>
+          <GlassControlPanel
+            activePreset={glassMode}
+            settings={glassSettings}
+            onPresetChange={selectGlassPreset}
+            onSettingChange={updateGlassSetting}
+          />
         </aside>
       </section>
 

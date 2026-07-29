@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -64,23 +64,49 @@ describe("NewsPage", () => {
     ).toBeTruthy();
   });
 
-  it("switches the whole layered material between original and tuned modes", async () => {
+  it("loads every value when the user selects a glass preset", async () => {
     vi.stubGlobal("fetch", vi.fn(async () =>
       jsonResponse({ items: [], limit: 20, offset: 0, has_more: false }),
     ));
     const user = userEvent.setup();
     const { container } = renderPage();
 
-    const main = screen.getByRole("main");
-    expect(main).toHaveClass("news-layered-tuned");
-    expect(container.querySelector("#news-glass-displacement")).toHaveAttribute("scale", "46");
+    expect(screen.getByRole("slider", { name: "Refraction" })).toHaveValue("74");
+    expect(container.querySelector("#news-glass-displacement")).toHaveAttribute("scale", "74");
 
     await user.click(screen.getByRole("button", { name: "Nguyên bản" }));
 
-    expect(main).not.toHaveClass("news-layered-tuned");
+    expect(screen.getByRole("spinbutton", { name: "Góc sáng" })).toHaveValue(111);
+    expect(screen.getByRole("slider", { name: "Refraction" })).toHaveValue("77");
+    expect(screen.getByRole("slider", { name: "Frost" })).toHaveValue("50");
     expect(container.querySelector("#news-glass-displacement")).toHaveAttribute("scale", "77");
-    expect(screen.getByText("50%")).toBeInTheDocument();
-    expect(screen.getByText("3px")).toBeInTheDocument();
+  });
+
+  it("updates the shared glass material while a control moves", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () =>
+      jsonResponse({ items: [], limit: 20, offset: 0, has_more: false }),
+    ));
+    const { container } = renderPage();
+    const main = screen.getByRole("main");
+
+    await screen.findByText(/Chưa có tin nào/i);
+
+    act(() => {
+      fireEvent.change(screen.getByRole("slider", { name: "Dispersion" }), {
+        target: { value: "80" },
+      });
+      fireEvent.change(screen.getByRole("slider", { name: "Frost" }), {
+        target: { value: "60" },
+      });
+    });
+
+    expect(screen.getByRole("slider", { name: "Dispersion" })).toHaveValue("80");
+    expect(main).toHaveStyle({
+      "--news-dispersion-left": "-6.60px",
+      "--news-dispersion-right": "6.60px",
+      "--news-blur": "3.45px",
+    });
+    expect(container.querySelectorAll(".news-glass-effect").length).toBeGreaterThan(0);
   });
 
   it("shows the empty state when there are no items", async () => {
@@ -206,7 +232,8 @@ describe("NewsPage", () => {
     expect(refresh).toHaveAttribute("aria-busy", "true");
     expect(refresh).toBeDisabled();
     expect(container.querySelector(".news-refresh-label")?.textContent).toBe("Làm mới");
-    const status = screen.getByRole("status");
+    const status = screen.getByText("Đang làm mới…");
+    expect(status).toHaveAttribute("role", "status");
     expect(status).toHaveTextContent("Đang làm mới…");
     expect(refresh).not.toContainElement(status);
   });
