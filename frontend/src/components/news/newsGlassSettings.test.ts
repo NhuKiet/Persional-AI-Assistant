@@ -37,8 +37,17 @@ describe("newsGlassSettings", () => {
       depthAlpha: "0.158",
       dispersionLeft: "-4.36px",
       dispersionRight: "4.36px",
-      splay: "42.48%",
+      splay: "14.12%",
     });
+  });
+
+  it("keeps the glint footprint small across the full Splay range", () => {
+    expect(toGlassVisualValues({ ...GLASS_PRESETS.tuned, splay: 0 }).splay).toBe(
+      "8.00%",
+    );
+    expect(toGlassVisualValues({ ...GLASS_PRESETS.tuned, splay: 100 }).splay).toBe(
+      "26.00%",
+    );
   });
 
   it("clamps editable values to each control range", () => {

@@ -72,6 +72,6 @@ export function toGlassVisualValues(settings: GlassSettings): GlassVisualValues 
     depthAlpha: (0.08 + settings.depth * 0.0026).toFixed(3),
     dispersionLeft: `${(-dispersion).toFixed(2)}px`,
     dispersionRight: `${dispersion.toFixed(2)}px`,
-    splay: `${(18 + settings.splay * 0.72).toFixed(2)}%`,
+    splay: `${(8 + settings.splay * 0.18).toFixed(2)}%`,
   };
 }
