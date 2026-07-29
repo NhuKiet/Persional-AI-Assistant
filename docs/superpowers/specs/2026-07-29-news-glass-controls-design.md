@@ -82,6 +82,25 @@ No glass surface may show an uninterrupted white outline. Active tabs remain
 identifiable through their cyan-to-blue fill, text contrast, and colored
 shadow rather than a white ring.
 
+## Directional Micro-Glint
+
+The primary highlight must not sit at the horizontal center of a glass
+surface. Anchor it at the upper-left corner and let it fall diagonally toward
+the lower-right, following the live Light angle.
+
+Keep the highlight deliberately small:
+
+- its width stays between 8% and 26% as Splay moves from 0 to 100;
+- its brightest point starts at the upper-left edge;
+- its opacity fades asymmetrically across both axes;
+- its cyan/magenta dispersion remains confined to the same corner;
+- it never forms a centered pill, a horizontal bar, or a continuous edge.
+
+Light Angle continues to control direction, Light Intensity controls
+brightness, and Splay controls the bounded glint footprint. The same material
+logic applies to command bars, controls, topic capsules, and feed glass, with
+the footprint scaling inside each surface.
+
 ## Background
 
 Remove `.news-liquid-ambient::before`, including both linear gradients and its
@@ -104,5 +123,7 @@ and caustic sweeps.
 - Contract tests verify all seven controls exist, the relevant CSS variables
   drive glass layers, the grid background rules are absent, and no continuous
   white glass border or active white outline remains.
+- Contract tests verify the highlight is upper-left anchored, has no centered
+  `translateX(-50%)`, and the Splay mapping remains within 8%–26%.
 - Existing News loading, topic filtering, refresh, typecheck, build, and full
   frontend tests must continue to pass.
