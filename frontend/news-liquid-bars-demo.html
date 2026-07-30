@@ -3,11 +3,10 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>News bars — A/B liquid glass</title>
+<title>Liquid glass — News header</title>
 <style>
   :root {
     --ink: #101a43;
-    --news-canvas: #f8faff;
     --spring: cubic-bezier(0.175, 0.885, 0.32, 2.2);
     color-scheme: light;
     font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -17,118 +16,18 @@
   body {
     min-height: 100vh;
     margin: 0;
-    padding: 0 0 80px;
+    padding: 40px 20px;
     color: var(--ink);
-    background: var(--news-canvas);
-  }
-
-  /* ── Ba bối cảnh nền để thử ───────────────────────────────── */
-  .backdrop { position: fixed; z-index: 0; inset: 0; pointer-events: none; }
-
-  /* 1. Nền News thật: gần như trắng trơn + 2 vệt mờ ở rìa */
-  body[data-scene="news"] .backdrop {
     background:
       radial-gradient(60% 70% at -6% 22%, rgba(150, 210, 255, 0.42), transparent 62%),
       radial-gradient(52% 64% at 106% 8%, rgba(176, 186, 255, 0.40), transparent 60%),
-      var(--news-canvas);
+      #f8faff;
   }
 
-  /* 2. Nền hoa văn chạy — đúng kiểu video (anim 60s linear infinite) */
-  body[data-scene="pattern"] .backdrop {
-    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120"><rect width="120" height="120" fill="%23eef4ff"/><g fill="none" stroke="%232f6fd0" stroke-width="3"><circle cx="30" cy="30" r="16"/><circle cx="90" cy="90" r="16"/><path d="M0 60h120M60 0v120"/></g><g fill="%23d9364a"><circle cx="90" cy="30" r="9"/><circle cx="30" cy="90" r="9"/></g></svg>');
-    background-size: 120px 120px;
-    background-position: 0 0;
-    animation: scenescroll 60s linear infinite;
-  }
-  @keyframes scenescroll {
-    from { background-position: 0% 0%; }
-    to   { background-position: 0% -1500%; }
-  }
+  .page { max-width: 900px; margin: 0 auto; }
 
-  /* 3. Nền ảnh rối, tương phản cao */
-  body[data-scene="photo"] .backdrop {
-    background:
-      radial-gradient(circle at 18% 26%, #ff9dda 0 12%, transparent 30%),
-      radial-gradient(circle at 74% 18%, #74e6ff 0 14%, transparent 32%),
-      radial-gradient(circle at 42% 78%, #ffd86e 0 12%, transparent 30%),
-      radial-gradient(circle at 88% 68%, #7979ff 0 14%, transparent 33%),
-      linear-gradient(126deg, #123a6d, #0b1c3a);
-  }
-
-  /* ── Khung trang ──────────────────────────────────────────── */
-  .page { position: relative; z-index: 1; margin: 0 auto; padding: 26px max(20px, calc((100vw - 1309px) / 2)) 0; }
-
-  .panel {
-    margin: 0 0 26px;
-    padding: 14px 18px;
-    border: 1px solid rgba(70, 96, 150, 0.24);
-    border-radius: 16px;
-    background: rgba(255, 255, 255, 0.86);
-    box-shadow: 0 8px 20px rgba(70, 96, 150, 0.14);
-    backdrop-filter: blur(10px);
-  }
-  .panel h2 { margin: 0 0 10px; font-size: 13px; letter-spacing: .12em; text-transform: uppercase; color: #64708c; }
-  .row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; }
-  .row + .row { margin-top: 12px; }
-  .panel label { font-size: 13px; font-weight: 600; }
-  .panel button {
-    padding: 7px 14px; border: 1px solid rgba(70, 96, 150, 0.3); border-radius: 999px;
-    background: #fff; color: var(--ink); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
-  }
-  .panel button[aria-pressed="true"] { border-color: #1d7fd8; background: #1d7fd8; color: #fff; }
-  .panel input[type="range"] { width: 190px; vertical-align: middle; }
-  .val { display: inline-block; min-width: 34px; font-variant-numeric: tabular-nums; font-weight: 700; }
-
-  .variant { margin: 0 0 40px; }
-  .tag {
-    display: inline-block; margin: 0 0 12px; padding: 5px 12px; border-radius: 999px;
-    background: rgba(16, 26, 67, 0.82); color: #fff; font-size: 12px; font-weight: 700; letter-spacing: .06em;
-  }
-  .note { margin: 12px 2px 0; max-width: 78ch; color: #55617e; font-size: 13px; line-height: 1.6; }
-
-  /* ═══ A — bản hiện tại: filter chỉ trên vệt specular ═══════ */
-  .a-bar {
-    display: flex; position: relative; align-items: center; gap: 16px;
-    height: 76px; padding: 10px 13px;
-    border: 1px solid rgba(143, 160, 199, 0.34); border-radius: 28px;
-    background:
-      linear-gradient(180deg, rgba(255,255,255,.9) 0%, rgba(255,255,255,.4) 46%, rgba(237,244,255,.54) 100%),
-      rgba(249, 252, 255, 0.62);
-    box-shadow:
-      0 0 0 2px rgba(255,255,255,.94),
-      inset 0 1px 0 rgba(255,255,255,.96),
-      inset 0 -12px 20px -16px rgba(94,118,172,.34),
-      0 16px 30px rgba(102,126,181,.2);
-    backdrop-filter: blur(24px) saturate(145%);
-  }
-  .a-bar::before {
-    position: absolute; inset: 2px; border: 1px solid rgba(255,255,255,.78);
-    border-radius: inherit; content: ""; pointer-events: none;
-  }
-  .a-bar::after {
-    position: absolute; top: 3px; right: 13%; left: 15%; height: 24px; border-radius: 999px;
-    background: linear-gradient(180deg, rgba(255,255,255,.86), rgba(255,255,255,0) 88%);
-    content: ""; opacity: .76; pointer-events: none; filter: url(#news-refraction);
-  }
-  .a-ctl {
-    position: relative; border: 1px solid rgba(143,160,199,.34); color: var(--ink); font: inherit; cursor: pointer;
-    background:
-      linear-gradient(180deg, rgba(255,255,255,.92) 0%, rgba(255,255,255,.26) 54%, rgba(255,255,255,.5) 100%),
-      rgba(249,252,255,.62);
-    box-shadow:
-      0 0 0 3px rgba(255,255,255,.94), inset 0 1px 0 rgba(255,255,255,.96),
-      inset 0 -9px 15px -12px rgba(94,118,172,.34), 0 8px 16px rgba(95,117,170,.16);
-    backdrop-filter: blur(16px) saturate(135%);
-  }
-  .a-ctl::before {
-    position: absolute; z-index: 0; inset: 2px; border: 1px solid rgba(255,255,255,.78);
-    border-radius: inherit; content: ""; pointer-events: none;
-  }
-
-  /* ═══ B — 4 lớp theo tutorial ══════════════════════════════ */
+  /* ── 4 lớp kính lỏng: effect (blur+distort) → tint → shine → content ── */
   .lg { position: relative; isolation: isolate; transition: all .4s var(--spring); }
-  /* Không dùng overflow:hidden ở lớp cha — nếu clip thì focus ring bị cắt.
-     Thay vào đó mỗi lớp tự bo theo bán kính cha. */
   .lg > .lg-effect, .lg > .lg-tint, .lg > .lg-shine {
     position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
   }
@@ -136,15 +35,13 @@
   .lg-tint   { z-index: 1; background: #ffffff80; }
   .lg-shine  { z-index: 2; box-shadow: inset 2px 2px 1px 0 #ffffff80, inset -1px -1px 1px 1px #ffffff80; }
   .lg-content { display: flex; position: relative; z-index: 3; align-items: center; width: 100%; height: 100%; }
-  body[data-distort="off"] .lg-effect { filter: none; }
 
-  .b-bar {
+  .bar {
     height: 76px; padding: 10px 13px; border-radius: 28px;
     box-shadow: 0 6px 6px #00000033, 0 0 20px #0000001a;
   }
-  .b-bar > .lg-content { gap: 16px; }
+  .bar > .lg-content { gap: 16px; }
 
-  /* ── Nội dung chung của 2 biến thể ────────────────────────── */
   .bar-title {
     flex: 1; min-width: 0; margin: 0 0 0 14px;
     font-size: clamp(1.45rem, 2.7vw, 2rem); font-weight: 650; letter-spacing: -.045em;
@@ -160,187 +57,85 @@
     color: inherit; font: inherit; font-weight: 540; cursor: pointer;
   }
   .refresh svg { color: #1f8fe0; }
-  /* .dock img:hover — ấn lún vào, không phóng to */
   .back svg, .refresh svg { transition: transform .4s var(--spring); transform-origin: center center; }
   .back:hover svg, .refresh:hover svg { transform: scale(0.95); }
 
   .tabs { display: flex; flex-wrap: wrap; justify-content: center; gap: 16px; margin-top: 21px; }
   .tab-label { font-size: 1rem; font-weight: 520; }
-  .a-tab {
-    display: inline-grid; height: 48px; place-items: center;
-    padding-inline: clamp(22px, 5vw, 60px); border-radius: 999px;
-  }
-  .a-tab-active {
-    border-color: rgba(48,140,226,.72); color: #fff;
-    background: linear-gradient(100deg, #17c9e2 0%, #1d9ae0 46%, #3f74ea 100%);
-    text-shadow: 0 1px 2px rgba(9,44,96,.34);
-    box-shadow:
-      0 0 0 3px rgba(255,255,255,.94), inset 0 1px 0 rgba(255,255,255,.66),
-      inset 0 -9px 15px -10px rgba(12,56,122,.5), 0 10px 20px rgba(31,154,236,.36);
-  }
-  .b-tab {
+  .tab {
     height: 48px; padding-inline: clamp(22px, 5vw, 60px); border-radius: 999px;
     border: 0; background: none; color: inherit; font: inherit; cursor: pointer;
     box-shadow: 0 6px 6px #00000033, 0 0 20px #0000001a;
   }
-  .b-tab > .lg-content { justify-content: center; }
-  .b-tab-active > .lg-tint {
+  .tab > .lg-content { justify-content: center; }
+  .tab-active > .lg-tint {
     background: linear-gradient(100deg, #17c9e2 0%, #1d9ae0 46%, #3f74ea 100%);
   }
-  .b-tab-active .tab-label { color: #fff; text-shadow: 0 1px 2px rgba(9,44,96,.34); }
+  .tab-active .tab-label { color: #fff; text-shadow: 0 1px 2px rgba(9,44,96,.34); }
 
-  .back:focus-visible, .refresh:focus-visible, .a-tab:focus-visible, .b-tab:focus-visible {
+  .back:focus-visible, .refresh:focus-visible, .tab:focus-visible {
     outline: 3px solid rgba(12,124,209,.9); outline-offset: 5px;
   }
 
   @media (prefers-reduced-motion: reduce) {
-    body[data-scene="pattern"] .backdrop { animation: none; }
     .lg, .back svg, .refresh svg { transition: none; }
   }
 </style>
 </head>
-<body data-scene="news" data-distort="on">
+<body>
 
 <svg width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute">
   <defs>
-    <!-- Bộ lọc của tutorial: bóp méo cái nằm SAU kính -->
     <filter id="glass-distortion" x="0%" y="0%" width="100%" height="100%">
       <feTurbulence type="turbulence" baseFrequency="0.008" numOctaves="2" seed="5" result="noise" />
-      <feDisplacementMap id="gd-map" in="SourceGraphic" in2="noise" scale="77"
+      <feDisplacementMap in="SourceGraphic" in2="noise" scale="77"
                          xChannelSelector="R" yChannelSelector="G" />
-    </filter>
-    <!-- Bộ lọc bản hiện tại: chỉ bóp vệt sáng trang trí -->
-    <filter id="news-refraction" x="-25%" y="-25%" width="150%" height="150%" color-interpolation-filters="sRGB">
-      <feTurbulence type="fractalNoise" baseFrequency="0.009 0.016" numOctaves="2" seed="9" result="n" />
-      <feGaussianBlur in="n" stdDeviation="1.8" result="ns" />
-      <feDisplacementMap in="SourceGraphic" in2="ns" scale="7" xChannelSelector="R" yChannelSelector="G" />
     </filter>
   </defs>
 </svg>
 
-<div class="backdrop"></div>
-
 <div class="page">
 
-  <div class="panel">
-    <h2>Bối cảnh nền</h2>
-    <div class="row" id="scenes">
-      <button data-scene="news" aria-pressed="true">Nền News thật (gần trắng)</button>
-      <button data-scene="pattern" aria-pressed="false">Hoa văn chạy (kiểu video)</button>
-      <button data-scene="photo" aria-pressed="false">Ảnh rối, tương phản cao</button>
-    </div>
-    <div class="row">
-      <label for="scale">Độ bóp méo <span class="val" id="scaleval">77</span></label>
-      <input type="range" id="scale" min="0" max="160" value="77" />
-      <button id="distort" aria-pressed="true">Distortion: BẬT</button>
+  <div class="lg bar">
+    <div class="lg-effect"></div><div class="lg-tint"></div><div class="lg-shine"></div>
+    <div class="lg-content">
+      <button class="back lg" style="border-radius:18px" aria-label="Về trang chủ">
+        <div class="lg-effect"></div><div class="lg-tint"></div><div class="lg-shine"></div>
+        <span class="lg-content" style="justify-content:center">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M19 12H5.6M12 5.6 5.6 12l6.4 6.4"/></svg>
+        </span>
+      </button>
+      <h1 class="bar-title">Tin tức AI &amp; Robotics</h1>
+      <button class="refresh lg" style="border-radius:18px">
+        <div class="lg-effect"></div><div class="lg-tint"></div><div class="lg-shine"></div>
+        <span class="lg-content" style="justify-content:center;gap:9px">
+          <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true">
+            <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M20.4 11.4a8.4 8.4 0 1 1-2.5-5.9"/>
+            <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M20.6 3.4v5.2h-5.2"/>
+          </svg>
+          <span>Làm mới</span>
+        </span>
+      </button>
     </div>
   </div>
 
-  <!-- ══ B ══ -->
-  <section class="variant">
-    <span class="tag">B — 4 lớp theo tutorial (effect → tint → shine → content)</span>
+  <div class="tabs" id="tabs">
+    <button class="tab lg tab-active"><div class="lg-effect"></div><div class="lg-tint"></div><div class="lg-shine"></div><span class="lg-content"><span class="tab-label">Tất cả</span></span></button>
+    <button class="tab lg"><div class="lg-effect"></div><div class="lg-tint"></div><div class="lg-shine"></div><span class="lg-content"><span class="tab-label">Model mới</span></span></button>
+    <button class="tab lg"><div class="lg-effect"></div><div class="lg-tint"></div><div class="lg-shine"></div><span class="lg-content"><span class="tab-label">Nghiên cứu</span></span></button>
+    <button class="tab lg"><div class="lg-effect"></div><div class="lg-tint"></div><div class="lg-shine"></div><span class="lg-content"><span class="tab-label">Robotics</span></span></button>
+    <button class="tab lg"><div class="lg-effect"></div><div class="lg-tint"></div><div class="lg-shine"></div><span class="lg-content"><span class="tab-label">Cộng đồng</span></span></button>
+  </div>
 
-    <div class="lg b-bar">
-      <div class="lg-effect"></div><div class="lg-tint"></div><div class="lg-shine"></div>
-      <div class="lg-content">
-        <button class="back lg" style="border-radius:18px" aria-label="Về trang chủ">
-          <div class="lg-effect"></div><div class="lg-tint"></div><div class="lg-shine"></div>
-          <span class="lg-content" style="justify-content:center">
-            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M19 12H5.6M12 5.6 5.6 12l6.4 6.4"/></svg>
-          </span>
-        </button>
-        <h1 class="bar-title">Tin tức AI &amp; Robotics</h1>
-        <button class="refresh lg" style="border-radius:18px">
-          <div class="lg-effect"></div><div class="lg-tint"></div><div class="lg-shine"></div>
-          <span class="lg-content" style="justify-content:center;gap:9px">
-            <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true">
-              <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M20.4 11.4a8.4 8.4 0 1 1-2.5-5.9"/>
-              <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M20.6 3.4v5.2h-5.2"/>
-            </svg>
-            <span>Làm mới</span>
-          </span>
-        </button>
-      </div>
-    </div>
-
-    <div class="tabs" id="btabs">
-      <button class="b-tab lg b-tab-active"><div class="lg-effect"></div><div class="lg-tint"></div><div class="lg-shine"></div><span class="lg-content"><span class="tab-label">Tất cả</span></span></button>
-      <button class="b-tab lg"><div class="lg-effect"></div><div class="lg-tint"></div><div class="lg-shine"></div><span class="lg-content"><span class="tab-label">Model mới</span></span></button>
-      <button class="b-tab lg"><div class="lg-effect"></div><div class="lg-tint"></div><div class="lg-shine"></div><span class="lg-content"><span class="tab-label">Nghiên cứu</span></span></button>
-      <button class="b-tab lg"><div class="lg-effect"></div><div class="lg-tint"></div><div class="lg-shine"></div><span class="lg-content"><span class="tab-label">Robotics</span></span></button>
-      <button class="b-tab lg"><div class="lg-effect"></div><div class="lg-tint"></div><div class="lg-shine"></div><span class="lg-content"><span class="tab-label">Cộng đồng</span></span></button>
-    </div>
-
-    <p class="note"><strong>Thay đổi so với video:</strong> bỏ <code>overflow:hidden</code> ở lớp cha (nó cắt mất focus ring, vi phạm spec §5), thay bằng <code>border-radius:inherit</code> trên từng lớp. Bấm Tab để kiểm chứng viền focus không bị cắt.</p>
-  </section>
-
-  <!-- ══ A ══ -->
-  <section class="variant">
-    <span class="tag">A — bản đang chạy trong repo (filter chỉ trên vệt sáng)</span>
-
-    <div class="a-bar">
-      <button class="a-ctl back" aria-label="Về trang chủ">
-        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M19 12H5.6M12 5.6 5.6 12l6.4 6.4"/></svg>
-      </button>
-      <h1 class="bar-title">Tin tức AI &amp; Robotics</h1>
-      <button class="a-ctl refresh">
-        <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true">
-          <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M20.4 11.4a8.4 8.4 0 1 1-2.5-5.9"/>
-          <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M20.6 3.4v5.2h-5.2"/>
-        </svg>
-        <span>Làm mới</span>
-      </button>
-    </div>
-
-    <div class="tabs" id="atabs">
-      <button class="a-ctl a-tab a-tab-active"><span class="tab-label">Tất cả</span></button>
-      <button class="a-ctl a-tab"><span class="tab-label">Model mới</span></button>
-      <button class="a-ctl a-tab"><span class="tab-label">Nghiên cứu</span></button>
-      <button class="a-ctl a-tab"><span class="tab-label">Robotics</span></button>
-      <button class="a-ctl a-tab"><span class="tab-label">Cộng đồng</span></button>
-    </div>
-  </section>
-
-  <p class="note">
-    Đổi nền sang <em>Hoa văn chạy</em> hoặc <em>Ảnh rối</em> rồi so lại — đó là lúc chênh lệch A/B lộ ra rõ nhất.
-    Trên nền News thật, hai bản gần như không khác nhau: không có gì phía sau để mà bóp méo.
-  </p>
 </div>
 
 <script>
-  const body = document.body;
-
-  document.getElementById("scenes").addEventListener("click", e => {
-    const btn = e.target.closest("button[data-scene]");
+  document.getElementById("tabs").addEventListener("click", e => {
+    const btn = e.target.closest("button");
     if (!btn) return;
-    body.dataset.scene = btn.dataset.scene;
-    for (const b of document.querySelectorAll("#scenes button"))
-      b.setAttribute("aria-pressed", String(b === btn));
+    for (const b of document.getElementById("tabs").children) b.classList.remove("tab-active");
+    btn.classList.add("tab-active");
   });
-
-  const scale = document.getElementById("scale"), map = document.getElementById("gd-map");
-  scale.addEventListener("input", () => {
-    map.setAttribute("scale", scale.value);
-    document.getElementById("scaleval").textContent = scale.value;
-  });
-
-  const dist = document.getElementById("distort");
-  dist.addEventListener("click", () => {
-    const on = body.dataset.distort === "on";
-    body.dataset.distort = on ? "off" : "on";
-    dist.setAttribute("aria-pressed", String(!on));
-    dist.textContent = "Distortion: " + (on ? "TẮT" : "BẬT");
-  });
-
-  for (const id of ["atabs", "btabs"]) {
-    const cls = id === "atabs" ? "a-tab-active" : "b-tab-active";
-    document.getElementById(id).addEventListener("click", e => {
-      const btn = e.target.closest("button");
-      if (!btn) return;
-      for (const b of document.getElementById(id).children) b.classList.remove(cls);
-      btn.classList.add(cls);
-    });
-  }
 </script>
 </body>
 </html>

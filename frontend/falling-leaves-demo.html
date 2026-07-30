@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Lá rơi</title>
+<style>
+  :root {
+    color-scheme: dark;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  html, body {
+    margin: 0;
+    height: 100%;
+    overflow: hidden;
+    background: radial-gradient(120% 100% at 50% 0%, #2a3324 0%, #1b2417 42%, #0f150c 100%);
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  }
+
+  canvas {
+    display: block;
+    width: 100vw;
+    height: 100vh;
+  }
+
+  .hud {
+    position: fixed;
+    top: 22px;
+    left: 22px;
+    z-index: 5;
+    color: #eef3e4;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+    pointer-events: none;
+    user-select: none;
+  }
+
+  .hud .eyebrow {
+    margin: 0 0 6px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: #c7d2a8;
+  }
+
+  .hud h1 {
+    margin: 0;
+    font-size: clamp(26px, 4vw, 44px);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+  }
+
+  .controls {
+    position: fixed;
+    right: 22px;
+    bottom: 22px;
+    z-index: 5;
+    display: grid;
+    gap: 10px;
+    padding: 16px;
+    width: 240px;
+    border-radius: 18px;
+    background: rgba(20, 26, 15, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(14px) saturate(140%);
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+    color: #eef3e4;
+  }
+
+  .controls label {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #c7d2a8;
+  }
+
+  .controls output {
+    font-weight: 700;
+    color: #eef3e4;
+  }
+
+  .controls input[type="range"] {
+    grid-column: 1 / -1;
+    width: 100%;
+    accent-color: #e0a458;
+  }
+
+  .controls .row {
+    display: grid;
+    gap: 4px;
+  }
+
+  .controls select {
+    grid-column: 1 / -1;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(255, 255, 255, 0.06);
+    color: #eef3e4;
+    font: inherit;
+  }
+
+  .ground-fade {
+    position: fixed;
+    inset: auto 0 0 0;
+    height: 22vh;
+    z-index: 2;
+    pointer-events: none;
+    background: linear-gradient(to top, rgba(10, 13, 7, 0.75), transparent);
+  }
+</style>
+</head>
+<body>
+  <canvas id="scene"></canvas>
+  <div class="ground-fade"></div>
+
+  <div class="hud">
+    <p class="eyebrow">Autumn canvas study</p>
+    <h1>Lá rơi</h1>
+  </div>
+
+  <div class="controls">
+    <div class="row">
+      <label for="density">Mật độ lá <output id="densityOut">70</output></label>
+      <input id="density" type="range" min="10" max="200" value="70" />
+    </div>
+    <div class="row">
+      <label for="wind">Gió <output id="windOut">1.0</output></label>
+      <input id="wind" type="range" min="-30" max="30" value="10" />
+    </div>
+    <div class="row">
+      <label for="speed">Tốc độ rơi <output id="speedOut">1.0</output></label>
+      <input id="speed" type="range" min="30" max="220" value="90" />
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById("scene");
+    const ctx = canvas.getContext("2d");
+
+    const densityInput = document.getElementById("density");
+    const windInput = document.getElementById("wind");
+    const speedInput = document.getElementById("speed");
+    const densityOut = document.getElementById("densityOut");
+    const windOut = document.getElementById("windOut");
+    const speedOut = document.getElementById("speedOut");
+
+    const LEAF_COLORS = [
+      "#d9622b", "#e0a458", "#c1451f", "#8a9a4b",
+      "#e8c15a", "#b5451f", "#c98a2b", "#9c6b2a",
+    ];
+
+    const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    let width = 0;
+    let height = 0;
+    let dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+    function resize() {
+      width = window.innerWidth;
+      height = window.innerHeight;
+      canvas.width = Math.floor(width * dpr);
+      canvas.height = Math.floor(height * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    window.addEventListener("resize", resize);
+    resize();
+
+    function rand(min, max) {
+      return min + Math.random() * (max - min);
+    }
+
+    class Leaf {
+      constructor(spawnAbove) {
+        this.reset(spawnAbove);
+      }
+
+      reset(spawnAbove) {
+        this.x = rand(-40, width + 40);
+        this.y = spawnAbove ? rand(-height, -20) : -30;
+        this.size = rand(10, 22);
+        this.color = LEAF_COLORS[Math.floor(Math.random() * LEAF_COLORS.length)];
+        this.baseFall = rand(0.7, 1.3);
+        this.swayAmp = rand(24, 70);
+        this.swaySpeed = rand(0.6, 1.6);
+        this.swayPhase = rand(0, Math.PI * 2);
+        this.rotation = rand(0, Math.PI * 2);
+        this.rotationSpeed = rand(-1.4, 1.4);
+        this.spinWobble = rand(0.4, 1.2);
+        this.flutterPhase = rand(0, Math.PI * 2);
+        this.flutterSpeed = rand(2, 4);
+        this.driftSeed = rand(0, 1000);
+        this.opacity = rand(0.75, 1);
+      }
+
+      update(dt, elapsed, fallSpeed, windStrength) {
+        const t = elapsed * this.swaySpeed + this.swayPhase;
+        const sway = Math.sin(t) * this.swayAmp * 0.02;
+
+        this.y += fallSpeed * this.baseFall * dt;
+        this.x += (sway + windStrength) * dt;
+        this.rotation += this.rotationSpeed * dt * this.spinWobble;
+        this.flutterPhase += this.flutterSpeed * dt;
+
+        if (this.y - this.size > height + 20) {
+          this.reset(false);
+        }
+        if (this.x < -60) this.x = width + 40;
+        if (this.x > width + 60) this.x = -40;
+      }
+
+      draw(ctx) {
+        const flutter = Math.sin(this.flutterPhase) * 0.35 + 0.65;
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.rotation);
+        ctx.scale(flutter, 1);
+        ctx.globalAlpha = this.opacity;
+
+        const s = this.size;
+        ctx.beginPath();
+        ctx.moveTo(0, -s);
+        ctx.bezierCurveTo(s * 0.9, -s * 0.6, s * 0.9, s * 0.5, 0, s);
+        ctx.bezierCurveTo(-s * 0.9, s * 0.5, -s * 0.9, -s * 0.6, 0, -s);
+        ctx.closePath();
+        ctx.fillStyle = this.color;
+        ctx.fill();
+
+        ctx.strokeStyle = "rgba(0, 0, 0, 0.18)";
+        ctx.lineWidth = Math.max(0.6, s * 0.05);
+        ctx.beginPath();
+        ctx.moveTo(0, -s * 0.85);
+        ctx.lineTo(0, s * 0.85);
+        ctx.stroke();
+
+        ctx.restore();
+      }
+    }
+
+    let leaves = [];
+    function setDensity(count) {
+      if (leaves.length < count) {
+        while (leaves.length < count) leaves.push(new Leaf(true));
+      } else {
+        leaves.length = count;
+      }
+    }
+    setDensity(Number(densityInput.value));
+
+    densityInput.addEventListener("input", () => {
+      densityOut.textContent = densityInput.value;
+      setDensity(Number(densityInput.value));
+    });
+    windInput.addEventListener("input", () => {
+      windOut.textContent = (Number(windInput.value) / 10).toFixed(1);
+    });
+    speedInput.addEventListener("input", () => {
+      speedOut.textContent = (Number(speedInput.value) / 90).toFixed(1);
+    });
+    windOut.textContent = (Number(windInput.value) / 10).toFixed(1);
+    speedOut.textContent = (Number(speedInput.value) / 90).toFixed(1);
+
+    let lastTime = performance.now();
+    let elapsed = 0;
+
+    function frame(now) {
+      const dt = Math.min((now - lastTime) / 1000, 0.05);
+      lastTime = now;
+      elapsed += dt;
+
+      ctx.clearRect(0, 0, width, height);
+
+      const fallSpeed = Number(speedInput.value);
+      const windStrength = Number(windInput.value);
+
+      for (const leaf of leaves) {
+        if (!prefersReducedMotion) {
+          leaf.update(dt, elapsed, fallSpeed, windStrength);
+        }
+        leaf.draw(ctx);
+      }
+
+      requestAnimationFrame(frame);
+    }
+
+    requestAnimationFrame(frame);
+  </script>
+</body>
+</html>

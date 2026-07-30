@@ -52,7 +52,7 @@ test.each([
   ["/coding", /Coding/i],
   ["/pdf", /PDF/i],
   ["/tool/homework", /Bài tập/i],
-  ["/news", /Tin tức AI/i],
+  ["/news", /News/],
 ])("keeps public route %s renderable", async (path, expectedContent) => {
   render(
     <MemoryRouter initialEntries={[path]}>

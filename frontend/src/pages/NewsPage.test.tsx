@@ -30,6 +30,10 @@ function renderPage() {
   );
 }
 
+async function openGlassPanel(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole("button", { name: "Tinh chỉnh vật liệu kính" }));
+}
+
 describe("NewsPage", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -44,23 +48,57 @@ describe("NewsPage", () => {
     expect(screen.getByText("Tóm tắt dịch")).toBeInTheDocument();
   });
 
-  it("uses the layered demo as the complete news shell and keeps live articles below it", async () => {
+  it("keeps the tuning panel closed until the wrench button opens it", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () =>
+      jsonResponse({ items: [SAMPLE_ITEM], limit: 20, offset: 0, has_more: false }),
+    ));
+    const user = userEvent.setup();
+    const { container } = renderPage();
+
+    expect(screen.queryByRole("slider", { name: "Refraction" })).toBeNull();
+    const toggle = screen.getByRole("button", { name: "Tinh chỉnh vật liệu kính" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(toggle.textContent).toBe("");
+
+    await user.click(toggle);
+
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("slider", { name: "Refraction" })).toBeInTheDocument();
+    // Panel sống trong shell chứ không trong thanh lệnh (thanh bị overflow:hidden).
+    const panel = container.querySelector("#news-glass-panel");
+    expect(panel?.parentElement).toHaveClass("news-command-shell");
+    expect(screen.getByRole("banner")).not.toContainElement(panel as HTMLElement);
+  });
+
+  it("closes the tuning panel on Escape", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () =>
+      jsonResponse({ items: [], limit: 20, offset: 0, has_more: false }),
+    ));
+    const user = userEvent.setup();
+    renderPage();
+
+    await openGlassPanel(user);
+    await user.keyboard("{Escape}");
+
+    expect(screen.queryByRole("slider", { name: "Refraction" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Tinh chỉnh vật liệu kính" })).toHaveFocus();
+  });
+
+  it("drops the demo scaffolding above the live feed", async () => {
     vi.stubGlobal("fetch", vi.fn(async () =>
       jsonResponse({ items: [SAMPLE_ITEM], limit: 20, offset: 0, has_more: false }),
     ));
     const { container } = renderPage();
 
-    expect(screen.getByRole("heading", { name: /Bốn lớp.*Một mặt kính/i })).toBeInTheDocument();
-    expect(screen.getByText("Nhìn xuyên qua khối kính")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Nguyên bản" })).toHaveAttribute("aria-pressed", "false");
-    expect(screen.getByRole("button", { name: "Tinh chỉnh" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.queryByRole("heading", { name: /Bốn lớp.*Một mặt kính/i })).toBeNull();
+    expect(screen.queryByText("Nhìn xuyên qua khối kính")).toBeNull();
+    expect(container.querySelector(".news-scene-word")).toBeNull();
+    expect(container.querySelector(".news-glass-comparison")).toBeNull();
 
     const article = await screen.findByRole("link", { name: "Tiêu đề dịch" });
-    const comparison = container.querySelector(".news-glass-comparison");
-    expect(comparison).not.toBeNull();
-    const documentPosition = comparison?.compareDocumentPosition(article) ?? 0;
+    const controls = container.querySelector(".news-controls");
     expect(
-      documentPosition & Node.DOCUMENT_POSITION_FOLLOWING,
+      (controls?.compareDocumentPosition(article) ?? 0) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
   });
 
@@ -70,7 +108,10 @@ describe("NewsPage", () => {
     ));
     const user = userEvent.setup();
     const { container } = renderPage();
+    await openGlassPanel(user);
 
+    expect(screen.getByRole("button", { name: "Nguyên bản" })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("button", { name: "Tinh chỉnh" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("slider", { name: "Refraction" })).toHaveValue("74");
     expect(container.querySelector("#news-glass-displacement")).toHaveAttribute("scale", "74");
 
@@ -86,10 +127,12 @@ describe("NewsPage", () => {
     vi.stubGlobal("fetch", vi.fn(async () =>
       jsonResponse({ items: [], limit: 20, offset: 0, has_more: false }),
     ));
+    const user = userEvent.setup();
     const { container } = renderPage();
     const main = screen.getByRole("main");
 
     await screen.findByText(/Chưa có tin nào/i);
+    await openGlassPanel(user);
 
     act(() => {
       fireEvent.change(screen.getByRole("slider", { name: "Dispersion" }), {

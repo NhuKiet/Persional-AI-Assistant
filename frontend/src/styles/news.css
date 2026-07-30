@@ -1,3 +1,7 @@
+/* Pacifico: chỉ dùng cho chữ "News" (thuần ASCII) — KHÔNG có subset
+   vietnamese nên tuyệt đối không áp cho chữ tiếng Việt (xem base.css). */
+@import url('https://fonts.googleapis.com/css2?family=Pacifico&display=swap');
+
 .news-page {
   --news-ink: #0c1737;
   --news-muted: #4d5a75;
@@ -11,7 +15,7 @@
   --news-depth-alpha: 0.158;
   --news-dispersion-left: -4.36px;
   --news-dispersion-right: 4.36px;
-  --news-splay: 42.48%;
+  --news-splay: 14.12%;
   --news-panel-bg: rgb(31 33 38 / 92%);
   --news-panel-raised: rgb(255 255 255 / 7%);
   --news-panel-track: rgb(255 255 255 / 9%);
@@ -20,6 +24,10 @@
   --news-panel-accent: #209ce8;
   --news-panel-thumb: #f7fbff;
   --news-distortion: url(#news-glass-distortion);
+  --news-leaf-copper: #b77a59;
+  --news-leaf-gold: #c0a36b;
+  --news-leaf-sage: #7f8d73;
+  --news-leaf-rose: #aa7772;
   position: relative;
   isolation: isolate;
   height: 100vh;
@@ -62,7 +70,16 @@
     linear-gradient(118deg, transparent 16%, rgba(255, 255, 255, 0.48) 38%, transparent 61%),
     radial-gradient(ellipse at 50% 0%, rgba(255, 255, 255, 0.46), transparent 58%);
   content: "";
-  opacity: 0.72;
+  opacity: 0.55;
+}
+
+.news-leaves-canvas {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
 }
 
 .news-aurora {
@@ -70,7 +87,7 @@
   display: block;
   border-radius: 42% 58% 64% 36% / 48% 38% 62% 52%;
   filter: blur(34px) saturate(128%);
-  opacity: 0.76;
+  opacity: 0.62;
   will-change: transform;
 }
 
@@ -93,7 +110,7 @@
   background:
     radial-gradient(circle at 50% 46%, rgba(110, 96, 246, 0.76), transparent 56%),
     linear-gradient(140deg, rgba(67, 138, 255, 0.18), rgba(178, 93, 247, 0.66));
-  opacity: 0.64;
+  opacity: 0.52;
   animation: news-aurora-violet 23s var(--ease) infinite alternate;
 }
 
@@ -105,7 +122,7 @@
   background:
     radial-gradient(circle at 54% 46%, rgba(255, 85, 144, 0.7), transparent 56%),
     linear-gradient(118deg, rgba(255, 134, 90, 0.7), rgba(255, 77, 166, 0.28));
-  opacity: 0.58;
+  opacity: 0.48;
   animation: news-aurora-coral 21s var(--ease) infinite alternate;
 }
 
@@ -117,7 +134,7 @@
   background:
     radial-gradient(circle at 46% 40%, rgba(255, 209, 90, 0.68), transparent 58%),
     linear-gradient(135deg, rgba(255, 152, 81, 0.44), rgba(255, 222, 123, 0.16));
-  opacity: 0.48;
+  opacity: 0.40;
   animation: news-aurora-violet 27s var(--ease) infinite alternate-reverse;
 }
 
@@ -132,7 +149,7 @@
     linear-gradient(126deg, transparent 8%, rgba(255, 255, 255, 0.66) 42%, transparent 58%),
     linear-gradient(42deg, rgba(71, 211, 244, 0.24), rgba(118, 102, 247, 0.19) 52%, rgba(255, 113, 157, 0.17));
   filter: blur(9px);
-  opacity: 0.78;
+  opacity: 0.60;
   transform: rotate(-8deg);
 }
 
@@ -258,72 +275,30 @@
   100% { transform: translate3d(-17%, 14%, 0) rotate(-6deg) scale(0.96); }
 }
 
-.news-scene-word {
-  position: absolute;
-  z-index: -1;
-  top: 172px;
-  left: 5vw;
-  color: rgba(10, 26, 61, 0.09);
-  font-family: var(--display);
-  font-size: clamp(100px, 17vw, 260px);
-  font-weight: 800;
-  letter-spacing: -0.09em;
-  line-height: 1;
-  white-space: nowrap;
-  user-select: none;
-}
-
-.news-intro,
 .news-controls,
-.news-glass-comparison,
 .news-feed {
   position: relative;
-  z-index: 1;
   width: min(100%, 1280px);
   margin-inline: auto;
 }
 
-.news-intro {
-  display: flex;
-  align-items: end;
-  justify-content: space-between;
-  gap: 32px;
-  margin-bottom: clamp(70px, 12vh, 132px);
+.news-feed {
+  z-index: 1;
 }
 
-.news-eyebrow {
-  margin: 0 0 8px;
-  color: var(--news-muted);
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-}
-
-.news-intro h1 {
-  max-width: 900px;
-  margin: 0;
-  color: var(--news-ink);
-  font-family: var(--display);
-  font-size: clamp(42px, 7.2vw, 108px);
-  font-weight: 800;
-  letter-spacing: -0.065em;
-  line-height: 0.88;
-}
-
-.news-intro-note {
-  max-width: 330px;
-  margin: 0 0 4px;
-  color: var(--news-muted);
-  font-size: 14px;
-  line-height: 1.55;
+/* Cao hơn .news-feed: bảng tinh chỉnh là popover tràn xuống dưới thanh lệnh
+   nên toàn bộ khối .news-controls phải nổi trên nội dung feed bên dưới,
+   không chỉ riêng .news-mode-panel — z-index của popover chỉ so sánh được
+   với anh em trong cùng stacking context, không vượt ra ngoài .news-controls. */
+.news-controls {
+  z-index: 2;
 }
 
 .news-command-bar,
 .news-back,
 .news-refresh-btn,
+.news-settings-btn,
 .news-tab,
-.news-lens,
 .news-mode-panel {
   position: relative;
   overflow: hidden;
@@ -370,96 +345,129 @@
 
 .news-glass-shine::before {
   position: absolute;
-  top: 2px;
-  left: 50%;
-  width: min(68%, var(--news-splay));
+  top: 1px;
+  left: clamp(4px, 1.4%, 16px);
+  width: var(--news-splay);
   height: 2px;
   border-radius: 999px;
   box-shadow:
     var(--news-dispersion-left) 0 5px rgb(74 227 255 / 62%),
     var(--news-dispersion-right) 0 5px rgb(255 125 216 / 42%);
   content: "";
-  transform: translateX(-50%);
+  transform: rotate(-10deg);
+  transform-origin: left center;
 }
 
 .news-glass-shine::after {
   position: absolute;
-  top: 3px;
-  left: 50%;
-  height: 24%;
-  border-radius: 999px;
+  top: -8%;
+  left: -1%;
+  height: 62%;
+  border-radius: 0 0 72% 0;
   background:
     linear-gradient(
       var(--news-light-angle),
       rgb(255 255 255 / var(--news-light-alpha)),
-      rgb(255 255 255 / 10%) 46%,
-      transparent 88%
+      rgb(255 255 255 / 8%) 42%,
+      transparent 82%
     );
   width: var(--news-splay);
   content: "";
   filter: url(#news-liquid-refraction);
-  transform: translateX(-50%);
+  -webkit-mask-image:
+    radial-gradient(ellipse 120% 105% at 0 0, #000 0%, rgb(0 0 0 / 76%) 30%, transparent 78%);
+  mask-image:
+    radial-gradient(
+      ellipse 120% 105% at 0 0,
+      #000 0%,
+      rgb(0 0 0 / 76%) 30%,
+      transparent 78%
+    );
+  transform: rotate(-4deg);
+  transform-origin: top left;
 }
 
 .news-command-shell {
+  position: relative;
   width: 100%;
 }
 
 .news-command-bar {
   width: 100%;
-  min-height: 88px;
-  padding: 13px 16px;
-  border-radius: 34px;
+  min-height: 68px;
+  padding: 10px 12px;
+  border-radius: 27px;
 }
 
 .news-bar-content {
   position: relative;
   z-index: 3;
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto 1fr auto auto;
   align-items: center;
   width: 100%;
   gap: 20px;
 }
 
 .news-back,
-.news-refresh-btn {
+.news-refresh-btn,
+.news-settings-btn {
   z-index: 3;
-  min-height: 58px;
-  border-radius: 22px;
+  min-height: 46px;
+  border-radius: 17px;
   cursor: pointer;
 }
 
-.news-back {
+.news-back,
+.news-settings-btn {
   display: grid;
-  width: 70px;
+  width: 54px;
   place-items: center;
+}
+
+.news-settings-btn {
+  color: var(--news-muted);
+}
+
+.news-settings-btn-active,
+.news-settings-btn:hover {
+  color: var(--news-ink);
+}
+
+.news-settings-icon {
+  position: relative;
+  z-index: 3;
+  width: 19px;
+  height: 19px;
 }
 
 .news-refresh-btn {
   display: flex;
-  min-width: 150px;
+  min-width: 122px;
   align-items: center;
   justify-content: center;
-  gap: 9px;
-  padding: 0 18px;
+  gap: 7px;
+  padding: 0 15px;
   font-weight: 700;
 }
 
 .news-back:hover,
 .news-refresh-btn:hover:not(:disabled),
+.news-settings-btn:hover,
 .news-tab:hover {
   transform: translateY(-2px);
 }
 
 .news-back:active,
 .news-refresh-btn:active:not(:disabled),
+.news-settings-btn:active,
 .news-tab:active {
   transform: scale(0.97);
 }
 
 .news-back:focus-visible,
 .news-refresh-btn:focus-visible,
+.news-settings-btn:focus-visible,
 .news-tab:focus-visible,
 .news-mode-button:focus-visible,
 .news-card-title:focus-visible {
@@ -476,8 +484,8 @@
 
 .news-back-icon,
 .news-refresh-icon {
-  width: 29px;
-  height: 29px;
+  width: 22px;
+  height: 22px;
 }
 
 .news-refresh-icon {
@@ -496,33 +504,34 @@
 .news-title {
   overflow: hidden;
   color: var(--news-ink);
-  font-family: var(--display);
-  font-size: clamp(21px, 2.4vw, 34px);
-  font-weight: 800;
-  letter-spacing: -0.035em;
+  font-family: "Pacifico", cursive;
+  font-size: clamp(24px, 2.6vw, 34px);
+  font-weight: 400;
+  letter-spacing: 0;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .news-tab-shell {
   width: min(100%, 1080px);
-  margin: 20px auto 0;
+  margin: 16px auto 0;
 }
 
 .news-tab-row {
   display: grid;
-  grid-template-columns: repeat(5, minmax(120px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(5, minmax(100px, 1fr));
+  gap: 10px;
 }
 
 .news-tab {
   display: grid;
-  min-height: 58px;
+  min-height: 46px;
   place-items: center;
   border-radius: 999px;
   cursor: pointer;
   font: inherit;
   font-weight: 750;
+  font-size: 0.92rem;
 }
 
 .news-tab-label {
@@ -550,52 +559,43 @@
   box-shadow: inset 0 -12px 22px rgba(16, 63, 183, 0.24);
 }
 
-.news-glass-comparison {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 22px;
-  width: min(100%, 1080px);
-  margin-top: 74px;
-}
-
-.news-lens {
-  display: flex;
-  min-height: 154px;
-  align-items: center;
-  justify-content: center;
-  border-radius: 46% 54% 48% 52% / 58% 43% 57% 42%;
-}
-
-.news-lens-copy {
-  position: relative;
-  z-index: 3;
-  padding: 34px;
-  text-align: center;
-}
-
-.news-lens-copy strong {
-  display: block;
-  margin-bottom: 7px;
-  font-family: var(--display);
-  font-size: clamp(21px, 2.4vw, 31px);
-  letter-spacing: -0.03em;
-}
-
-.news-lens-copy span {
-  color: var(--news-muted);
-  font-size: 14px;
-}
-
+/* Popover neo vào góc phải thanh lệnh — thanh lệnh có overflow:hidden nên
+   panel phải là con của shell, không phải của header. */
 .news-mode-panel {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 12px);
+  right: 0;
   width: 320px;
   padding: 14px;
   border-radius: 22px;
   color: var(--news-panel-text);
+  animation: news-panel-in var(--dur) var(--ease-out);
+}
+
+@keyframes news-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .news-mode-panel .news-glass-tint {
   background: var(--news-panel-bg);
+}
+
+/* Panel nền đặc màu (--news-panel-bg) nên không cần lấy mẫu nền phía sau:
+   bỏ cả filter khúc xạ SVG lẫn backdrop-filter. Nền lá rơi vẽ lại canvas
+   mỗi khung hình, backdrop-filter phải lấy mẫu liên tục dễ khiến Chromium
+   rách khung compositor, để lại vệt xám nhòe đè lên nội dung panel. */
+.news-mode-panel .news-glass-effect {
+  filter: none;
+  backdrop-filter: none;
 }
 
 .news-mode-content {
@@ -782,20 +782,7 @@
 }
 
 .news-feed {
-  margin-top: 92px;
-}
-
-.news-feed-heading {
-  margin-bottom: 24px;
-}
-
-.news-feed-heading h2 {
-  margin: 0;
-  color: var(--news-ink);
-  font-family: var(--display);
-  font-size: clamp(32px, 5vw, 64px);
-  letter-spacing: -0.055em;
-  line-height: 0.95;
+  margin-top: 36px;
 }
 
 .news-notice,
@@ -888,9 +875,9 @@
   display: block;
   margin-bottom: 10px;
   color: var(--news-ink);
-  font-family: var(--display);
+  font-family: var(--sans);
   font-size: clamp(1.05rem, 1.7vw, 1.22rem);
-  font-weight: 680;
+  font-weight: 600;
   line-height: 1.38;
   text-decoration: none;
 }
@@ -959,8 +946,8 @@
   .news-command-bar,
   .news-back,
   .news-refresh-btn,
+  .news-settings-btn,
   .news-tab,
-  .news-lens,
   .news-mode-panel,
   .news-card {
     background-color: rgba(255, 255, 255, 0.92);
@@ -979,9 +966,11 @@
 
   .news-back:hover,
   .news-refresh-btn:hover:not(:disabled),
+  .news-settings-btn:hover,
   .news-tab:hover,
   .news-back:active,
   .news-refresh-btn:active:not(:disabled),
+  .news-settings-btn:active,
   .news-tab:active,
   .news-card:hover {
     transform: none;
@@ -990,14 +979,13 @@
   .news-refresh-btn[aria-busy="true"] .news-refresh-icon {
     animation: none;
   }
+
+  .news-mode-panel {
+    animation: none;
+  }
 }
 
 @media (max-width: 900px) {
-  .news-intro {
-    align-items: start;
-    flex-direction: column;
-  }
-
   .news-tab-row {
     grid-template-columns: repeat(5, 150px);
     justify-content: start;
@@ -1010,14 +998,6 @@
     display: none;
   }
 
-  .news-glass-comparison {
-    grid-template-columns: 1fr;
-  }
-
-  .news-mode-panel {
-    width: 100%;
-  }
-
   .news-card {
     grid-template-columns: 220px minmax(0, 1fr) 48px;
     gap: 20px;
@@ -1026,7 +1006,7 @@
 
 @media (max-width: 700px) {
   .news-mode-panel {
-    width: 100%;
+    width: min(100%, 320px);
     padding: 12px;
   }
 
@@ -1060,41 +1040,31 @@
     padding: 24px 14px 56px;
   }
 
-  .news-intro {
-    margin-bottom: 72px;
-  }
-
-  .news-intro h1 {
-    font-size: clamp(48px, 16vw, 76px);
-  }
-
-  .news-scene-word {
-    top: 210px;
-  }
-
   .news-command-bar {
-    min-height: 72px;
-    padding: 9px;
-    border-radius: 27px;
+    min-height: 58px;
+    padding: 7px;
+    border-radius: 22px;
   }
 
   .news-bar-content {
-    gap: 11px;
+    gap: 8px;
   }
 
   .news-back,
-  .news-refresh-btn {
-    min-height: 50px;
-    border-radius: 18px;
+  .news-refresh-btn,
+  .news-settings-btn {
+    min-height: 42px;
+    border-radius: 15px;
   }
 
-  .news-back {
-    width: 52px;
+  .news-back,
+  .news-settings-btn {
+    width: 44px;
   }
 
   .news-refresh-btn {
-    min-width: 52px;
-    padding: 0 13px;
+    min-width: 44px;
+    padding: 0 11px;
   }
 
   .news-refresh-label {
@@ -1105,12 +1075,8 @@
     font-size: 1.15rem;
   }
 
-  .news-glass-comparison {
-    margin-top: 54px;
-  }
-
   .news-feed {
-    margin-top: 68px;
+    margin-top: 48px;
   }
 
   .news-card {
