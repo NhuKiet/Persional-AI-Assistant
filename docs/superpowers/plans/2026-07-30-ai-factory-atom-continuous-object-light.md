@@ -1,10 +1,10 @@
-# AI Factory Atom Continuous Object-Only Light Implementation Plan
+# AI Factory Atom Continuous Object-Only Light and Shard Micro-Orbit Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Remove the perceived pauses between rings 1–2 and 2–3 by deriving every existing block's wave phase from one monotonic radial field, while keeping empty space dark and brightening the cinematic background.
+**Goal:** Remove the perceived pauses between rings 1–2 and 2–3 with one monotonic object-only radial field, brighten the cinematic background, and give every tiny block the approved deterministic `4%` / `0.35×` local micro-orbit.
 
-**Architecture:** The standalone HTML remains a single Three.js artifact. A construction-time radial transfer maps core and ring shard radii into one ordered phase domain; the existing asymmetric object signal and additive instance overlays consume those phases. A damped scalar follows object energy for bloom, while a focused PowerShell contract and browser captures verify that no travelling gap-light layer is introduced.
+**Architecture:** The standalone HTML remains a single Three.js artifact. A construction-time radial transfer maps core and ring shard radii into one ordered phase domain; the existing asymmetric object signal and additive instance overlays consume those phases. One shared shader patch applies seeded instanced micro-motion to both opaque shards and their additive overlays, and one shared time uniform advances without per-frame instance-matrix rewrites. A damped scalar follows object energy for bloom, while a focused PowerShell contract and browser captures verify continuity, GPU synchronization, silhouette stability, and the absence of travelling gap light.
 
 **Tech Stack:** HTML/CSS, JavaScript ES modules, Three.js `0.164.1`, PowerShell contract checks, Node syntax checking, in-app browser runtime verification, FFmpeg contact sheets.
 
@@ -12,18 +12,24 @@
 
 - Only existing core and ring blocks may become brighter; empty space between rings must remain empty and dark.
 - Do not add a visible shockwave sphere, shell, disc, line, sprite, particle layer, geometry, or travelling light in the gaps.
-- Preserve seeded shard placement, ring geometry, camera composition, interactions, rotation speeds, responsive layout, fallback behavior, dark bevels, and material variation.
+- Preserve seeded shard placement, ring geometry, camera composition, interactions, assembly-level core/ring rotation speeds, responsive layout, fallback behavior, dark bevels, and material variation.
 - CSS base background and Three.js scene/fog background must be `#110d0b` / `0x110d0b`.
 - Radial phase ordering must be monotonic by physical shard radius; fixed `bandSlots` must not participate in travelling-wave timing.
 - At each ring 1→2 and ring 2→3 hand-off, outgoing or incoming normalized object energy must remain at least `0.20`.
 - Bloom damping must be FPS-independent and sourced only from current object energy.
 - `prefers-reduced-motion` keeps a static object-energy state and does not advance the travelling front or bloom damping.
+- Each core and ring block uses a closed shard-local ellipse with translation amplitude `0.04 × shard characteristic size`, time scale `0.35×`, and second-harmonic self-tilt amplitude `0.16` radians.
+- Core motion parameters use frequency `0.78–1.30` and ellipse ratio `0.42–0.76`; ring parameters use frequency `0.62–1.02` and ellipse ratio `0.38–0.66`.
+- Motion parameters must be deterministic for a given seed and must not consume the placement/color random stream.
+- Opaque shards and their additive overlays must use the exact same instanced attribute and shared shader time uniform.
+- `prefers-reduced-motion` disables shard translation and self-tilt, leaving seeded base transforms.
 - Do not introduce per-frame matrix, color, vector, array, or geometry allocations.
+- Do not call `setMatrixAt` or mark `instanceMatrix` dirty from the animation loop for micro-motion.
 - Back up the target with long-path-safe APIs and verify the backup SHA-256 before replacement.
 
 ---
 
-### Task 1: Add a Failing Continuous Object-Light Contract
+### Task 1: Add a Failing Continuous Object-Light and Micro-Orbit Contract
 
 **Files:**
 - Create: `C:\Users\longt\.codex\visualizations\2026\07\29\019fae9f-3167-7211-bbed-6998cd3c6de3\verify-ai-factory-atom-continuous-object-light.ps1`
@@ -69,10 +75,44 @@ Require-Match 'smoothedWaveEnergy\s*\+=\s*\(peakEnergy\s*-\s*smoothedWaveEnergy\
 Require-Match 'const prefersReduced\s*=\s*matchMedia\(' 'The native reduced-motion preference must remain authoritative.'
 Require-Match 'reducedMotion' 'A browser-verifiable reduced-motion query override is required.'
 Require-Match 'if\s*\(!prefersReduced\)\s*\{[\s\S]{0,900}?updateCapabilityWave\(dt\)' 'Travelling updates must remain reduced-motion guarded.'
+Require-Match 'microMotion:\s*\{[\s\S]{0,500}?amplitude:\s*0\.04' 'Micro-orbit amplitude must be 4 percent of shard-local size.'
+Require-Match 'timeScale:\s*0\.35' 'Micro-orbit time scale must be 0.35x.'
+Require-Match 'tiltAmplitude:\s*0\.16' 'Self-tilt amplitude must remain 0.16 radians.'
+Require-Match 'coreFrequency:\s*\[0\.78,\s*1\.30\]' 'Core frequency range must match the approved motion.'
+Require-Match 'ringFrequency:\s*\[0\.62,\s*1\.02\]' 'Ring frequency range must match the approved motion.'
+Require-Match 'coreEllipse:\s*\[0\.42,\s*0\.76\]' 'Core ellipse range must match the approved motion.'
+Require-Match 'ringEllipse:\s*\[0\.38,\s*0\.66\]' 'Ring ellipse range must match the approved motion.'
+Require-Match 'function createMicroMotionAttribute\(geometry,\s*count,\s*seed,\s*frequencyRange,\s*ellipseRange\)' 'Seeded per-instance motion data must be created once.'
+Require-Match "setAttribute\('instanceMicroMotion',\s*new THREE\.InstancedBufferAttribute\(data,\s*4\)\)" 'Micro-motion must use one vec4 instanced attribute.'
+Require-Match 'function installShardMicroMotion\(material\)' 'Both material families need one shared shader patch.'
+Require-Match 'attribute vec4 instanceMicroMotion' 'The vertex shader must consume per-instance motion data.'
+Require-Match 'shader\.uniforms\.uMicroTime\s*=\s*microMotionUniforms\.uMicroTime' 'All patched materials must share one time uniform.'
+Require-Match 'installShardMicroMotion\(coreMat\);\s*\r?\n\s*const mesh' 'The opaque core material must receive micro-motion before mesh creation.'
+Require-Match 'installShardMicroMotion\(mat\);\s*\r?\n\s*ringMats\.push' 'Opaque ring materials must receive micro-motion before mesh creation.'
+Require-Match 'installShardMicroMotion\(material\);\s*\r?\n\s*const waveMesh' 'Additive overlay materials must receive the same micro-motion patch.'
+Require-Match 'createMicroMotionAttribute\([\s\S]{0,300}?CONFIG\.microMotion\.coreFrequency' 'Core geometry must receive seeded core motion data.'
+Require-Match 'createMicroMotionAttribute\([\s\S]{0,300}?CONFIG\.microMotion\.ringFrequency' 'Ring geometry must receive seeded ring motion data.'
+Require-Match 'if\s*\(!prefersReduced\)\s*\{[\s\S]{0,900}?microMotionTime\s*\+=\s*dt' 'Micro-motion time must advance only outside reduced motion.'
+Require-Match 'microMotionUniforms\.uMicroTime\.value\s*=\s*microMotionTime' 'The animation loop must update only the shared time uniform.'
 
 Forbid-Match 'bandSlots\s*:' 'Fixed band slots cause the outer-ring pauses.'
 Forbid-Match 'new\s+THREE\.(SphereGeometry|RingGeometry|CircleGeometry)\b' 'No travelling shell or disc may fill empty space.'
 Forbid-Match '(gapGlow|shockwaveMesh|waveShell|travellingLight)' 'No gap-light helper may be introduced.'
+
+$animateMatch = [regex]::Match(
+  $source,
+  'function animate\(\)\s*\{[\s\S]*?\n\}\s*function start\('
+)
+if (-not $animateMatch.Success) {
+  $failures.Add('The animation loop could not be inspected.')
+} else {
+  if ($animateMatch.Value -match '\bsetMatrixAt\b') {
+    $failures.Add('The animation loop must not rewrite per-instance matrices.')
+  }
+  if ($animateMatch.Value -match 'instanceMatrix\.needsUpdate') {
+    $failures.Add('The animation loop must not upload instance matrices for micro-motion.')
+  }
+}
 
 $anchors = @(
   [pscustomobject]@{ Radius = 0.00; Phase = 0.00 },
@@ -108,7 +148,7 @@ if ($failures.Count -gt 0) {
   exit 1
 }
 
-Write-Output 'PASS: continuous object-only Atom light contract'
+Write-Output 'PASS: continuous object-only Atom light and micro-orbit contract'
 ```
 
 - [ ] **Step 2: Run the contract against the current target and verify RED**
@@ -122,8 +162,9 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File `
 ```
 
 Expected: exit `1`. Failures must include the old `#080706` background, the
-presence of `bandSlots`, and the absence of `radialPhaseFromRadius` and
-`smoothedWaveEnergy`.
+presence of `bandSlots`, and the absence of `radialPhaseFromRadius`,
+`smoothedWaveEnergy`, the approved `4%` / `0.35×` configuration, the
+`instanceMicroMotion` attribute, and the shared shader patch.
 
 - [ ] **Step 3: Save the RED evidence**
 
@@ -137,7 +178,7 @@ No production or target file changes are allowed in Task 1.
 
 ---
 
-### Task 2: Implement the Monotonic Object-Only Radial Field
+### Task 2: Implement the Radial Field and GPU Shard Micro-Orbits
 
 **Files:**
 - Create: `C:\Users\longt\.codex\visualizations\2026\07\29\019fae9f-3167-7211-bbed-6998cd3c6de3\ai-factory-atom-continuous-object-light.html`
@@ -146,7 +187,7 @@ No production or target file changes are allowed in Task 1.
 
 **Interfaces:**
 - Consumes: the current delivered target and the RED contract from Task 1.
-- Produces: a contract-green, syntax-valid trial artifact. `radialPhaseFromRadius(radius: number): number` returns a monotonic phase in `[0, 0.62]`.
+- Produces: a contract-green, syntax-valid trial artifact. `radialPhaseFromRadius(radius: number): number` returns a monotonic phase in `[0, 0.62]`; `createMicroMotionAttribute(...)` uploads one deterministic `vec4` per shard; `installShardMicroMotion(material)` applies the same transform to opaque and additive materials.
 
 - [ ] **Step 1: Create the isolated trial copy**
 
@@ -278,7 +319,184 @@ Remove the three separate `new URLSearchParams(location.search)` calls. This
 does not alter normal users' OS preference; it only permits deterministic
 runtime verification.
 
-- [ ] **Step 7: Run the focused contract and verify GREEN**
+- [ ] **Step 7: Add the fixed micro-motion calibration and shared uniforms**
+
+Add this sibling section to `CONFIG`:
+
+```js
+microMotion: {
+  amplitude: 0.04,
+  timeScale: 0.35,
+  tiltAmplitude: 0.16,
+  coreFrequency: [0.78, 1.30],
+  ringFrequency: [0.62, 1.02],
+  coreEllipse: [0.42, 0.76],
+  ringEllipse: [0.38, 0.66],
+  seedOffset: 1000003
+},
+```
+
+Near `waveTime`, add one persistent clock and one shared uniform object:
+
+```js
+let microMotionTime = 0;
+const microMotionUniforms = {
+  uMicroTime: { value: 0 },
+  uMicroEnabled: { value: prefersReduced ? 0 : 1 }
+};
+```
+
+Do not expose these production values as UI controls.
+
+- [ ] **Step 8: Create deterministic per-instance motion attributes**
+
+Add this helper after `createShardGeometry`:
+
+```js
+function createMicroMotionAttribute(geometry, count, seed, frequencyRange, ellipseRange){
+  const rnd = createSeededRandom(seed);
+  const data = new Float32Array(count * 4);
+  for (let i = 0; i < count; i++){
+    const offset = i * 4;
+    data[offset] = rnd() * Math.PI * 2;
+    data[offset + 1] = range(rnd, frequencyRange[0], frequencyRange[1]);
+    data[offset + 2] = range(rnd, ellipseRange[0], ellipseRange[1]);
+    data[offset + 3] = rnd() * Math.PI * 2;
+  }
+  geometry.setAttribute(
+    'instanceMicroMotion',
+    new THREE.InstancedBufferAttribute(data, 4)
+  );
+}
+```
+
+In `createCore`, immediately after creating `geo`, attach core parameters with
+an independent seed:
+
+```js
+createMicroMotionAttribute(
+  geo,
+  count,
+  CONFIG.seed + CONFIG.microMotion.seedOffset,
+  CONFIG.microMotion.coreFrequency,
+  CONFIG.microMotion.coreEllipse
+);
+```
+
+Move `const count = profile.coreCount;` above this call if necessary. Do not
+reuse the core placement `rnd`, because consuming it would change existing
+shard placement and colour.
+
+In `createOrbitalRing`, attach ring parameters immediately after creating
+`geo`:
+
+```js
+createMicroMotionAttribute(
+  geo,
+  count,
+  CONFIG.seed + Math.round(def.radius * 1000) + CONFIG.microMotion.seedOffset,
+  CONFIG.microMotion.ringFrequency,
+  CONFIG.microMotion.ringEllipse
+);
+```
+
+The base mesh and its overlay already share the same geometry, so both consume
+the exact same attribute without duplicating buffers.
+
+- [ ] **Step 9: Patch opaque and additive vertex shaders identically**
+
+Add this helper before `createCore`:
+
+```js
+function installShardMicroMotion(material){
+  material.onBeforeCompile = shader => {
+    shader.uniforms.uMicroTime = microMotionUniforms.uMicroTime;
+    shader.uniforms.uMicroEnabled = microMotionUniforms.uMicroEnabled;
+
+    shader.vertexShader = shader.vertexShader
+      .replace(
+        '#include <common>',
+        `#include <common>
+attribute vec4 instanceMicroMotion;
+uniform float uMicroTime;
+uniform float uMicroEnabled;
+
+float shardMicroTheta(){
+  return uMicroTime
+    * ${CONFIG.microMotion.timeScale.toFixed(2)}
+    * instanceMicroMotion.y
+    * 6.28318530718
+    + instanceMicroMotion.x;
+}
+
+mat2 shardMicroRotation(float angle){
+  float c = cos(angle);
+  float s = sin(angle);
+  return mat2(c, s, -s, c);
+}`
+      )
+      .replace(
+        '#include <beginnormal_vertex>',
+        `#include <beginnormal_vertex>
+float microNormalTheta = shardMicroTheta();
+float microNormalTilt = sin(
+  microNormalTheta * 2.0 + instanceMicroMotion.w
+) * ${CONFIG.microMotion.tiltAmplitude.toFixed(2)} * uMicroEnabled;
+objectNormal.xy = shardMicroRotation(microNormalTilt) * objectNormal.xy;`
+      )
+      .replace(
+        '#include <begin_vertex>',
+        `#include <begin_vertex>
+float microPositionTheta = shardMicroTheta();
+float microPositionTilt = sin(
+  microPositionTheta * 2.0 + instanceMicroMotion.w
+) * ${CONFIG.microMotion.tiltAmplitude.toFixed(2)} * uMicroEnabled;
+transformed.xy = shardMicroRotation(microPositionTilt) * transformed.xy;
+vec2 microOrbit = vec2(
+  cos(microPositionTheta),
+  sin(microPositionTheta) * instanceMicroMotion.z
+) * ${CONFIG.microMotion.amplitude.toFixed(2)} * uMicroEnabled;
+transformed.xy += microOrbit;`
+      );
+  };
+  material.customProgramCacheKey = () => 'shard-micro-orbit-v1';
+}
+```
+
+Call the helper immediately after constructing each shard material:
+
+```js
+installShardMicroMotion(coreMat);
+```
+
+```js
+installShardMicroMotion(mat);
+```
+
+```js
+installShardMicroMotion(material);
+```
+
+The last call belongs in `createWaveOverlay`. The normal and position patches
+use the same second-harmonic tilt, while the opaque and additive materials
+share both the geometry attribute and uniform objects.
+
+- [ ] **Step 10: Advance only the shared micro-motion time**
+
+Inside the existing `if (!prefersReduced)` block in `animate`, before assembly
+rotation, add:
+
+```js
+microMotionTime += dt;
+microMotionUniforms.uMicroTime.value = microMotionTime;
+```
+
+Do not call `setMatrixAt`, do not touch `instanceMatrix.needsUpdate`, and do not
+allocate an array, vector, or matrix in `animate`. When `prefersReduced` is
+true, `uMicroEnabled` is `0` and the time remains frozen at the seeded base
+pose.
+
+- [ ] **Step 11: Run the focused contract and verify GREEN**
 
 Run:
 
@@ -291,10 +509,10 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File `
 Expected:
 
 ```text
-PASS: continuous object-only Atom light contract
+PASS: continuous object-only Atom light and micro-orbit contract
 ```
 
-- [ ] **Step 8: Check the inline ES module syntax**
+- [ ] **Step 12: Check the inline ES module syntax**
 
 Extract the contents of `<script type="module">...</script>` in memory and pipe
 it to:
@@ -307,18 +525,20 @@ Expected: exit `0` with no syntax output.
 
 ---
 
-### Task 3: Verify Visual Continuity, Reduced Motion, and Delivery
+### Task 3: Verify Light Continuity, Micro-Motion, Reduced Motion, and Delivery
 
 **Files:**
 - Verify: `C:\Users\longt\.codex\visualizations\2026\07\29\019fae9f-3167-7211-bbed-6998cd3c6de3\ai-factory-atom-continuous-object-light.html`
 - Create: `C:\Users\longt\.codex\visualizations\2026\07\29\019fae9f-3167-7211-bbed-6998cd3c6de3\continuous-object-light-final\frame-001.jpg` through `frame-048.jpg`
 - Create: `C:\Users\longt\.codex\visualizations\2026\07\29\019fae9f-3167-7211-bbed-6998cd3c6de3\continuous-object-light-final\contact-sheet.jpg`
+- Create: `C:\Users\longt\.codex\visualizations\2026\07\29\019fae9f-3167-7211-bbed-6998cd3c6de3\continuous-object-light-final\micro-frame-001.jpg` through `micro-frame-024.jpg`
+- Create: `C:\Users\longt\.codex\visualizations\2026\07\29\019fae9f-3167-7211-bbed-6998cd3c6de3\continuous-object-light-final\micro-contact-sheet.jpg`
 - Create: `C:\Users\longt\AppData\Local\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Roaming\Claude\local-agent-mode-sessions\1a1e740c-d4a9-4ba0-afb8-912613387b04\e6d408fb-49e2-45aa-a9f8-fa9843d40c87\local_fef978ab-fbf7-4aed-84ae-533f52267181\outputs\pre-continuous-object-light.html`
 - Modify: `C:\Users\longt\AppData\Local\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Roaming\Claude\local-agent-mode-sessions\1a1e740c-d4a9-4ba0-afb8-912613387b04\e6d408fb-49e2-45aa-a9f8-fa9843d40c87\local_fef978ab-fbf7-4aed-84ae-533f52267181\outputs\ai-factory-atom.html`
 
 **Interfaces:**
 - Consumes: the contract-green trial artifact from Task 2.
-- Produces: a visually verified target, a byte-exact pre-delivery backup, 48-frame evidence, and matching trial/target/HTTP SHA-256 hashes.
+- Produces: a visually verified target, a byte-exact pre-delivery backup, full-cycle light evidence, close-up micro-motion evidence, and matching trial/target/HTTP SHA-256 hashes.
 
 - [ ] **Step 1: Serve and inspect the trial**
 
@@ -360,7 +580,34 @@ Reject the trial if ring 1→2 or ring 2→3 contains a fully dark hand-off, a
 one-frame brightness step, a luminous bridge in empty space, or flat white
 block silhouettes.
 
-- [ ] **Step 3: Check exact outer-ring hand-offs**
+- [ ] **Step 3: Capture and inspect individual block micro-motion**
+
+Keep the camera stationary, zoom into a region where adjacent core and
+ring-1 blocks are clearly separated, and capture 24 consecutive frames at
+approximately 20 fps. Build a 6×4 close-up sheet:
+
+```powershell
+& "C:\Users\longt\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-8.1.2-full_build\bin\ffmpeg.exe" `
+  -hide_banner -loglevel error -y -framerate 20 `
+  -i "C:\Users\longt\.codex\visualizations\2026\07\29\019fae9f-3167-7211-bbed-6998cd3c6de3\continuous-object-light-final\micro-frame-%03d.jpg" `
+  -vf "scale=360:-1,tile=6x4:padding=4:margin=4:color=black" `
+  -frames:v 1 `
+  "C:\Users\longt\.codex\visualizations\2026\07\29\019fae9f-3167-7211-bbed-6998cd3c6de3\continuous-object-light-final\micro-contact-sheet.jpg"
+```
+
+Reject the trial unless individual tiny blocks move relative to their
+neighbours on small, smooth, out-of-phase closed paths. Also reject if the
+core/ring envelope breathes, ring thickness visibly changes, blocks drift away
+from their base area, motion reads as jitter, or an additive highlight detaches
+from its opaque block.
+
+Track representative blocks over the 4.8-second full-cycle capture from Step
+2. Each observed trajectory must bend back toward its starting phase within
+the configured `2.20–4.61` second period range. Compare the first frame with a
+matching-phase frame for that block; it must return near the same base-centred
+path and show no cumulative displacement.
+
+- [ ] **Step 4: Check exact outer-ring hand-offs**
 
 Using `canvas.dataset.waveFronts` and `canvas.dataset.ringEnergy`, capture
 samples while the front crosses ring centres near phases `0.26`, `0.415`, and
@@ -374,7 +621,7 @@ Math.max(outgoingRingEnergy, incomingRingEnergy) >= 0.20
 
 Visually confirm that energy exists only on ring blocks and not between them.
 
-- [ ] **Step 4: Verify reduced motion and interactions**
+- [ ] **Step 5: Verify reduced motion and interactions**
 
 Open:
 
@@ -383,13 +630,15 @@ http://127.0.0.1:8765/ai-factory-atom-continuous-object-light.html?quality=high&
 ```
 
 Sample `canvas.dataset.waveFronts` twice at least one second apart. Both values
-must be absent or identical. Confirm canvas ready, fallback hidden, and zero
-browser logs.
+must be absent or identical. After allowing camera zoom easing to settle,
+capture two close-up frames at least one second apart; the block transforms
+must be pixel-identical within the WebGL antialiasing tolerance. Confirm canvas
+ready, fallback hidden, and zero browser logs.
 
 Return to normal motion, perform a real pointer drag and wheel zoom, then
 confirm the healthy runtime state remains unchanged.
 
-- [ ] **Step 5: Create and verify the recovery backup before replacement**
+- [ ] **Step 6: Create and verify the recovery backup before replacement**
 
 Use a long-path prefix and terminating .NET file APIs:
 
@@ -415,7 +664,7 @@ if ($beforeHash -ne $afterHash) { throw 'Backup hash mismatch; target not replac
 
 Do not continue unless the backup exists at the exact path and hashes match.
 
-- [ ] **Step 6: Replace and reverify the target**
+- [ ] **Step 7: Replace and reverify the target**
 
 Write the already-verified trial bytes to the long target path:
 
@@ -437,10 +686,11 @@ confirm:
 - WebGL has not failed;
 - browser logs are empty.
 
-- [ ] **Step 7: Record final evidence**
+- [ ] **Step 8: Record final evidence**
 
-Write exact hashes, URLs, frame paths, phase samples, interaction results,
-reduced-motion results, and browser logs to:
+Write exact hashes, URLs, full-cycle and close-up frame paths, phase samples,
+micro-motion observations, interaction results, reduced-motion results, and
+browser logs to:
 
 ```text
 C:\Users\longt\Music\KietAI\Persional-AI-Assistant\.superpowers\sdd\continuous-object-light-task-3-report.md
