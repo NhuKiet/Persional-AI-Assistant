@@ -59,8 +59,8 @@ The selected direction is the revised Option B:
   keeps the corners near the previous cinematic black.
 - Each existing small block follows a deterministic closed local ellipse around
   its seeded base transform and performs a small periodic self-tilt.
-- The user-approved demo calibration is the starting point: `9%` translation
-  amplitude and `0.70×` time scale, with deterministic per-instance phase,
+- The user-approved production calibration is `4%` translation amplitude and
+  `0.35×` time scale, with deterministic per-instance phase,
   frequency, ellipse ratio, and tilt phase.
 
 ## Individual Shard Micro-Motion
@@ -89,11 +89,11 @@ and the existing seeded world construction:
 - `ellipseRatio`: core `0.42–0.76`, rings `0.38–0.66`;
 - `tiltPhase`: uniformly distributed through `[0, 2π)`.
 
-At the approved `0.70×` time scale, the orbital angle is:
+At the approved `0.35×` time scale, the orbital angle is:
 
-`theta = elapsedSeconds × 0.70 × frequency × 2π + phase`
+`theta = elapsedSeconds × 0.35 × frequency × 2π + phase`
 
-The primary translation radius is `0.09 × shard characteristic size`. The
+The primary translation radius is `0.04 × shard characteristic size`. The
 secondary radius is the primary radius multiplied by `ellipseRatio`. A
 periodic self-tilt uses the second harmonic:
 
@@ -114,7 +114,7 @@ All per-instance motion parameters are created once during world construction
 as instanced attributes or a deterministic equivalent compatible with Three.js
 `0.164.1`.
 
-The `9%` amplitude is measured from each shard's own characteristic size, not
+The `4%` amplitude is measured from each shard's own characteristic size, not
 from ring radius. This keeps the aggregate core/ring silhouette stable and
 prevents the rings from visibly breathing, thickening, or shedding blocks.
 
@@ -216,7 +216,7 @@ when it proves:
 - no new travelling shell, shockwave geometry, gap sprite, or gap light is
   introduced.
 - opaque and additive shard materials use the same GPU micro-orbit transform;
-- the approved `9%` amplitude, `0.70×` time scale, deterministic parameter
+- the approved `4%` amplitude, `0.35×` time scale, deterministic parameter
   ranges, and second-harmonic `0.16`-radian tilt are present;
 - the animation loop updates a shared time uniform and does not rewrite
   per-instance matrices;
