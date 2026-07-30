@@ -1,4 +1,4 @@
-# AI Factory Atom — Continuous Object-Only Radial Light
+# AI Factory Atom — Continuous Object-Only Radial Light and Shard Micro-Orbits
 
 Date: 2026-07-30
 
@@ -12,6 +12,11 @@ separate beats instead of one radial event.
 
 The background also remains darker than desired.
 
+The reference video also gives the atom's smallest blocks a restrained,
+repeating local motion. The core and rings move correctly as assemblies in the
+current version, but their individual blocks remain too rigid relative to one
+another.
+
 ## Goal
 
 Create one continuous outward-moving radial light field whose timing is derived
@@ -22,6 +27,10 @@ and dark.
 The background should be visibly brighter and warmer while retaining a dark
 cinematic vignette.
 
+Add deterministic, closed micro-orbits to the individual small blocks without
+changing the established motion, scale, or silhouette of the core and three
+rings.
+
 ## Non-goals
 
 - Do not add a visible shockwave sphere, shell, disc, line, sprite, or particle
@@ -29,8 +38,11 @@ cinematic vignette.
 - Do not add new geometry or a new light source that travels through empty
   space.
 - Do not change seeded shard placement, ring geometry, camera composition,
-  interaction, rotation speeds, responsive layout, or fallback behavior.
+  interaction, assembly-level core/ring rotation speeds, responsive layout, or
+  fallback behavior.
 - Do not flatten the dark bevels and material variation of individual blocks.
+- Do not add random per-frame jitter, Brownian drift, free-floating debris, or
+  an orbit whose centre moves away from a block's seeded base transform.
 
 ## Approved Visual Direction
 
@@ -45,6 +57,66 @@ The selected direction is the revised Option B:
   the dominant ring cannot create a brightness step.
 - The base background changes from `#080706` to `#110d0b`. A dark vignette
   keeps the corners near the previous cinematic black.
+- Each existing small block follows a deterministic closed local ellipse around
+  its seeded base transform and performs a small periodic self-tilt.
+- The user-approved demo calibration is the starting point: `9%` translation
+  amplitude and `0.70×` time scale, with deterministic per-instance phase,
+  frequency, ellipse ratio, and tilt phase.
+
+## Individual Shard Micro-Motion
+
+### Scope and coordinate space
+
+Micro-motion applies only to the individual instanced blocks in the core and
+three rings. It is evaluated after each block's seeded base transform and
+before the existing assembly-level transform. The core and rings therefore
+retain their current global paths, while nearby blocks move subtly relative to
+one another.
+
+The orbit centre is always the block's seeded base position. Translation uses
+a closed ellipse in a stable shard-local tangent plane; it must not accumulate
+over time or alter the mean position. The additive highlight instance for a
+block must receive the exact same displaced transform as its base material so
+the highlight never separates into a ghost copy.
+
+### Deterministic motion model
+
+Each instance receives stable motion parameters derived from its instance index
+and the existing seeded world construction:
+
+- `phase`: uniformly distributed through `[0, 2π)`;
+- `frequency`: core `0.78–1.30`, rings `0.62–1.02`;
+- `ellipseRatio`: core `0.42–0.76`, rings `0.38–0.66`;
+- `tiltPhase`: uniformly distributed through `[0, 2π)`.
+
+At the approved `0.70×` time scale, the orbital angle is:
+
+`theta = elapsedSeconds × 0.70 × frequency × 2π + phase`
+
+The primary translation radius is `0.09 × shard characteristic size`. The
+secondary radius is the primary radius multiplied by `ellipseRatio`. A
+periodic self-tilt uses the second harmonic:
+
+`tilt = sin(2 × theta + tiltPhase) × 0.16 radians`
+
+These values are fixed production calibration, not exposed as new UI controls.
+The motion is periodic and deterministic for a given seed. Reloading the page
+must recreate the same block paths.
+
+### GPU execution and silhouette limits
+
+Apply translation and self-tilt in the vertex shader for both the opaque shard
+material and its existing additive overlay. Do not rewrite thousands of
+instance matrices in the animation loop.
+
+The shader receives elapsed time through one shared uniform update per frame.
+All per-instance motion parameters are created once during world construction
+as instanced attributes or a deterministic equivalent compatible with Three.js
+`0.164.1`.
+
+The `9%` amplitude is measured from each shard's own characteristic size, not
+from ring radius. This keeps the aggregate core/ring silhouette stable and
+prevents the rings from visibly breathing, thickening, or shedding blocks.
 
 ## Wave Model
 
@@ -114,11 +186,20 @@ Existing instance buffers may be updated, but the implementation should avoid
 rebuilding the world or changing quality profiles as part of a normal wave
 handoff.
 
+Micro-motion adds only shared time-uniform updates per frame. Per-instance
+phase/frequency/ellipse/tilt data is allocated once, uploaded once, and reused.
+The implementation must not call `setMatrixAt` or mark `instanceMatrix` dirty
+from the animation loop.
+
 ## Accessibility
 
 `prefers-reduced-motion: reduce` keeps the existing static object-energy state.
 The travelling radial front and bloom damping do not advance in reduced-motion
 mode.
+
+Shard micro-orbit time is also frozen in reduced-motion mode. The frozen pose
+uses the seeded base transforms without translation or self-tilt, matching the
+micro-motion-off state from the approved demo.
 
 ## Verification
 
@@ -134,6 +215,12 @@ when it proves:
 - travelling updates remain guarded by reduced-motion;
 - no new travelling shell, shockwave geometry, gap sprite, or gap light is
   introduced.
+- opaque and additive shard materials use the same GPU micro-orbit transform;
+- the approved `9%` amplitude, `0.70×` time scale, deterministic parameter
+  ranges, and second-harmonic `0.16`-radian tilt are present;
+- the animation loop updates a shared time uniform and does not rewrite
+  per-instance matrices;
+- reduced-motion disables both micro-translation and self-tilt.
 
 ### Runtime and visual checks
 
@@ -146,6 +233,11 @@ Serve the trial artifact over localhost and verify:
 - no frame shows a luminous bridge in empty space;
 - block boundaries and dark bevel faces remain visible at peak energy;
 - centre/background are brighter while the corners remain dark;
+- consecutive close-up frames show individual tiny blocks tracing small,
+  out-of-phase closed paths rather than moving as one rigid shell;
+- the core and ring envelopes remain stable with no visible breathing,
+  thickening, drift, or detached additive highlights;
+- a reload reproduces the same per-block motion paths;
 - real drag and wheel zoom remain functional;
 - reduced-motion holds a static energy state.
 
