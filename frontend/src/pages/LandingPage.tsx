@@ -1,139 +1,99 @@
-import type { CSSProperties, KeyboardEvent } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import mainlogo from "../assets/mainlogo.png";
-import { TOOLS, toolPath } from "../config/tools";
 import { useTheme } from "../hooks/useTheme";
+import { createAtomReactor } from "../three/atomReactor";
+import type { AtomReactorHandle } from "../three/atomReactor";
 
-/** Trang chủ thật — trước đây "/" đi thẳng vào ô chat (HomePage, giờ ở /chat),
- *  không có gì giới thiệu app trước khi vào. Trang này lấp chỗ đó: một câu
- *  thesis, ô nhập để vào thẳng chat kèm câu hỏi đầu tiên, và bảng 6 công cụ
- *  để vào thẳng route riêng của từng cái — không phải vòng qua /chat trước.
+/** Trang chủ — "Capability Reactor": một lõi kim loại 3D bao quanh bởi 3 vành
+ *  quỹ đạo, với một làn sóng năng lượng lan tỏa liên tục từ lõi ra từng vành.
+ *  Thay cho trang chủ cũ (thesis + ô nhập chat + bảng 6 công cụ) theo yêu cầu
+ *  người dùng — đánh đổi lối vào nhanh 6 công cụ để lấy một hero hình ảnh.
+ *  Lối vào duy nhất còn lại là nút "Mở trợ lý" ở nav, dẫn thẳng /chat.
  *
- *  Chữ ký thiết kế: ánh sáng bám con trỏ trên nền kính mờ (xem cursor light
- *  effect ở cuối file). Kính mờ chỉ ra kính khi có ánh sáng chạy qua nó —
- *  blur tĩnh kèm viền trắng chỉ là một hộp xám. Đã thống nhất hướng này với
- *  người dùng qua bản preview.html trước khi áp vào đây. */
+ *  Nền/fog của cảnh 3D đổi theo theme (setBackgroundColor) thay vì dựng lại
+ *  cảnh — xem ATOM_BG bên dưới. Hai màu này CỐ Ý khác thang --bg chuẩn của
+ *  app (gần đen / trắng tinh): kim loại ivory của lõi cần một nền có sắc độ
+ *  vừa phải để còn tương phản, trắng/đen tuyệt đối sẽ nuốt chi tiết. */
+const ATOM_BG = { dark: 0x3a332c, light: 0xf7f3ea };
+
 export function LandingPage() {
   const navigate = useNavigate();
   const { theme, toggle } = useTheme();
-  const [query, setQuery] = useState("");
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const handleRef = useRef<AtomReactorHandle | null>(null);
+  const failedRef = useRef<HTMLDivElement>(null);
 
-  const goToChat = (prefill?: string) => {
-    navigate("/chat", prefill ? { state: { prefill } } : undefined);
-  };
-
-  const submit = () => {
-    const trimmed = query.trim();
-    if (trimmed) goToChat(trimmed); else goToChat();
-  };
-
-  const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") { e.preventDefault(); submit(); }
-  };
-
-  return (
-    <div className="landing">
-      <CursorLight />
-      <div className="ld-theme-corner">
-        <button type="button" className="ld-theme-toggle" onClick={toggle}
-          aria-label="Đổi giao diện sáng/tối"
-          title={theme === "dark" ? "Chuyển sang giao diện sáng" : "Chuyển sang giao diện tối"}>
-          {theme === "dark"
-            ? <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="4.5" stroke="currentColor" strokeWidth="1.6"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></svg>
-            : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round"/></svg>}
-        </button>
-      </div>
-
-      <div className="landing-wrap">
-        <nav className="ld-nav ld-rise" style={{ "--rd": "0ms" } as CSSProperties}>
-          <div className="ld-brand">
-            <img src={mainlogo} alt="" className="ld-brand-logo" />
-            <span className="logo-name-sm">KiNg</span>
-          </div>
-          <button type="button" className="ld-cta" onClick={() => goToChat()}>Mở trợ lý</button>
-        </nav>
-
-        <header className="ld-hero">
-          <p className="ld-eyebrow ld-rise" style={{ "--rd": "60ms" } as CSSProperties}>Trợ lý AI cá nhân</p>
-          <h1 className="ld-headline ld-rise" style={{ "--rd": "120ms" } as CSSProperties}>
-            Sáu công cụ.<br /><em>Một chỗ làm việc.</em>
-          </h1>
-          <p className="ld-sub ld-rise" style={{ "--rd": "180ms" } as CSSProperties}>
-            Nghiên cứu, viết code, giải bài tập, đọc PDF — tất cả bắt đầu từ một ô nhập duy nhất.
-          </p>
-
-          <div className="ld-input-wrap ld-rise" style={{ "--rd": "240ms" } as CSSProperties}>
-            <div className="ld-input-glass">
-              <input
-                type="text"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                onKeyDown={onKeyDown}
-                placeholder="Hỏi KiNg bất cứ điều gì…"
-                aria-label="Hỏi KiNg bất cứ điều gì"
-              />
-              <button type="button" className="ld-send" onClick={submit} aria-label="Gửi">
-                <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true">
-                  <path d="M1 7.5h13M8 1.5l6 6-6 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </button>
-            </div>
-          </div>
-        </header>
-
-        <p className="ld-rack-label ld-rise" style={{ "--rd": "280ms" } as CSSProperties}>Chọn công cụ</p>
-        <div className="ld-rack">
-          {TOOLS.map((tool, i) => (
-            <button
-              key={tool.id}
-              type="button"
-              className="ld-tool ld-rise"
-              style={{ "--tint": tool.color, "--rd": `${300 + i * 40}ms` } as CSSProperties}
-              title={tool.desc}
-              onClick={() => navigate(toolPath(tool))}
-            >
-              <div className="ld-tool-top">
-                <span className="ld-tool-icon">{tool.icon}</span>
-                <span className="ld-tool-name">{tool.label}</span>
-              </div>
-              <p className="ld-tool-desc">{tool.desc}</p>
-            </button>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/** Nguồn sáng bám con trỏ, throttle qua rAF để không ghì layout mỗi
- *  pointermove. Tắt hẳn dưới prefers-reduced-motion — dù đây không phải một
- *  animation lặp, một quầng sáng đuổi theo con trỏ vẫn có thể gây khó chịu
- *  cho người nhạy cảm với chuyển động. */
-function CursorLight() {
-  const ref = useRef<HTMLDivElement>(null);
+  const goToChat = () => navigate("/chat");
 
   useEffect(() => {
-    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (reduce) return;
-    let raf = 0;
-    const onMove = (e: PointerEvent) => {
-      if (raf) return;
-      raf = requestAnimationFrame(() => {
-        const el = ref.current;
-        if (el) {
-          el.style.setProperty("--mx", `${(e.clientX / window.innerWidth) * 100}%`);
-          el.style.setProperty("--my", `${(e.clientY / window.innerHeight) * 100}%`);
-        }
-        raf = 0;
-      });
-    };
-    window.addEventListener("pointermove", onMove, { passive: true });
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const handle = createAtomReactor(canvas, {
+      backgroundColor: ATOM_BG[theme],
+      onFail: () => {
+        canvas.style.display = "none";
+        if (failedRef.current) failedRef.current.style.display = "flex";
+      },
+    });
+    handleRef.current = handle;
+    canvas.classList.add("ready");
     return () => {
-      window.removeEventListener("pointermove", onMove);
-      if (raf) cancelAnimationFrame(raf);
+      handle.dispose();
+      handleRef.current = null;
     };
+    // Chỉ dựng cảnh một lần khi mount — đổi theme sau đó đi qua effect riêng
+    // bên dưới (setBackgroundColor), không dựng lại toàn bộ shard/ring.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return <div className="ld-light" ref={ref} />;
+  useEffect(() => {
+    handleRef.current?.setBackgroundColor(ATOM_BG[theme]);
+  }, [theme]);
+
+  return (
+    <div className="atom-landing">
+      <canvas ref={canvasRef} className="atom-canvas" aria-hidden="true" />
+      <div className="atom-vignette" aria-hidden="true" />
+      <div className="atom-vignette atom-vignette-dark" aria-hidden="true" />
+      <div className="atom-fallback" ref={failedRef} aria-hidden="true"><div className="atom-orb" /></div>
+
+      <nav className="atom-nav">
+        <div className="atom-brand">
+          <img src={mainlogo} alt="" className="atom-brand-logo" />
+          <span className="logo-name-sm">KiNg</span>
+        </div>
+        <div className="atom-nav-right">
+          <button type="button" className="atom-theme-toggle" onClick={toggle}
+            aria-label="Đổi giao diện sáng/tối"
+            title={theme === "dark" ? "Chuyển sang giao diện sáng" : "Chuyển sang giao diện tối"}>
+            {theme === "dark"
+              ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="4.5" stroke="currentColor" strokeWidth="1.6"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></svg>
+              : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round"/></svg>}
+          </button>
+          <button type="button" className="atom-cta" onClick={goToChat}>Mở trợ lý</button>
+        </div>
+      </nav>
+
+      <header className="atom-hero">
+        <p className="atom-eyebrow">Trợ lý AI cá nhân</p>
+        <h1 className="atom-headline">Năng lượng tính toán,<br /><em>hội tụ thành trợ lý.</em></h1>
+        <p className="atom-sub">
+          KiNg gộp nghiên cứu, viết code, giải bài tập và đọc tài liệu vào một lõi xử lý
+          duy nhất — luôn sẵn sàng, luôn học hỏi.
+        </p>
+        <div className="atom-metrics">
+          <div className="atom-metric"><div className="k">Công cụ</div><div className="v">6 chuyên biệt</div></div>
+          <div className="atom-metric"><div className="k">Phản hồi</div><div className="v">Thời gian thực</div></div>
+          <div className="atom-metric"><div className="k">Bộ nhớ</div><div className="v">Ghi nhớ ngữ cảnh</div></div>
+          <div className="atom-metric"><div className="k">Ngôn ngữ</div><div className="v">Tiếng Việt ưu tiên</div></div>
+          <div className="atom-metrics-note">Tổng quan nhanh về KiNg</div>
+        </div>
+      </header>
+
+      <div className="atom-corner atom-corner-tr">KiNg — lõi xử lý<br/>trực tuyến · liên tục</div>
+      <div className="atom-corner atom-corner-br">Lõi năng lực AI<br/>kết xuất · webgl</div>
+      <div className="atom-hint">kéo để xoay · cuộn để phóng</div>
+    </div>
+  );
 }
