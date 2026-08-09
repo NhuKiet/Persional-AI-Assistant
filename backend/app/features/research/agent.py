@@ -7,6 +7,7 @@ from concurrent.futures import TimeoutError as FutureTimeoutError
 from typing import Generator
 
 from backend.app.core.config import settings
+from backend.app.features.research.grounding import filter_by_anchor_relevance
 from backend.app.features.research.iteration import needs_iteration, gap_query
 from backend.app.features.research.models import ResearchOutput, SearchResult
 from backend.app.features.research import sufficiency
@@ -227,15 +228,26 @@ class ResearchAgent:
         query:      str,
         raw_results: list[SearchResult],
         top_k:      int = 15,
+        anchor:     str | None = None,
     ) -> list[SearchResult]:
         """
         Post-search pipeline:
+        0. Drop results with no anchor-token overlap (retrieval contamination)
         1. Enrich web results with trafilatura
         2. Deduplicate
         3. Rerank (BGE + credibility)
+
+        `anchor` is the query to sanity-check topical relevance against —
+        defaults to `query`, but callers driving this off an LLM-expanded or
+        gap-filling query (noisy by construction) should pass the real,
+        clean user query instead, since filtering against the noisy text
+        itself would just rubber-stamp its own contamination.
         """
+        # Step 0: drop off-topic results before spending enrich/rerank work on them
+        relevant = filter_by_anchor_relevance(anchor or query, raw_results, label=query[:40])
+
         # Step 1: Enrich web results
-        enriched = _enrich_web_results(raw_results)
+        enriched = _enrich_web_results(relevant)
 
         # Step 2: Deduplicate
         deduped = deduplicate_results(enriched, threshold=0.92)
@@ -244,8 +256,8 @@ class ResearchAgent:
         reranked = rerank_results(query, deduped, top_k=top_k)
 
         logger.info(
-            "Pipeline: %d raw → %d enriched → %d deduped → %d reranked",
-            len(raw_results), len(enriched), len(deduped), len(reranked),
+            "Pipeline: %d raw → %d relevant → %d enriched → %d deduped → %d reranked",
+            len(raw_results), len(relevant), len(enriched), len(deduped), len(reranked),
         )
         return reranked
 
@@ -262,7 +274,7 @@ class ResearchAgent:
         base_ids = {s.id for s in base_sources}
         try:
             extra_raw = self._search_all(gap_query)
-            extra     = self._process_pipeline(gap_query, extra_raw)
+            extra     = self._process_pipeline(gap_query, extra_raw, anchor=query)
         except Exception as e:  # noqa: BLE001 — non-fatal, giữ nguyên nguồn cũ
             logger.warning("[TOP-UP] search failed (non-fatal): %s", e)
             return base_sources, []
@@ -423,6 +435,7 @@ class ResearchAgent:
                     yield {"type": "status", "message": "Bổ sung nguồn còn thiếu…",
                            "source": "knowledge"}
                     all_sources, newly = self._top_up(query, fresh, gap)
+                    yield {"type": "source_done", "source": "knowledge", "count": len(newly)}
                     newly_fetched.extend(newly)
                     if newly:
                         decision = "top_up"
@@ -551,8 +564,16 @@ class ResearchAgent:
                 _cache.set(query, raw_results)
 
                 # ── Post-processing pipeline ──────────────────────────────────
+                # Anchored to `query` (the clean, contextualized user query) —
+                # NOT the LLM-generated expansion queries that fired some of
+                # these searches, since those are exactly the noisy text that
+                # produces off-topic matches in the first place (e.g. arXiv
+                # matching an unrelated paper purely because both titles
+                # contain the generic phrase "A Comparative Study of…").
+                relevant_results = filter_by_anchor_relevance(query, raw_results)
+
                 yield {"type": "status", "message": "Enriching web content…", "source": "web"}
-                enriched = _enrich_web_results(raw_results)
+                enriched = _enrich_web_results(relevant_results)
 
                 yield {"type": "status", "message": "Deduplicating results…", "source": "pipeline"}
                 deduped = deduplicate_results(enriched, threshold=0.92)
@@ -562,8 +583,8 @@ class ResearchAgent:
                 newly_fetched.extend(all_sources)
 
                 logger.info(
-                    "[PIPELINE] %d raw → %d enriched → %d deduped → %d reranked (%.1fs)",
-                    len(raw_results), len(enriched), len(deduped),
+                    "[PIPELINE] %d raw → %d relevant → %d enriched → %d deduped → %d reranked (%.1fs)",
+                    len(raw_results), len(relevant_results), len(enriched), len(deduped),
                     len(all_sources), time.time() - t0,
                 )
 

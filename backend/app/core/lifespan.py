@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -34,6 +35,16 @@ async def lifespan(app: FastAPI):
         logger.warning("News prune failed (non-fatal): %s", e)
 
     news_task = start_background_task()
+
+    # BGE reranker (~2GB) tải từ HuggingFace Hub khi dùng lần đầu — tải ở đây,
+    # nền, ngay khi server khởi động, thay vì để request research đầu tiên
+    # của user gánh việc tải model đó (từng khiến research "bị treo" hàng
+    # phút sau mỗi lần restart container/cache trống).
+    def _warm_reranker():
+        from backend.app.features.research.reranker import _bge_reranker
+        _bge_reranker()
+
+    threading.Thread(target=_warm_reranker, daemon=True).start()
 
     logger.info("KiNg backend v3 started — research + chat + coding + PDF + news ready")
     yield

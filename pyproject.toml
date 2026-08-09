@@ -23,6 +23,7 @@ dependencies = [
     "langgraph==1.1.2",
     "ollama==0.6.1",
     "FlagEmbedding>=1.2.10",
+    "torch",
     "weaviate-client>=4.9,<5",
     "tavily==1.1.0",
     "arxiv==2.4.1",
@@ -61,3 +62,17 @@ testpaths = ["tests"]
 
 [tool.uv]
 package = false
+
+# Container chạy Linux (Docker) và có GPU NVIDIA (RTX 3050) — build torch bản
+# CUDA cho platform đó thay vì bản CPU-only mặc định trên PyPI, để reranker
+# (FlagEmbedding) chạy trên GPU. Máy dev khác (macOS/Windows host) vẫn dùng
+# torch CPU bình thường từ PyPI.
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cu121", marker = "sys_platform == 'linux'" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cu121"
+url = "https://download.pytorch.org/whl/cu121"
+explicit = true

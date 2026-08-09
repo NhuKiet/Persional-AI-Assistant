@@ -31,7 +31,7 @@
 /* ── 1. Fonts & Reset ──────────────────────────────────────── */
 
 /* Instrument Serif chỉ xin bản italic — đó là kiểu duy nhất wordmark dùng. */
-@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Instrument+Serif:ital@1&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Instrument+Serif:ital@1&family=Playfair+Display:ital,wght@1,700&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap');
 
 *,
 *::before,
@@ -165,10 +165,13 @@
 
      --display  Bricolage Grotesque — CÓ vietnamese. Dùng cho MỌI tiêu đề.
      --wordmark Instrument Serif   — KHÔNG có vietnamese. Chỉ được dùng cho
-                chữ ký "KiNg" (thuần ASCII, cố định). Đừng dùng cho gì khác. */
+                chữ ký "KiNg" (thuần ASCII, cố định). Đừng dùng cho gì khác.
+     --brand-serif Playfair Display — CÓ vietnamese (đã kiểm tra). Dùng cho
+                dòng "Trợ lý cá nhân của Kiệt" ở hero, thay cho --mono cũ. */
   --sans:     'Geist', sans-serif;
   --display:  'Bricolage Grotesque', sans-serif;
   --wordmark: 'Instrument Serif', serif;
+  --brand-serif: 'Playfair Display', serif;
   --mono:     'Geist Mono', monospace;
 
   /* --- Shape --- */

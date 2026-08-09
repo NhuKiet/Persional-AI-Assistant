@@ -15,7 +15,7 @@ import type { AtomReactorHandle } from "../three/atomReactor";
  *  cảnh — xem ATOM_BG bên dưới. Hai màu này CỐ Ý khác thang --bg chuẩn của
  *  app (gần đen / trắng tinh): kim loại ivory của lõi cần một nền có sắc độ
  *  vừa phải để còn tương phản, trắng/đen tuyệt đối sẽ nuốt chi tiết. */
-const ATOM_BG = { dark: 0x3a332c, light: 0xf7f3ea };
+const ATOM_BG = { dark: 0x080b14, light: 0xf4f1ea };
 
 export function LandingPage() {
   const navigate = useNavigate();
@@ -31,6 +31,7 @@ export function LandingPage() {
     if (!canvas) return;
     const handle = createAtomReactor(canvas, {
       backgroundColor: ATOM_BG[theme],
+      isLight: theme === "light",
       onFail: () => {
         canvas.style.display = "none";
         if (failedRef.current) failedRef.current.style.display = "flex";
@@ -48,7 +49,7 @@ export function LandingPage() {
   }, []);
 
   useEffect(() => {
-    handleRef.current?.setBackgroundColor(ATOM_BG[theme]);
+    handleRef.current?.setBackgroundColor(ATOM_BG[theme], theme === "light");
   }, [theme]);
 
   return (
@@ -76,17 +77,17 @@ export function LandingPage() {
       </nav>
 
       <header className="atom-hero">
-        <p className="atom-eyebrow">Trợ lý AI cá nhân</p>
-        <h1 className="atom-headline">Năng lượng tính toán,<br /><em>hội tụ thành trợ lý.</em></h1>
+        <p className="atom-eyebrow">Trợ lý cá nhân của <span className="atom-eyebrow-name">Kiệt</span></p>
+        <h1 className="atom-headline">Mọi việc bạn cần,<br /><em>một lời gọi là xong.</em></h1>
         <p className="atom-sub">
           KiNg gộp nghiên cứu, viết code, giải bài tập và đọc tài liệu vào một lõi xử lý
           duy nhất — luôn sẵn sàng, luôn học hỏi.
         </p>
         <div className="atom-metrics">
-          <div className="atom-metric"><div className="k">Công cụ</div><div className="v">6 chuyên biệt</div></div>
-          <div className="atom-metric"><div className="k">Phản hồi</div><div className="v">Thời gian thực</div></div>
-          <div className="atom-metric"><div className="k">Bộ nhớ</div><div className="v">Ghi nhớ ngữ cảnh</div></div>
-          <div className="atom-metric"><div className="k">Ngôn ngữ</div><div className="v">Tiếng Việt ưu tiên</div></div>
+          <div className="atom-metric"><div className="k">Công cụ</div><div className="v">Nghiên cứu, code, PDF, tin tức</div></div>
+          <div className="atom-metric"><div className="k">Phản hồi</div><div className="v">Trả lời ngay, không chờ</div></div>
+          <div className="atom-metric"><div className="k">Bộ nhớ</div><div className="v">Nhớ mạch chuyện đang nói</div></div>
+          <div className="atom-metric"><div className="k">Ngôn ngữ</div><div className="v">Nói chuyện như người Việt</div></div>
           <div className="atom-metrics-note">Tổng quan nhanh về KiNg</div>
         </div>
       </header>

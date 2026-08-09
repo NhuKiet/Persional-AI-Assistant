@@ -16,9 +16,23 @@ services:
       SUPABASE_DB_URL: ${SUPABASE_DB_URL_DOCKER}
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    # Cho container thấy GPU NVIDIA của host (dùng cho BGE reranker qua torch).
+    # Cần Docker Desktop đã bật GPU support (WSL2 backend + driver NVIDIA hỗ
+    # trợ CUDA on WSL). Không có GPU/driver thì torch tự rơi về CPU, không lỗi.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
     volumes:
       # Giữ dữ liệu runtime (pdf, sandbox) ngoài container.
       - ./data:/app/data
+      # Cache model HuggingFace (BGE reranker, ~2GB) — không có volume này thì
+      # mỗi lần rebuild/restart container phải tải lại từ đầu, khiến câu hỏi
+      # research ĐẦU TIÊN sau restart bị treo hàng phút chờ tải model.
+      - hf_cache:/root/.cache/huggingface
     restart: unless-stopped
 
   frontend:
@@ -49,3 +63,6 @@ services:
 #
 #volumes:
 #  ollama_data:
+
+volumes:
+  hf_cache:

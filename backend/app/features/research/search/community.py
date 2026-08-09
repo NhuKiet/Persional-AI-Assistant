@@ -4,11 +4,19 @@ import re
 
 import httpx
 
+from backend.app.features.research.grounding import shares_anchor_token
 from backend.app.features.research.models import SearchResult
 
 logger = logging.getLogger(__name__)
 
 _DAILY_PAPERS_URL = "https://huggingface.co/api/daily_papers"
+
+# HuggingFace's papers-search endpoint ignores the `search` param server-side
+# — verified empirically: it returns the exact same "today's trending papers"
+# list for a real query and for a nonsense one. Trusting it as a real search
+# floods every research run with irrelevant trending papers (dedup/rerank
+# don't catch it, since these get real nonzero scores from upvotes). Filter
+# client-side with the shared anchor-token check instead.
 
 
 def fetch_trending_papers(k: int = 6) -> list[str]:
@@ -66,7 +74,13 @@ class HuggingFaceSearcher:
                         "upvotes":  upvotes,
                     },
                 ))
-            return results
+            relevant = [r for r in results if shares_anchor_token(query, r.title, r.content)]
+            if len(relevant) < len(results):
+                logger.info(
+                    "HuggingFace papers: dropped %d/%d irrelevant (search param ignored by API)",
+                    len(results) - len(relevant), len(results),
+                )
+            return relevant
         except Exception as e:
             logger.error("HuggingFace papers search failed: %s", e)
             return []

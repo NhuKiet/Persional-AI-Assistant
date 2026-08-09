@@ -4,8 +4,8 @@
    loại ivory của lõi cần nền có sắc độ vừa phải mới còn tương phản; khớp với
    ATOM_BG trong LandingPage.tsx (đổi một bên thì phải đổi bên kia). */
 
-:root { --atom-bg: #3a332c; }
-:root[data-theme="light"] { --atom-bg: #f7f3ea; }
+:root { --atom-bg: #080b14; }
+:root[data-theme="light"] { --atom-bg: #f4f1ea; }
 
 .atom-landing {
   position: fixed;
@@ -123,24 +123,40 @@
 }
 
 .atom-eyebrow {
-  font-family: var(--mono);
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--text3);
+  font-family: var(--brand-serif);
+  font-style: italic;
+  font-weight: 700;
+  font-size: clamp(22px, 2.4vw, 30px);
+  letter-spacing: 0.01em;
+  text-transform: none;
+  color: var(--text2);
   margin-bottom: 18px;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
 }
-.atom-eyebrow::before { content: ""; width: 26px; height: 1px; background: var(--text3); }
+.atom-eyebrow::before { content: ""; width: 26px; height: 1px; background: var(--text3); flex-shrink: 0; }
+
+.atom-eyebrow-name {
+  background: linear-gradient(90deg, #ff3b3b, #ff9a3b, #f4e13b, #3bd45a, #3bb8ff, #8a3bff, #ff3bbd, #ff3b3b);
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: atom-eyebrow-rgb 7s linear infinite;
+}
+@keyframes atom-eyebrow-rgb {
+  to { background-position: -300% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .atom-eyebrow-name { animation: none; }
+}
 
 .atom-headline {
   font-family: var(--display);
   font-weight: 700;
   font-variation-settings: 'opsz' 72;
-  font-size: clamp(26px, 3vw, 40px);
+  font-size: clamp(30px, 3.6vw, 46px);
   line-height: 1.08;
   letter-spacing: -0.03em;
   margin-bottom: 16px;

@@ -17,9 +17,15 @@ import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.j
 // bình thường nhưng giữ nguyên màu tĩnh. Đổi lại true để bật sóng lan ra vành.
 const RINGS_WAVE_ENABLED = false;
 
+// Rung nhỏ tại chỗ cho từng shard (core + vành) — mỗi shard dao động quanh
+// đúng vị trí gốc của nó theo pha/tần số riêng (Lissajous 3 trục), biên độ
+// nhỏ hơn nhiều lần kích thước shard nên không lệch quỹ đạo hay phá hình
+// dạng tổng thể, chỉ tạo cảm giác "sống"/rung động liên tục.
+const MICRO_JITTER_ENABLED = true;
+
 const CONFIG = {
   seed: 20260730,
-  exposure: 1.14,
+  exposure: 1.22,
   fogDensity: 0.045,
 
   camera: {
@@ -39,14 +45,14 @@ const CONFIG = {
     ivory: 0xf0ece6,
     coreMetalness: 0.08,
     coreRoughness: 0.34,
-    hueJitter: 0.04, valueJitter: 0.10,
+    hueJitter: 0.09, valueJitter: 0.10, satBoostMax: 0.32,
     selfSpin: 0.04,
   },
 
   rings: [
-    { count: 760, radius: 2.80, thickness: 0.22, rotX: 0.55, rotZ: 0.20, speed:  0.20 },
-    { count: 880, radius: 3.35, thickness: 0.24, rotX:-0.90, rotZ:-0.40, speed: -0.28 },
-    { count: 720, radius: 3.70, thickness: 0.21, rotX: 0.20, rotZ: 1.15, speed:  0.24 },
+    { count: 1300, radius: 2.80, thickness: 0.22, rotX: 0.55, rotZ: 0.20, speed:  0.20 },
+    { count: 1500, radius: 3.35, thickness: 0.24, rotX:-0.90, rotZ:-0.40, speed: -0.28 },
+    { count: 1220, radius: 3.70, thickness: 0.21, rotX: 0.20, rotZ: 1.15, speed:  0.24 },
   ],
   ringShardMin: 0.05, ringShardMax: 0.13,
   shardBevel: 0.075,
@@ -55,7 +61,20 @@ const CONFIG = {
 
   motion: { globalY: 0.09, dragDamping: 6, parallaxMax: 0.08, parallaxDamping: 3 },
 
-  bloom: { strength: 0.36, radius: 0.28, threshold: 0.58 },
+  // Biên độ tính bằng đơn vị scene (radius core ~1.95, ring shard ~0.05-0.13)
+  // — cố ý nhỏ hơn nhiều lần kích thước shard để chỉ đọc như một rung động
+  // tại chỗ, không phải shard "trôi" ra khỏi vị trí.
+  microJitter: {
+    // Lõi: một nhịp lên-xuống thống nhất (không random per-shard) — cycle
+    // tính bằng giây cho một lượt lên-xuống đầy đủ.
+    // waveCount = số "dải" lệch pha trải từ tâm ra rìa — 1 thì gần như đồng
+    // pha (phồng-xẹp kiểu tim đập), càng cao thì càng thấy rõ dải sóng lan
+    // (dập dìu) từ tâm ra ngoài thay vì cả khối nhấp nhô cùng lúc.
+    core: { amplitude: 0.06, cycle: 1.8, waveCount: 2.4 },
+    ring: { amplitude: 0.024, freqMin: 2.2, freqMax: 5.6 },
+  },
+
+  bloom: { strength: 0.42, radius: 0.3, threshold: 0.52 },
   glowScale: 5.5,
   wave: {
     cycle: 4.8,
@@ -81,18 +100,18 @@ const CONFIG = {
 
   lights: {
     key:  { color: 0xfff2e0, intensity: 4.4, pos: [6, 8, 10] as [number, number, number] },
-    rim:  { color: 0x8a7bff, intensity: 1.6, pos: [-8, -4, 4] as [number, number, number] },
-    warm: { color: 0xff8a45, intensity: 3.6, pos: [2, -6, -6] as [number, number, number] },
-    warmFront: { color: 0xffa662, intensity: 2.1, pos: [5, -1, 8] as [number, number, number] },
+    rim:  { color: 0x8a7bff, intensity: 2.6, pos: [-8, -4, 4] as [number, number, number] },
+    warm: { color: 0xff8a45, intensity: 4.0, pos: [2, -6, -6] as [number, number, number] },
+    warmFront: { color: 0xffa662, intensity: 2.5, pos: [5, -1, 8] as [number, number, number] },
     ambient: { color: 0x4a4038, intensity: 1.5 },
     corePoint: { color: 0xffeccd, intensity: 1.3, distance: 8, decay: 1.35 },
   },
 };
 
 const QUALITY_PROFILES = {
-  high:     { coreCount: 2600, ringScale: 1,    maxDpr: 1.75, bloom: true,  bloomResolutionScale: 1,    backgroundDust: 360 },
-  balanced: { coreCount: 1800, ringScale: 0.72, maxDpr: 1.35, bloom: true,  bloomResolutionScale: 0.65, backgroundDust: 180 },
-  low:      { coreCount: 1050, ringScale: 0.48, maxDpr: 1,    bloom: false, bloomResolutionScale: 0,    backgroundDust: 0 },
+  high:     { coreCount: 3600, ringScale: 1,    maxDpr: 1.75, bloom: true,  bloomResolutionScale: 1,    backgroundDust: 360 },
+  balanced: { coreCount: 2500, ringScale: 0.72, maxDpr: 1.35, bloom: true,  bloomResolutionScale: 0.65, backgroundDust: 180 },
+  low:      { coreCount: 1450, ringScale: 0.48, maxDpr: 1,    bloom: false, bloomResolutionScale: 0,    backgroundDust: 0 },
 };
 type ProfileName = keyof typeof QUALITY_PROFILES;
 const PROFILE_ORDER: ProfileName[] = ["high", "balanced", "low"];
@@ -140,15 +159,24 @@ interface BandUserData {
   line?: THREE.LineLoop;
   speed?: number;
   debugWaveEnergy?: number;
+  // Rung nhỏ tại chỗ (xem MICRO_JITTER_ENABLED) — vị trí gốc + pha/tần số
+  // riêng từng shard, ghi thẳng vào instanceMatrix mỗi frame thay vì bake
+  // một lần, nhưng biên độ đủ nhỏ để không lệch quỹ đạo/hình dạng tổng thể.
+  basePositions?: Float32Array;
+  jitterPhase?: Float32Array;
+  jitterFreq?: Float32Array;
+  radialDir?: Float32Array;
+  ripplePhase?: Float32Array;
 }
 
 export interface AtomReactorHandle {
-  setBackgroundColor(hex: number): void;
+  setBackgroundColor(hex: number, isLight: boolean): void;
   dispose(): void;
 }
 
 export interface AtomReactorOptions {
   backgroundColor: number;
+  isLight?: boolean;
   onFail?: (err: unknown) => void;
 }
 
@@ -163,6 +191,11 @@ export function createAtomReactor(canvas: HTMLCanvasElement, opts: AtomReactorOp
   let camera!: THREE.PerspectiveCamera;
   let composer: EffectComposer | null = null;
   let bloomPass: UnrealBloomPass | null = null;
+  // Nền sáng gần trắng "cháy" bloom rất nhanh (ít khoảng tối để cộng thêm)
+  // so với nền tối — hai biến này bù lại theo độ sáng của background hiện
+  // tại, cập nhật trong setBackgroundColor() mỗi lần đổi theme.
+  let bloomStrengthScale = 1;
+  let bloomThresholdBoost = 0;
   let environmentTarget: THREE.WebGLRenderTarget | null = null;
 
   let atom!: THREE.Group;
@@ -204,6 +237,69 @@ export function createAtomReactor(canvas: HTMLCanvasElement, opts: AtomReactorOp
     return r;
   }
 
+  // Nền tối vốn đã tối đều nên tự nhiên trông như một "khối" quanh lõi. Nền
+  // sáng phẳng lại làm lõi kim loại/bụi nâu nổi trơ trọi giữa trắng tinh —
+  // vẽ một khối bo tròn bụi nâu tối (cùng độ tối với nền tối) mờ dần ra viền
+  // sáng, làm nền cho lõi thay vì màu phẳng.
+  const LIGHT_BACKDROP_CORE = "#241b14";
+  let backgroundTexture: THREE.CanvasTexture | null = null;
+  let currentBgHex = opts.backgroundColor;
+  let currentBgIsLight = false;
+
+  // Khối bo tròn chỉ cần phủ vùng quanh lõi (~56%,47% màn hình, khớp vị trí
+  // atom trên canvas), không lan sang vùng chữ bên trái. Dựng texture theo
+  // đúng tỉ lệ khung hình hiện tại để hình tròn không bị méo khi stretch full
+  // viewport (WebGLBackground map thẳng texture theo NDC, không tự "cover").
+  function createBackdropTexture(edgeHex: number) {
+    const aspect = window.innerWidth / Math.max(1, window.innerHeight);
+    const height = 512;
+    const width = Math.round(height * aspect);
+    const cv = document.createElement("canvas");
+    cv.width = width; cv.height = height;
+    const g = cv.getContext("2d")!;
+    const edge = new THREE.Color(edgeHex);
+    const edgeCss = `#${edge.getHexString()}`;
+    g.fillStyle = edgeCss;
+    g.fillRect(0, 0, width, height);
+    const cx = width * 0.64, cy = height * 0.47, radius = height * 0.62;
+    const ellipseScaleX = 1.35;
+    // ellipseScaleY tính ngược từ khoảng trống dọc thực tế quanh cy (chừa 8%
+    // biên để gradient kịp mờ hẳn về edgeCss) — cố định 0.85 từng làm elip
+    // vươn quá mép trên/dưới canvas, bị "cắt cụt" ngay biên viewport thay vì
+    // mờ dần, vì bán kính đã tăng lên nhưng biên dọc canvas thì không đổi.
+    const maxVerticalReach = Math.min(cy, height - cy) * 0.92;
+    const ellipseScaleY = maxVerticalReach / radius;
+    g.save();
+    g.translate(cx, cy);
+    g.scale(ellipseScaleX, ellipseScaleY);
+    g.translate(-cx, -cy);
+    const gradient = g.createRadialGradient(cx, cy, 0, cx, cy, radius);
+    gradient.addColorStop(0, LIGHT_BACKDROP_CORE);
+    gradient.addColorStop(0.5, LIGHT_BACKDROP_CORE);
+    gradient.addColorStop(1, edgeCss);
+    g.fillStyle = gradient;
+    // Vẽ dư biên (không phải đúng width/height) — rect này cũng nằm dưới
+    // scale ở trên nên bản thân nó co lại theo trục dọc, kết thúc vùng tô
+    // SỚM hơn lúc gradient kịp mờ hẳn (tạo viền cụt ngay giữa canvas thay vì
+    // ra tới mép). Overscan để rect luôn phủ hết canvas thật bất kể hệ số scale.
+    g.fillRect(-width, -height, width * 3, height * 3);
+    g.restore();
+    const tex = new THREE.CanvasTexture(cv);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  }
+
+  function applyBackground(hex: number, isLight: boolean) {
+    currentBgHex = hex; currentBgIsLight = isLight;
+    if (backgroundTexture) { backgroundTexture.dispose(); backgroundTexture = null; }
+    if (isLight) {
+      backgroundTexture = createBackdropTexture(hex);
+      scene.background = backgroundTexture;
+    } else {
+      scene.background = new THREE.Color(hex);
+    }
+  }
+
   function createEnvironmentTexture() {
     const cv = document.createElement("canvas");
     cv.width = 256; cv.height = 128;
@@ -233,7 +329,7 @@ export function createAtomReactor(canvas: HTMLCanvasElement, opts: AtomReactorOp
     // dưới — bloom (UnrealBloomPass) làm mất kênh alpha của canvas, vùng
     // trống render ra đen đặc bất kể nền CSS đặt màu gì. Vẽ màu nền thẳng vào
     // scene mới đáng tin cậy qua mọi profile chất lượng (có/không bloom).
-    scene.background = new THREE.Color(opts.backgroundColor);
+    applyBackground(opts.backgroundColor, opts.isLight ?? false);
     scene.fog = new THREE.FogExp2(opts.backgroundColor, CONFIG.fogDensity);
     const environmentSource = createEnvironmentTexture();
     const pmrem = new THREE.PMREMGenerator(renderer);
@@ -321,7 +417,7 @@ export function createAtomReactor(canvas: HTMLCanvasElement, opts: AtomReactorOp
       metalness: c.coreMetalness,
       roughness: c.coreRoughness,
       vertexColors: true,
-      envMapIntensity: 1.75,
+      envMapIntensity: 2.1,
       emissive: 0x8a7f74,
       emissiveIntensity: 0.16,
     });
@@ -329,6 +425,10 @@ export function createAtomReactor(canvas: HTMLCanvasElement, opts: AtomReactorOp
     const mesh = new THREE.InstancedMesh(geo, material, count) as unknown as THREE.InstancedMesh & { userData: BandUserData };
     mesh.frustumCulled = false;
     const wavePhase = new Float32Array(count);
+    const basePositions = new Float32Array(count * 3);
+    const radialDir = new Float32Array(count * 3);
+    const ripplePhase = new Float32Array(count);
+    const jc = CONFIG.microJitter.core;
 
     const dummy = new THREE.Object3D();
     const col = new THREE.Color();
@@ -341,20 +441,31 @@ export function createAtomReactor(canvas: HTMLCanvasElement, opts: AtomReactorOp
       const theta = u * Math.PI * 2;
       const phi = Math.acos(2 * v - 1);
       const r = c.radius * Math.pow(w, c.densityExp);
-      dummy.position.set(
-        r * Math.sin(phi) * Math.cos(theta),
-        r * Math.sin(phi) * Math.sin(theta),
-        r * Math.cos(phi),
-      );
+      const dirX = Math.sin(phi) * Math.cos(theta);
+      const dirY = Math.sin(phi) * Math.sin(theta);
+      const dirZ = Math.cos(phi);
+      dummy.position.set(r * dirX, r * dirY, r * dirZ);
       dummy.rotation.set(range(rnd, 0, Math.PI), range(rnd, 0, Math.PI), range(rnd, 0, Math.PI));
       const s = range(rnd, c.shardMin, c.shardMax);
       dummy.scale.set(s * range(rnd, 0.7, 1.1), s * range(rnd, 0.7, 1.1), s * range(rnd, c.elongate[0], c.elongate[1]));
+      basePositions[i * 3] = dummy.position.x;
+      basePositions[i * 3 + 1] = dummy.position.y;
+      basePositions[i * 3 + 2] = dummy.position.z;
+      // (dirX, dirY, dirZ) — vector đơn vị hướng tâm sẵn có từ toạ độ cầu
+      // (theta, phi), không cần chuẩn hoá lại basePosition.
+      radialDir[i * 3] = dirX;
+      radialDir[i * 3 + 1] = dirY;
+      radialDir[i * 3 + 2] = dirZ;
+      // Pha ripple trải RỘNG theo bán kính (khác wavePhase — pha đó dành cho
+      // ánh sáng, chỉ trải trong coreSpread hẹp) — cần trải rộng thì mới thấy
+      // rõ dải sóng lệch nhau lan ra, thay vì cả khối phồng-xẹp đồng pha.
+      ripplePhase[i] = (r / c.radius) * jc.waveCount;
       dummy.updateMatrix();
       mesh.setMatrixAt(i, dummy.matrix);
 
       col.setHSL(
         hsl.h + (rnd() - 0.5) * c.hueJitter,
-        hsl.s,
+        Math.min(1, hsl.s + rnd() * c.satBoostMax),
         Math.min(1, hsl.l + (rnd() - 0.5) * c.valueJitter),
       );
       mesh.setColorAt(i, col);
@@ -372,6 +483,9 @@ export function createAtomReactor(canvas: HTMLCanvasElement, opts: AtomReactorOp
       baseEmissiveIntensity: material.emissiveIntensity,
       waveMesh: null as unknown as THREE.InstancedMesh & { userData: WaveMeshUserData },
       waveActive: false,
+      basePositions,
+      radialDir,
+      ripplePhase,
     };
     core = mesh;
     atom.add(core);
@@ -386,7 +500,7 @@ export function createAtomReactor(canvas: HTMLCanvasElement, opts: AtomReactorOp
       metalness: CONFIG.ringMetalness,
       roughness: CONFIG.ringRoughness,
       vertexColors: true,
-      envMapIntensity: 1.35,
+      envMapIntensity: 1.65,
       emissive: 0x746e72,
       emissiveIntensity: 0.12,
     });
@@ -397,12 +511,23 @@ export function createAtomReactor(canvas: HTMLCanvasElement, opts: AtomReactorOp
     const col = new THREE.Color();
     const tangent = new THREE.Vector3();
     const waveAngle = new Float32Array(count);
+    const basePositions = new Float32Array(count * 3);
+    const jitterPhase = new Float32Array(count * 3);
+    const jitterFreq = new Float32Array(count);
+    const jr = CONFIG.microJitter.ring;
 
     for (let i = 0; i < count; i++) {
       const a = (i / count) * Math.PI * 2 + range(rnd, -0.05, 0.05);
       const rr = def.radius + range(rnd, -def.thickness, def.thickness);
       const y = range(rnd, -def.thickness * 0.5, def.thickness * 0.5);
       dummy.position.set(Math.cos(a) * rr, y, Math.sin(a) * rr);
+      basePositions[i * 3] = dummy.position.x;
+      basePositions[i * 3 + 1] = dummy.position.y;
+      basePositions[i * 3 + 2] = dummy.position.z;
+      jitterPhase[i * 3] = range(rnd, 0, Math.PI * 2);
+      jitterPhase[i * 3 + 1] = range(rnd, 0, Math.PI * 2);
+      jitterPhase[i * 3 + 2] = range(rnd, 0, Math.PI * 2);
+      jitterFreq[i] = range(rnd, jr.freqMin, jr.freqMax);
 
       tangent.set(-Math.sin(a), 0, Math.cos(a));
       dummy.lookAt(dummy.position.clone().add(tangent));
@@ -410,13 +535,19 @@ export function createAtomReactor(canvas: HTMLCanvasElement, opts: AtomReactorOp
       dummy.rotateY(range(rnd, -0.35, 0.35));
 
       const s = range(rnd, CONFIG.ringShardMin, CONFIG.ringShardMax);
-      dummy.scale.set(s * range(rnd, 0.58, 0.96), s * range(rnd, 0.58, 0.96), s * range(rnd, 1.2, 2.15));
+      dummy.scale.set(s * range(rnd, 0.75, 1.05), s * range(rnd, 0.75, 1.05), s * range(rnd, 0.85, 1.3));
       dummy.updateMatrix();
       mesh.setMatrixAt(i, dummy.matrix);
 
       const t = rnd(), b = CONFIG.ringBrightness;
       const lum = 0.5 + 0.62 * Math.pow(t, 1.35);
-      col.setRGB(0.94 * b * lum, 0.89 * b * lum, 0.84 * b * lum);
+      // ~30% shard nghiêng sắc lạnh (lavender/lam) thay vì đồng loạt nâu ấm —
+      // tạo mảng màu ấm/lạnh xen kẽ, kết hợp rim light tím thì càng rõ.
+      const coolMix = rnd() < 0.3 ? range(rnd, 0.15, 0.45) : 0;
+      const colR = THREE.MathUtils.lerp(0.94, 0.80, coolMix);
+      const colG = THREE.MathUtils.lerp(0.89, 0.83, coolMix);
+      const colB = THREE.MathUtils.lerp(0.84, 0.98, coolMix);
+      col.setRGB(colR * b * lum, colG * b * lum, colB * b * lum);
       mesh.setColorAt(i, col);
       const slot = CONFIG.wave.bandSlots[ringIndex + 1];
       const radialPhase = (rr - def.radius) / (def.thickness * 2);
@@ -435,6 +566,9 @@ export function createAtomReactor(canvas: HTMLCanvasElement, opts: AtomReactorOp
       baseEmissiveIntensity: mat.emissiveIntensity,
       waveMesh: null as unknown as THREE.InstancedMesh & { userData: WaveMeshUserData },
       waveActive: false,
+      basePositions,
+      jitterPhase,
+      jitterFreq,
     };
     createWaveOverlay(mesh, geo, count);
 
@@ -605,7 +739,58 @@ export function createAtomReactor(canvas: HTMLCanvasElement, opts: AtomReactorOp
       for (const ring of rings) peakEnergy = Math.max(peakEnergy, updateRingWave(ring));
     }
 
-    if (bloomPass) bloomPass.strength = CONFIG.bloom.strength * (1 + peakEnergy * wave.bloomGain);
+    if (bloomPass) bloomPass.strength = CONFIG.bloom.strength * bloomStrengthScale * (1 + peakEnergy * wave.bloomGain);
+  }
+
+  // Ghi trực tiếp offset vào 3 ô translation của instanceMatrix (thay vì
+  // Object3D.compose lại toàn bộ ma trận) — rẻ hơn nhiều khi chạy mỗi frame
+  // cho vài nghìn instance, và không đụng tới rotation/scale đã bake sẵn.
+  function updateMicroJitter(mesh: (THREE.InstancedMesh & { userData: BandUserData }) | null, t: number, amplitude: number) {
+    if (!mesh) return;
+    const ud = mesh.userData;
+    const basePositions = ud.basePositions, jitterPhase = ud.jitterPhase, jitterFreq = ud.jitterFreq;
+    if (!basePositions || !jitterPhase || !jitterFreq) return;
+    const arr = mesh.instanceMatrix.array as Float32Array;
+    const count = jitterFreq.length;
+    for (let i = 0; i < count; i++) {
+      const f = jitterFreq[i];
+      const o3 = i * 3;
+      const ox = Math.sin(t * f + jitterPhase[o3]) * amplitude;
+      const oy = Math.sin(t * f * 1.31 + jitterPhase[o3 + 1]) * amplitude;
+      const oz = Math.sin(t * f * 0.77 + jitterPhase[o3 + 2]) * amplitude;
+      const o16 = i * 16;
+      arr[o16 + 12] = basePositions[o3] + ox;
+      arr[o16 + 13] = basePositions[o3 + 1] + oy;
+      arr[o16 + 14] = basePositions[o3 + 2] + oz;
+    }
+    mesh.instanceMatrix.needsUpdate = true;
+  }
+
+  // Lõi: chỉ nhấp nhô theo trục Y, một nhịp thống nhất (không phải random
+  // từng shard như vành) — pha lấy từ wavePhase (đã tỉ lệ theo bán kính
+  // trong createCore), nên "gợn sóng" lệch nhẹ dần từ tâm ra ngoài thay vì
+  // cả khối nhấp nhô cứng như một cục, mà không rời khỏi hình dạng cầu.
+  function updateCoreRipple(mesh: (THREE.InstancedMesh & { userData: BandUserData }) | null, t: number, amplitude: number, cycle: number) {
+    if (!mesh) return;
+    const ud = mesh.userData;
+    const basePositions = ud.basePositions, ripplePhase = ud.ripplePhase, radialDir = ud.radialDir;
+    if (!basePositions || !ripplePhase || !radialDir) return;
+    const arr = mesh.instanceMatrix.array as Float32Array;
+    const count = ripplePhase.length;
+    const twoPi = Math.PI * 2;
+    for (let i = 0; i < count; i++) {
+      // Dịch dọc theo đúng vector hướng tâm của shard đó — "lên xuống" nghĩa
+      // là ra/vào so với tâm (thở phồng-xẹp), không phải trục Y cố định.
+      // ripplePhase trải rộng theo bán kính nên các dải lệch pha rõ, đọc ra
+      // như sóng lan chứ không phải cả khối nhấp nhô đồng loạt.
+      const s = Math.sin(twoPi * (t / cycle - ripplePhase[i])) * amplitude;
+      const o3 = i * 3;
+      const o16 = i * 16;
+      arr[o16 + 12] = basePositions[o3] + radialDir[o3] * s;
+      arr[o16 + 13] = basePositions[o3 + 1] + radialDir[o3 + 1] * s;
+      arr[o16 + 14] = basePositions[o3 + 2] + radialDir[o3 + 2] * s;
+    }
+    mesh.instanceMatrix.needsUpdate = true;
   }
 
   function createHeatTexture() {
@@ -753,6 +938,7 @@ export function createAtomReactor(canvas: HTMLCanvasElement, opts: AtomReactorOp
         composer.setPixelRatio(Math.min(window.devicePixelRatio || 1, profile.maxDpr) * (profile.bloomResolutionScale || 1));
         composer.setSize(size.width, size.height);
       }
+      if (currentBgIsLight) applyBackground(currentBgHex, true);
       applyLayout();
     });
   }
@@ -849,6 +1035,11 @@ export function createAtomReactor(canvas: HTMLCanvasElement, opts: AtomReactorOp
         const coreWave = core.userData.waveMesh;
         if (coreWave) coreWave.rotation.copy(core.rotation);
       }
+
+      if (MICRO_JITTER_ENABLED) {
+        updateCoreRipple(core, t, CONFIG.microJitter.core.amplitude, CONFIG.microJitter.core.cycle);
+        for (const r of rings) updateMicroJitter(r, t, CONFIG.microJitter.ring.amplitude);
+      }
     }
 
     const zd = 1 - Math.exp(-4 * dt);
@@ -890,10 +1081,30 @@ export function createAtomReactor(canvas: HTMLCanvasElement, opts: AtomReactorOp
     document.removeEventListener("visibilitychange", onVisibility);
   }
 
-  function setBackgroundColor(hex: number) {
+  function setBackgroundColor(hex: number, isLight: boolean) {
     if (!scene) return;
-    if (scene.background instanceof THREE.Color) scene.background.setHex(hex);
-    if (scene.fog) (scene.fog as THREE.FogExp2).color.setHex(hex);
+    applyBackground(hex, isLight);
+
+    // Độ sáng tương đối của nền (0 = đen, 1 = trắng) quyết định bloom co lại
+    // bao nhiêu — nền sáng vốn đã gần trắng nên cộng thêm bloom rất dễ cháy,
+    // trong khi nền tối cần bloom mạnh mới nổi bật được các điểm sáng.
+    const r = ((hex >> 16) & 255) / 255, g = ((hex >> 8) & 255) / 255, b = (hex & 255) / 255;
+    const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    const litAmount = THREE.MathUtils.smoothstep(luminance, 0.35, 0.85);
+    bloomStrengthScale = THREE.MathUtils.lerp(1, 0.42, litAmount);
+    bloomThresholdBoost = THREE.MathUtils.lerp(0, 0.3, litAmount);
+    if (bloomPass) bloomPass.threshold = CONFIG.bloom.threshold + bloomThresholdBoost;
+
+    // Fog cùng màu nền: trên nền tối, fog nhạt dần vào bóng tối trông có
+    // chiều sâu; trên nền sáng gần trắng, fog cùng công thức lại nhạt vật
+    // thể vào MÀU TRẮNG — mất tương phản, nhìn mờ nhòe cả khối (đúng lỗi
+    // trong ảnh chụp thực tế). Giảm mạnh mật độ fog khi nền sáng để giữ độ
+    // rõ, gần như tắt hẳn khi nền rất sáng.
+    if (scene.fog) {
+      const fog = scene.fog as THREE.FogExp2;
+      fog.color.setHex(hex);
+      fog.density = CONFIG.fogDensity * THREE.MathUtils.lerp(1, 0.12, litAmount);
+    }
   }
 
   function dispose() {
@@ -904,6 +1115,7 @@ export function createAtomReactor(canvas: HTMLCanvasElement, opts: AtomReactorOp
     disposeWorld();
     disposeComposer();
     if (environmentTarget) { environmentTarget.dispose(); environmentTarget = null; }
+    if (backgroundTexture) { backgroundTexture.dispose(); backgroundTexture = null; }
     if (renderer) renderer.dispose();
   }
 
@@ -911,6 +1123,7 @@ export function createAtomReactor(canvas: HTMLCanvasElement, opts: AtomReactorOp
     renderer = createRenderer();
     createScene();
     buildWorldForProfile();
+    setBackgroundColor(opts.backgroundColor);
     bindInteractions();
     camera.position.set(0, 0, zoomZ);
     const activeComposer = composer as EffectComposer | null;
