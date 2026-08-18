@@ -19,6 +19,7 @@ MODEL_REGISTRY: dict[str, list[tuple[str, str]]] = {
         ("claude-haiku-4-5-20251001", "Claude Haiku 4.5"),
     ],
     "openai": [
+        ("gpt-5.6-luna", "GPT-5.6 Luna"),
         ("gpt-4.1-mini", "GPT-4.1 mini"),
         ("gpt-4o", "GPT-4o"),
         ("gpt-4o-mini", "GPT-4o mini"),
@@ -46,12 +47,28 @@ def _content_text(content) -> str:
     return ""
 
 
+def _default_model_for(provider: str) -> str | None:
+    """settings.DEFAULT_MODEL, nhưng CHỈ khi nó thuộc về `provider`.
+
+    DEFAULT_MODEL đi cặp với DEFAULT_PROVIDER (xem features/models/router.py):
+    một id như "gpt-5.6-luna" vô nghĩa với provider "anthropic". Nên khi caller
+    chọn provider khác DEFAULT_PROVIDER, trả None để get_llm rơi về default
+    riêng của provider đó.
+    """
+    if not settings.DEFAULT_MODEL:
+        return None
+    if provider != settings.DEFAULT_PROVIDER.lower():
+        return None
+    return settings.DEFAULT_MODEL
+
+
 def get_llm(
     provider: str | None = None,
     model: str | None = None,
     temperature: float = 0.1,
 ) -> BaseChatModel:
     provider = (provider or settings.DEFAULT_PROVIDER).lower()
+    model = model or _default_model_for(provider)
 
     if provider == "ollama":
         from langchain_ollama import ChatOllama
