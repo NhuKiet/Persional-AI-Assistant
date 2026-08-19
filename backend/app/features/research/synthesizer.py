@@ -71,12 +71,23 @@ def budget_for(caps) -> ContextBudget:
 # real content and must not be fed back as context for follow-up questions.
 NO_SUMMARY_FALLBACK = "No summary available."
 
-# Claim-extraction reasoning effort, overridable for measurement runs.
-# "high" is the shipped default; RESEARCH_CLAIM_EFFORT=none isolates the
-# effort variable when attributing a change in grounded fraction, so a drift
-# caused by reasoning depth can be told apart from one caused by which
-# search sources happened to be reachable that day.
-_CLAIM_EFFORT = os.environ.get("RESEARCH_CLAIM_EFFORT", "high")
+# Claim-extraction reasoning effort. Unset means "send no reasoning_effort at
+# all" — the model's own default, which is what this call site used before
+# structured output was introduced.
+#
+# Measured with a controlled A/B, both arms run back to back so source
+# availability stayed comparable (2026-08-19):
+#
+#     high: grounded 0.287, confidence 0.506, 7 iteration rounds, 86.4s
+#     none: grounded 0.442, confidence 0.543, 4 iteration rounds, 81.6s
+#
+# "high" costs more wall time and more top-up iteration rounds while showing
+# the user fewer claims and lower confidence. That is not proof its claims are
+# worse — is_grounded is a lexical proxy, and deeper reasoning plausibly yields
+# cross-source claims that share fewer tokens with any single cited source —
+# but nothing supports paying for it either. RESEARCH_CLAIM_EFFORT keeps the
+# knob available for the qualitative comparison that would settle it.
+_CLAIM_EFFORT = os.environ.get("RESEARCH_CLAIM_EFFORT") or None
 
 
 def _content_or_str(content) -> str:

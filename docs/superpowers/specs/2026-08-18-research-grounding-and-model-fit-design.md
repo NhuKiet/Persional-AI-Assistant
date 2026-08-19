@@ -432,3 +432,57 @@ not a metric.)*
 - **Gating Ollama out of `available_models()`** when no server is reachable. Real, small, but unrelated.
 - **Answer-quality evaluation.** The probe measures mechanical signals only (section 9).
 - **Call consolidation.** Considered and rejected: the seven synthesis calls already run in parallel, so merging them would not reduce latency and would cost fault isolation.
+
+## 13. Results (2026-08-19)
+
+### 13.1 What shipped
+
+Tasks implementing sections 4, 5, 6 and 8. Sections 3 and 7 were withdrawn in revision 2 and never implemented.
+
+| Metric | Baseline | After | Verdict |
+|---|---|---|---|
+| mean context chars sent | 7,203 | ~36,000 | goal met (§4.2) |
+| comparison-table calls | 8 of 8 queries | 2 of 8 | goal met (§8) — both compare-intent queries |
+| charts produced | 1 of 8 | 8 of 8 → **3 of 8** after the fix below | regression found and repaired |
+| mean wall seconds | 75.2 | ~82–86 | accepted cost of larger context |
+
+### 13.2 Chart regression, found and fixed
+
+Structured output replaced the text path's `"NO_DATA"` sentinel with a `has_data: bool` field. The model answers that field true almost always, so charts went from 1 of 8 queries to 8 of 8. Chart values are LLM-generated numbers and, as section 5 already recorded, nothing verified them.
+
+Fix: `ChartData` gained a `source_quote` field, and a pure `chart_is_supported()` check now requires the quote to appear verbatim in the context and to contain at least two of the plotted values, alongside a minimum of two label/value pairs. Charts fell to 3 of 8 — the surviving three each carry quotable numbers.
+
+This is the one place quote-anchored verification was actually built, and it was justified by a measured defect rather than by the reasoning withdrawn in section 3.
+
+### 13.3 Grounding drift: attributed by controlled A/B
+
+The first comparison showed grounded fraction falling 0.396 → 0.301 and confidence 0.607 → 0.520. Two causes were confounded: claim extraction had begun running at `reasoning_effort="high"` over 5× more context, **and** the source mix differed (Semantic Scholar failed on every baseline query but none of the second run).
+
+Both arms were then run back to back, varying only the effort setting. Source conditions stayed comparable — Semantic Scholar failed 106 vs 102 times, Weaviate 503 on 23 vs 20 occasions, context 35,978 vs 36,045 chars.
+
+| | baseline | `high` | `none` |
+|---|---|---|---|
+| mean grounded fraction | 0.396 | **0.287** | **0.442** |
+| mean confidence | 0.607 | 0.506 | 0.543 |
+| iteration rounds | 6 | 7 | 4 |
+| mean wall seconds | 75.2 | 86.4 | 81.6 |
+
+`none` was higher than `high` on 6 of 8 queries. The pattern matches the interpretation fixed in advance: reasoning effort is the cause of the drift, not the source mix.
+
+**What this does not establish.** `is_grounded` is a lexical proxy. Higher reasoning effort plausibly produces more cross-source synthesized claims, which by construction share fewer tokens with any single cited source. A lower score is therefore consistent with both worse claims and better ones; this measurement cannot tell them apart.
+
+**What it does establish**, independent of claim quality: `high` costs more wall time and more top-up iteration rounds, while displaying fewer claims and lower confidence to the user.
+
+**Decision.** Claim extraction no longer sends a `reasoning_effort` at all, restoring the behavior it had before structured output was introduced. `RESEARCH_CLAIM_EFFORT` keeps the knob available for the qualitative comparison that would settle the open question.
+
+### 13.4 Environment findings — recorded, not addressed
+
+Both outside this work's scope. Recorded because they change how the numbers above should be read.
+
+1. **The cross-encoder reranker never ran.** BGE fails to load with `XLMRobertaTokenizer has no attribute prepare_for_model`, a FlagEmbedding/transformers version conflict, and no `COHERE_API_KEY` is configured. Every run in this measurement — baseline and all three afterwards — fell back to credibility-only scoring. The unification in section 6 is therefore correct by construction and by unit test, but its primary path has never executed here. Production ranking quality is lower than the design assumes.
+
+2. **Weaviate Cloud returned 503 throughout.** The knowledge-gate path (`sufficiency.assess`, `retrieve_candidates`, the top-up branch) was never exercised in any measurement. Every number above describes the live-search path only.
+
+### 13.5 Open question, still open
+
+Section 1.1 closed the question of whether grounding is inert — it is not. It did not settle whether rejected claims are rejected *correctly* or *falsely*. That needs a person reading real claims against real sources; no metric in this document answers it, and the A/B above makes it more pointed rather than less, since the two effort settings disagree on roughly a third of claims.
