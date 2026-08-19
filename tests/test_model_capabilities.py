@@ -40,3 +40,24 @@ def test_resolve_model_matches_get_llm_defaults(monkeypatch):
     assert llm_mod._resolve_model("openai", None) == "gpt-4o-mini"
     assert llm_mod._resolve_model("anthropic", None) == "claude-sonnet-5"
     assert llm_mod._resolve_model("openai", "gpt-4o") == "gpt-4o"
+
+
+from backend.app.core.llm import ModelCapabilities, capabilities_for as _cf
+from backend.app.features.research.synthesizer import budget_for
+
+
+def test_budget_for_large_context_model_is_capped_at_60k_tokens():
+    b = budget_for(_cf("openai", "gpt-5.6-luna"))
+    assert b.max_chars == 210_000          # min(1_050_000*0.5, 60_000) * 3.5
+    assert b.per_source_chars == 14_000    # 210_000 // 15
+
+
+def test_budget_for_small_context_model_stays_small():
+    b = budget_for(ModelCapabilities(8192, False, True))
+    assert b.max_chars == 14_336           # 8192*0.5 = 4096 tokens * 3.5
+    assert b.per_source_chars == 955
+
+
+def test_budget_per_source_never_degenerates():
+    b = budget_for(ModelCapabilities(1024, False, True))
+    assert b.per_source_chars >= 200

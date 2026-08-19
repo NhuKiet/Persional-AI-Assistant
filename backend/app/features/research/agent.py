@@ -367,8 +367,10 @@ class ResearchAgent:
             logger.info("[QUERY] %s", query)
 
             if provider or model:
-                from backend.app.core.llm import get_llm
-                synth = Synthesizer(get_llm(provider, model))
+                from backend.app.core.llm import capabilities_for, get_llm
+                synth = Synthesizer(
+                    get_llm(provider, model), capabilities_for(provider, model),
+                )
             else:
                 synth = self.synth
 

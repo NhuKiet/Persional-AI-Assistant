@@ -13,6 +13,7 @@ import json
 import logging
 import re
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 
 from backend.app.core.config import settings
 from backend.app.core.llm import get_llm
@@ -25,12 +26,42 @@ from backend.app.features.research.security import frame_untrusted, UNTRUSTED_GU
 
 logger = logging.getLogger(__name__)
 
-# Context budgets — tăng để LLM có đủ thông tin tổng hợp
-# Llama3 8B có context 8k tokens ~ 6000 ký tự an toàn cho 1 prompt
-_CTX_SUMMARY = 7000   # tăng từ 5000
-_CTX_POINTS  = 5000   # tăng từ 3500
-_CTX_CMP     = 3500   # tăng từ 2500
-_CTX_CHART   = 2500   # tăng từ 2000
+# Context budget is derived from the configured model, not hardcoded. The
+# constants above were sized for "Llama3 8B có context 8k tokens" and starved
+# every larger model that followed: each source was truncated to 900 chars
+# after the pipeline spent a crawl, a dedup pass and a rerank producing 15
+# sources of up to 8000 chars each. Measured before this change, the largest
+# context actually sent was 7,203 chars against a 1,050,000-token window.
+#
+# The four graded budgets they replaced had no technical basis — each section
+# is an independent call with the whole context window available to it, so
+# splitting one budget across them was never meaningful. One budget now.
+
+_CHARS_PER_TOKEN      = 3.5      # conservative; Vietnamese costs more per char
+_MAX_EFFECTIVE_TOKENS = 60_000
+_RERANK_TOP_K         = 15       # matches rerank_results(top_k=15) in agent.py
+
+
+@dataclass(frozen=True)
+class ContextBudget:
+    max_chars: int
+    per_source_chars: int
+
+
+def budget_for(caps) -> ContextBudget:
+    """Half the model's window, hard-capped.
+
+    The cap is deliberate: available material tops out near 15 x 8000 = 120k
+    chars (~30k tokens), so a 1M-token model never reaches it. It exists only
+    to bound pathological input, not to be a target.
+    """
+    effective = min(int(caps.context_window * 0.5), _MAX_EFFECTIVE_TOKENS)
+    max_chars = int(effective * _CHARS_PER_TOKEN)
+    return ContextBudget(
+        max_chars=max_chars,
+        per_source_chars=max(200, max_chars // _RERANK_TOP_K),
+    )
+
 
 # Placeholder used when the LLM call fails entirely (_call swallows the
 # exception and returns ""). Exported so callers building conversation
@@ -40,8 +71,11 @@ NO_SUMMARY_FALLBACK = "No summary available."
 
 
 class Synthesizer:
-    def __init__(self, llm=None):
-        self.llm = llm or get_llm()
+    def __init__(self, llm=None, capabilities=None):
+        from backend.app.core.llm import capabilities_for
+        self.llm    = llm or get_llm()
+        self.caps   = capabilities or capabilities_for()
+        self.budget = budget_for(self.caps)
 
     # ── LLM call ──────────────────────────────────────────────────────────────
 
@@ -57,7 +91,10 @@ class Synthesizer:
 
     # ── Context builder ───────────────────────────────────────────────────────
 
-    def _ctx(self, sources: list[SearchResult], max_chars: int, per_source: int = 900) -> str:
+    def _ctx(self, sources: list[SearchResult], max_chars: int | None = None,
+             per_source: int | None = None) -> str:
+        max_chars  = self.budget.max_chars if max_chars is None else max_chars
+        per_source = self.budget.per_source_chars if per_source is None else per_source
         parts, total = [], 0
         for s in sources:
             content_preview = s.content[:per_source]
@@ -238,8 +275,9 @@ class Synthesizer:
             return
 
         src_text = "\n".join(
-            f"{i+1}. [{s.source}] {s.title}: {frame_untrusted(s.content[:200].replace(chr(10), ' '))}"
-            for i, s in enumerate(sources[:4])
+            f"{i+1}. [{s.source}] {s.title}: "
+            f"{frame_untrusted(s.content[:self.budget.per_source_chars].replace(chr(10), ' '))}"
+            for i, s in enumerate(sources)
         )
 
         raw = self._call(prompts.comparison_table_prompt(query, src_text))
@@ -330,7 +368,7 @@ class Synthesizer:
 
         logger.info("[RAG SYNTH] %d sources for: %s", len(sources), query)
 
-        ctx = self._ctx(sources, max_chars=6500, per_source=1300)
+        ctx = self._ctx(sources)
 
         raw = self._call(prompts.rag_synthesis_prompt(query, ctx)).strip()
         logger.info("[RAG SYNTH] LLM raw: %d chars", len(raw))
@@ -394,13 +432,14 @@ class Synthesizer:
         logger.info("Synthesizing %d sources for: %s", len(sources), query)
         ranked = sorted(sources, key=lambda s: s.score, reverse=True)
 
+        ctx = self._ctx(ranked)
         steps = [
-            ("summaries",    self._make_summaries,          (query, self._ctx(ranked, _CTX_SUMMARY), out)),
-            ("key_points",   self._make_key_points,         (query, self._ctx(ranked, _CTX_POINTS),  out)),
-            ("comparison",   self._make_comparison_table,   (query, ranked, out)),
-            ("chart",        self._make_chart_data,         (query, self._ctx(ranked, _CTX_CHART),   out)),
+            ("summaries",    self._make_summaries,           (query, ctx, out)),
+            ("key_points",   self._make_key_points,          (query, ctx, out)),
+            ("comparison",   self._make_comparison_table,    (query, ranked, out)),
+            ("chart",        self._make_chart_data,          (query, ctx, out)),
             ("follow_ups",   self._make_follow_up_questions, (query, out)),
-            ("papers",       self._make_papers_and_refs,    (ranked, out)),
+            ("papers",       self._make_papers_and_refs,     (ranked, out)),
         ]
 
         with ThreadPoolExecutor(max_workers=len(steps)) as ex:
