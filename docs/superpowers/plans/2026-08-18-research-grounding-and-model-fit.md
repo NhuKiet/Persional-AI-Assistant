@@ -1083,7 +1083,7 @@ git commit -m "refactor(research): one rerank ladder and one fusion function"
 
 ### Task 5: Remove dead code and move comparison gating to the backend
 
-Measured on the baseline: the comparison table was populated with 4 rows on **all 8** queries, while only 1 of those queries had comparison intent. Seven of eight comparison calls were made and discarded.
+Measured on the baseline: the comparison table was populated with 4 rows on **all 8** queries, while only 2 of those queries had comparison intent. Six of eight comparison calls were made and discarded.
 
 **Files:**
 - Modify: `synthesizer.py`, `agent.py`, `router.py`, `service.py`, `prompts.py`, `search/community.py`, `search/query.py`, `search/__init__.py`
@@ -1136,7 +1136,7 @@ Add to `backend/app/features/research/search/query.py`:
 # Comparison intent. This lived in the frontend (ResearchResult.tsx), which
 # meant the backend made the comparison LLM call on every run and the UI threw
 # the result away unless the query happened to contain one of these. Measured
-# on 8 baseline queries: 8 calls made, 1 displayed. The decision belongs where
+# on 8 baseline queries: 8 calls made, 2 displayable. The decision belongs where
 # the call is made.
 _COMPARE_KEYWORDS = (
     "vs", "versus", "compare", "comparison", "so sánh", "khác nhau",
@@ -1250,7 +1250,7 @@ for k in b:
 | Metric | Baseline | Expected after | Why |
 |---|---|---|---|
 | `mean_ctx_chars` | 7,203 | far larger | the budget no longer caps at a Llama3-era constant |
-| `comparison_rows` | 4 on all 8 queries | 0 on 7 of 8 | the call is gated on intent |
+| `comparison_rows` | 4 on all 8 queries | populated on 2 of 8 | the call is gated on intent; "So sánh DPO và PPO" and "…khác GAN ở điểm nào" are the two queries that ask for a comparison |
 | `mean_grounded_fraction` | 0.396 | **unchanged** | grounding semantics were deliberately untouched |
 | `mean_confidence` | 0.607 | **unchanged** | same |
 | `total_iteration_rounds` | 6 | roughly unchanged | same |
@@ -1258,7 +1258,7 @@ for k in b:
 
 **A material move in `mean_grounded_fraction` or `mean_confidence` is a regression signal, not a win.** This plan does not change grounding; if those numbers shift, something changed that should not have. Investigate before proceeding.
 
-Compare per-row `comparison_rows` directly — the 7-of-8 drop is this plan's clearest measurable outcome.
+Compare per-row `comparison_rows` directly — six of eight queries dropping to zero is this plan's clearest measurable outcome.
 
 - [ ] **Step 3: Reproduce the baseline's conditions or say so**
 
