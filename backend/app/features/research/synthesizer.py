@@ -83,6 +83,59 @@ def _content_or_str(content) -> str:
     return str(content or "")
 
 
+_WS_RE  = re.compile(r"\s+")
+_NUM_RE = re.compile(r"\d+(?:[.,]\d+)?")
+
+_CHART_PUNCT = str.maketrans({
+    "‘": "'", "’": "'", "“": '"', "”": '"',
+    "–": "-", "—": "-", " ": " ",
+})
+
+
+def _normalize_chart_text(text: str) -> str:
+    """Lowercase, fold typographic punctuation, collapse whitespace."""
+    return _WS_RE.sub(" ", (text or "").translate(_CHART_PUNCT).lower()).strip()
+
+
+def _number_forms(value: float) -> set[str]:
+    """String forms a model might have written for `value`.
+
+    40.0 is written "40", not "40.0"; 79.5 may appear as "79.5" or "79,5".
+    """
+    forms = {f"{value:g}"}
+    if float(value).is_integer():
+        forms.add(str(int(value)))
+    return forms | {f.replace(".", ",") for f in forms}
+
+
+def chart_is_supported(parsed, ctx: str) -> bool:
+    """Whether a structured chart is backed by text actually present in `ctx`.
+
+    Pure — no I/O. Charts are the one synthesis output whose content is pure
+    numbers, and nothing else in the pipeline verifies them. Measured: charts
+    fired on 1 of 8 queries under the old "NO_DATA" text sentinel and 8 of 8
+    once the schema asked for a boolean, because the model answers true almost
+    always. Requiring a quote that is really in the sources, containing the
+    numbers really being plotted, puts the decision back on evidence.
+    """
+    if not parsed.has_data:
+        return False
+    if len(parsed.labels) < 2 or len(parsed.values) < 2:
+        return False
+    if len(parsed.labels) != len(parsed.values):
+        return False
+
+    quote = _normalize_chart_text(parsed.source_quote)
+    if len(quote) < 15:
+        return False
+    if quote not in _normalize_chart_text(ctx):
+        return False
+
+    quoted_numbers = set(_NUM_RE.findall(quote))
+    matched = sum(1 for v in parsed.values if _number_forms(v) & quoted_numbers)
+    return matched >= 2
+
+
 class Synthesizer:
     def __init__(self, llm=None, capabilities=None):
         from backend.app.core.llm import capabilities_for
@@ -361,9 +414,12 @@ class Synthesizer:
             prompts.chart_data_prompt(query, ctx), output_schemas.ChartData, "low",
         )
         if parsed is not None:
-            if parsed.has_data and parsed.labels and parsed.values:
-                out.chart_data = parsed.model_dump(exclude={"has_data"})
-                logger.info("Chart: %s (structured)", out.chart_data.get("title", ""))
+            if chart_is_supported(parsed, ctx):
+                out.chart_data = parsed.model_dump(exclude={"has_data", "source_quote"})
+                logger.info("Chart: %s (structured, quote-verified)",
+                            out.chart_data.get("title", ""))
+            else:
+                logger.info("Chart: rejected — no verifiable numbers in the sources")
             return
         raw = self._call(prompts.chart_data_prompt(query, ctx), "low").strip()
         if raw and "NO_DATA" not in raw.upper():

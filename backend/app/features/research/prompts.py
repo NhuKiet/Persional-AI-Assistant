@@ -109,9 +109,16 @@ def chart_data_prompt(query: str, ctx: str) -> str:
     return (
         f"Look at these sources about '{query}'.\n\n"
         f"Sources:\n{ctx}\n\n"
-        f"Do you see numbers that can be compared (%, scores, counts, years)?\n"
-        f'If YES, return ONLY this JSON: {{"type":"bar","title":"title","labels":["a","b"],"values":[1,2],"unit":""}}\n'
-        f"If NO, reply: NO_DATA\n\n"
+        f"Do the sources state at least TWO comparable numbers (%, scores, "
+        f"counts, years) that belong on the same chart?\n"
+        f"Most sources do not. Answer no unless the numbers are really there "
+        f"in the text above — do not derive them, estimate them, or bring them "
+        f"in from your own knowledge. A chart you cannot quote from the "
+        f"sources is worse than no chart.\n"
+        f"If YES, return the chart together with the sentence(s) you took the "
+        f"numbers from, copied verbatim into source_quote.\n"
+        f"If NO, set has_data to false and leave the other fields empty. "
+        f"If you are replying as plain text rather than JSON, reply: NO_DATA\n\n"
         f"Rules for the JSON fields (title/labels/unit) and the numbers themselves:\n"
         f"{_footer(GROUNDING_RULE, LANGUAGE_RULE)}"
     )

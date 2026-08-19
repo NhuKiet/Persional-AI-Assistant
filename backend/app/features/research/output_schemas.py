@@ -37,12 +37,25 @@ class ComparisonTable(BaseModel):
 
 
 class ChartData(BaseModel):
-    has_data: bool = Field(description="False when the sources contain no comparable numbers")
+    has_data: bool = Field(
+        description=(
+            "True ONLY when the sources state at least two comparable numbers "
+            "you can quote verbatim. False in every other case."
+        )
+    )
     type:     str  = Field(default="bar")
     title:    str  = Field(default="")
     labels:   list[str]   = Field(default_factory=list)
     values:   list[float] = Field(default_factory=list)
     unit:     str  = Field(default="")
+    source_quote: str = Field(
+        default="",
+        description=(
+            "The sentence(s) from the sources containing these numbers, copied "
+            "VERBATIM. Checked against the sources; a chart whose quote is not "
+            "found is discarded."
+        ),
+    )
 
 
 class FollowUps(BaseModel):
