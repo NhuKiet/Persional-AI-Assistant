@@ -623,12 +623,19 @@ def test_batch_fallback_fires_when_quotes_are_unusable():
 
 
 def test_batch_fallback_does_not_fire_when_quotes_work():
+    """Four claims so the min-claims guard is satisfied and this test can only
+    pass on the 30% threshold logic — two grounded out of four is 0.5."""
     s = _source()
-    good = _claim("ok", "Diffusion models are increasingly replacing GANs", s.id)
-    claims = [good, _claim("bad", "invented sentence absent from the source text", s.id)]
+    claims = [
+        _claim("ok1", "Diffusion models are increasingly replacing GANs", s.id),
+        _claim("ok2", "for image synthesis tasks due to better mode coverage", s.id),
+        _claim("bad1", "invented sentence absent from the source text here", s.id),
+        _claim("bad2", "another fabricated sentence nowhere in the source", s.id),
+    ]
     called = []
 
-    ClaimAuditor(fallback_scorer=lambda pairs: called.append(pairs) or []).verify(claims, [s])
+    out = ClaimAuditor(fallback_scorer=lambda pairs: called.append(pairs) or []).verify(claims, [s])
+    assert sum(1 for c in out if c.grounded) == 2   # 0.5 >= 0.3, above the trigger
     assert called == []
 
 
