@@ -22,6 +22,7 @@ from backend.app.features.research.grounding import (
 )
 from backend.app.features.research.models import ResearchOutput, SearchResult
 from backend.app.features.research import prompts
+from backend.app.features.research import output_schemas
 from backend.app.features.research.security import frame_untrusted, UNTRUSTED_GUARD
 
 logger = logging.getLogger(__name__)
@@ -70,6 +71,18 @@ def budget_for(caps) -> ContextBudget:
 NO_SUMMARY_FALLBACK = "No summary available."
 
 
+def _content_or_str(content) -> str:
+    """Anthropic returns content blocks rather than a plain string."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "".join(
+            b if isinstance(b, str) else b.get("text", "")
+            for b in content if isinstance(b, (str, dict))
+        )
+    return str(content or "")
+
+
 class Synthesizer:
     def __init__(self, llm=None, capabilities=None):
         from backend.app.core.llm import capabilities_for
@@ -79,15 +92,43 @@ class Synthesizer:
 
     # ── LLM call ──────────────────────────────────────────────────────────────
 
-    def _call(self, prompt: str) -> str:
+    def _bound(self, effort: str | None):
+        """The LLM with reasoning effort applied, when the model supports it.
+
+        Call sites always pass their intended effort; models without the knob
+        simply ignore it here, so no call site branches on model.
+        """
+        if effort and effort in self.caps.reasoning_effort_levels:
+            try:
+                return self.llm.bind(reasoning_effort=effort)
+            except Exception as e:  # noqa: BLE001
+                logger.warning("Could not bind reasoning_effort=%s: %s", effort, e)
+        return self.llm
+
+    def _call(self, prompt: str, effort: str | None = None) -> str:
         try:
-            result = self.llm.invoke(prompt).content
+            result = _content_or_str(self._bound(effort).invoke(prompt).content)
             logger.info("LLM response: %d chars", len(result))
             logger.debug("LLM (%d chars): %s…", len(result), result[:80])
             return result
         except Exception as e:
             logger.error("LLM call failed: %s", e)
             return ""
+
+    def _call_structured(self, prompt: str, schema, effort: str | None = None):
+        """Return a validated schema instance, or None meaning "use the text
+        fallback". Never raises: a schema violation must degrade to the legacy
+        parse path, not fail the section."""
+        if not self.caps.supports_structured_output:
+            return None
+        try:
+            return self._bound(effort).with_structured_output(schema).invoke(prompt)
+        except Exception as e:  # noqa: BLE001
+            logger.warning(
+                "Structured output failed for %s (falling back to text parse): %s",
+                getattr(schema, "__name__", schema), e,
+            )
+            return None
 
     # ── Context builder ───────────────────────────────────────────────────────
 
@@ -210,26 +251,36 @@ class Synthesizer:
     # ── Summary ───────────────────────────────────────────────────────────────
 
     def _make_summaries(self, query: str, ctx: str, out: ResearchOutput) -> None:
-        # Both prompts are independent; fire them together and parse in order.
         with ThreadPoolExecutor(max_workers=2) as ex:
-            f_short_medium = ex.submit(self._call, prompts.summary_short_medium_prompt(query, ctx))
-            f_detailed     = ex.submit(self._call, prompts.summary_detailed_prompt(query, ctx))
-            raw1 = f_short_medium.result()
-            raw2 = f_detailed.result()
+            f_sm = ex.submit(
+                self._call_structured,
+                prompts.summary_short_medium_prompt(query, ctx),
+                output_schemas.SummaryShortMedium,
+                "medium",
+            )
+            f_detailed = ex.submit(
+                self._call, prompts.summary_detailed_prompt(query, ctx), "high",
+            )
+            parsed = f_sm.result()
+            raw2   = f_detailed.result()
 
-        m = re.search(r"SUMMARY:\s*(.+?)(?=OVERVIEW:|$)", raw1, re.DOTALL | re.IGNORECASE)
-        out.summary_short = m.group(1).strip() if m else ""
-
-        m = re.search(r"OVERVIEW:\s*(.+)", raw1, re.DOTALL | re.IGNORECASE)
-        out.summary_medium = m.group(1).strip() if m else ""
+        if parsed is not None:
+            out.summary_short  = parsed.short.strip()
+            out.summary_medium = parsed.medium.strip()
+        else:
+            raw1 = self._call(prompts.summary_short_medium_prompt(query, ctx), "medium")
+            m = re.search(r"SUMMARY:\s*(.+?)(?=OVERVIEW:|$)", raw1, re.DOTALL | re.IGNORECASE)
+            out.summary_short = m.group(1).strip() if m else ""
+            m = re.search(r"OVERVIEW:\s*(.+)", raw1, re.DOTALL | re.IGNORECASE)
+            out.summary_medium = m.group(1).strip() if m else ""
+            if not out.summary_short:
+                lines = [l.strip() for l in raw1.splitlines() if l.strip() and len(l.strip()) > 20]
+                out.summary_short = lines[0] if lines else NO_SUMMARY_FALLBACK
+            if not out.summary_medium:
+                out.summary_medium = raw1.strip() or out.summary_short
 
         if not out.summary_short:
-            lines = [l.strip() for l in raw1.splitlines() if l.strip() and len(l.strip()) > 20]
-            out.summary_short = lines[0] if lines else NO_SUMMARY_FALLBACK
-
-        if not out.summary_medium:
-            out.summary_medium = raw1.strip() or out.summary_short
-
+            out.summary_short = NO_SUMMARY_FALLBACK
         out.summary_detailed = raw2.strip() if raw2.strip() else out.summary_medium
 
         logger.info(
@@ -240,7 +291,14 @@ class Synthesizer:
     # ── Key points ────────────────────────────────────────────────────────────
 
     def _make_key_points(self, query: str, ctx: str, out: ResearchOutput) -> None:
-        raw = self._call(prompts.key_points_prompt(query, ctx))
+        parsed = self._call_structured(
+            prompts.key_points_prompt(query, ctx), output_schemas.KeyPoints, "medium",
+        )
+        if parsed is not None:
+            out.key_points = [p.strip() for p in parsed.points if len(p.strip()) > 15]
+            logger.info("Key points: %d (structured)", len(out.key_points))
+            return
+        raw = self._call(prompts.key_points_prompt(query, ctx), "medium")
 
         out.key_points = []
         for line in raw.splitlines():
@@ -280,34 +338,34 @@ class Synthesizer:
             for i, s in enumerate(sources)
         )
 
-        raw = self._call(prompts.comparison_table_prompt(query, src_text))
-
-        parsed = self._parse_array(raw)
-        valid  = [r for r in parsed if isinstance(r, dict) and "source" in r and "main_claim" in r]
-
-        if valid:
-            out.comparison_table = valid
-        else:
-            # Clean fallback — no "Auto-generated entry" noise
-            out.comparison_table = [
-                {
-                    "source":     (s.title[:50] or s.url or s.source),
-                    "type":       s.source,
-                    "main_claim": s.content[:150].replace("\n", " ").strip() or "See source",
-                    "strength":   f"{s.source} source",
-                    "limitation": "See full source for details",
-                }
-                for s in sources[:5]
-                if s.title or s.content
-            ]
-
+        parsed = self._call_structured(
+            prompts.comparison_table_prompt(query, src_text),
+            output_schemas.ComparisonTable, "medium",
+        )
+        if parsed is not None:
+            out.comparison_table = [r.model_dump() for r in parsed.rows]
+            logger.info("Comparison: %d rows (structured)", len(out.comparison_table))
+            return
+        raw = self._call(prompts.comparison_table_prompt(query, src_text), "medium")
+        valid = [
+            r for r in self._parse_array(raw)
+            if isinstance(r, dict) and "source" in r and "main_claim" in r
+        ]
+        out.comparison_table = valid
         logger.info("Comparison: %d rows", len(out.comparison_table))
 
     # ── Chart data ────────────────────────────────────────────────────────────
 
     def _make_chart_data(self, query: str, ctx: str, out: ResearchOutput) -> None:
-        raw = self._call(prompts.chart_data_prompt(query, ctx)).strip()
-
+        parsed = self._call_structured(
+            prompts.chart_data_prompt(query, ctx), output_schemas.ChartData, "low",
+        )
+        if parsed is not None:
+            if parsed.has_data and parsed.labels and parsed.values:
+                out.chart_data = parsed.model_dump(exclude={"has_data"})
+                logger.info("Chart: %s (structured)", out.chart_data.get("title", ""))
+            return
+        raw = self._call(prompts.chart_data_prompt(query, ctx), "low").strip()
         if raw and "NO_DATA" not in raw.upper():
             chart = self._parse_obj(raw)
             if chart and "labels" in chart and "values" in chart:
@@ -317,7 +375,14 @@ class Synthesizer:
     # ── Follow-up questions ───────────────────────────────────────────────────
 
     def _make_follow_up_questions(self, query: str, out: ResearchOutput) -> None:
-        raw = self._call(prompts.follow_up_questions_prompt(query))
+        parsed_structured = self._call_structured(
+            prompts.follow_up_questions_prompt(query), output_schemas.FollowUps, "low",
+        )
+        if parsed_structured is not None:
+            out.follow_up_questions = [q.strip() for q in parsed_structured.questions if "?" in q][:4]
+            logger.info("Follow-up questions: %d (structured)", len(out.follow_up_questions))
+            return
+        raw = self._call(prompts.follow_up_questions_prompt(query), "low")
 
         parsed     = self._parse_array(raw)
         str_qs     = [q for q in parsed if isinstance(q, str) and "?" in q]
@@ -476,7 +541,14 @@ class Synthesizer:
         if not getattr(settings, "RESEARCH_GROUNDING_ENABLED", True) or not sources:
             return
         try:
-            claims = extract_claims(query, sources, self._call, self._parse_array)
+            claims = extract_claims(
+                query, sources,
+                lambda p: self._call(p, "high"),
+                self._parse_array,
+                structured_call=lambda p: self._call_structured(
+                    p, output_schemas.Claims, "high",
+                ),
+            )
             claims = ClaimAuditor().verify(claims, sources)
             out.claims      = [c for c in claims if c.grounded]
             out.confidence  = compute_confidence(claims, len(sources))

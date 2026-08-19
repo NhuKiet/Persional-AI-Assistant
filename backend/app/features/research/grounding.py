@@ -120,15 +120,27 @@ def _numbered_sources(sources: list[SearchResult]) -> str:
     )
 
 
-def extract_claims(query, sources, llm_call, parse_array) -> list[Claim]:
+def extract_claims(query, sources, llm_call, parse_array, structured_call=None) -> list[Claim]:
+    """`structured_call` is an injected callable returning an object with a
+    `.claims` list carrying text/source_id/evidence_type, or None to use the
+    text path. Injected, not imported, so this module stays pure."""
     if not sources:
         return []
-    try:
-        raw = llm_call(claim_extraction_prompt(query, _numbered_sources(sources)))
-        parsed = parse_array(raw)
-    except Exception as e:  # noqa: BLE001
-        logger.warning("extract_claims failed (non-fatal): %s", e)
-        return []
+    parsed = None
+    if structured_call is not None:
+        try:
+            result = structured_call(claim_extraction_prompt(query, _numbered_sources(sources)))
+            if result is not None:
+                parsed = [item.model_dump() for item in result.claims]
+        except Exception as e:  # noqa: BLE001
+            logger.warning("structured claim extraction failed (non-fatal): %s", e)
+    if parsed is None:
+        try:
+            raw = llm_call(claim_extraction_prompt(query, _numbered_sources(sources)))
+            parsed = parse_array(raw)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("extract_claims failed (non-fatal): %s", e)
+            return []
 
     claims: list[Claim] = []
     for item in parsed:
