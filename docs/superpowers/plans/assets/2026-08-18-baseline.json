@@ -1,0 +1,78 @@
+{
+  "summary": {
+    "runs": 8,
+    "errors": 0,
+    "mean_grounded_fraction": 0.0,
+    "mean_confidence": 0.0,
+    "total_iteration_rounds": 7,
+    "charts_produced": 0,
+    "mean_ctx_chars": 7272,
+    "mean_wall_seconds": 64.8
+  },
+  "rows": [
+    {
+      "query": "RAG hoạt động thế nào",
+      "error": null,
+      "wall_seconds": 72.3,
+      "iteration_rounds": 1,
+      "claims_extracted": 0,
+      "ctx_chars_max": 7265
+    },
+    {
+      "query": "So sánh DPO và PPO trong huấn luyện mô hình ngôn ngữ",
+      "error": null,
+      "wall_seconds": 56.8,
+      "iteration_rounds": 1,
+      "claims_extracted": 0,
+      "ctx_chars_max": 7279
+    },
+    {
+      "query": "Mô hình khuếch tán khác GAN ở điểm nào",
+      "error": null,
+      "wall_seconds": 76.1,
+      "iteration_rounds": 1,
+      "claims_extracted": 0,
+      "ctx_chars_max": 7272
+    },
+    {
+      "query": "Kỹ thuật lượng tử hóa mô hình ngôn ngữ lớn mới nhất",
+      "error": null,
+      "wall_seconds": 32.9,
+      "iteration_rounds": 0,
+      "claims_extracted": 0,
+      "ctx_chars_max": 7201
+    },
+    {
+      "query": "Vector database nào phù hợp cho hệ thống RAG production",
+      "error": null,
+      "wall_seconds": 96.7,
+      "iteration_rounds": 1,
+      "claims_extracted": 0,
+      "ctx_chars_max": 7293
+    },
+    {
+      "query": "Cách đánh giá chất lượng hệ thống RAG",
+      "error": null,
+      "wall_seconds": 68.4,
+      "iteration_rounds": 1,
+      "claims_extracted": 0,
+      "ctx_chars_max": 7279
+    },
+    {
+      "query": "Mixture of Experts là gì",
+      "error": null,
+      "wall_seconds": 53.0,
+      "iteration_rounds": 1,
+      "claims_extracted": 0,
+      "ctx_chars_max": 7300
+    },
+    {
+      "query": "Chain of thought prompting có thực sự hiệu quả không",
+      "error": null,
+      "wall_seconds": 61.8,
+      "iteration_rounds": 1,
+      "claims_extracted": 0,
+      "ctx_chars_max": 7286
+    }
+  ]
+}
