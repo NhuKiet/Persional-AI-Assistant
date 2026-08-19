@@ -1,6 +1,7 @@
 # tests/test_structured_output.py
 from backend.app.core.llm import ModelCapabilities
-from backend.app.features.research.output_schemas import SummaryShortMedium
+from backend.app.features.research.models import ResearchOutput
+from backend.app.features.research.output_schemas import KeyPoints, SummaryShortMedium
 from backend.app.features.research.synthesizer import Synthesizer
 
 
@@ -84,3 +85,19 @@ def test_call_returns_text_and_survives_provider_error():
 
     assert _synth(_FakeLLM(), _PLAIN_CAPS)._call("p") == "SUMMARY: s\nOVERVIEW: m"
     assert _synth(_Raiser(), _PLAIN_CAPS)._call("p") == ""
+
+
+def test_key_points_falls_back_to_text_when_structured_result_is_all_too_short():
+    # Structured result parses fine but every point is <=15 chars after strip,
+    # so it gets filtered to []. Before the fix, _make_key_points returned early
+    # here with out.key_points == [] and the Key Points panel silently vanished.
+    llm = _FakeLLM(
+        structured_result=KeyPoints(points=["Chưa đủ dữ liệu"]),  # too short after strip (<=15 chars)
+        text="[FINDING] a valid fallback key point from the text parse path",
+    )
+    s = _synth(llm, _STRUCTURED_CAPS)
+    out = ResearchOutput(query="q")
+
+    s._make_key_points("q", "ctx", out)
+
+    assert out.key_points == ["[FINDING] a valid fallback key point from the text parse path"]

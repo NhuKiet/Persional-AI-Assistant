@@ -367,9 +367,12 @@ class Synthesizer:
             prompts.key_points_prompt(query, ctx), output_schemas.KeyPoints, "medium",
         )
         if parsed is not None:
-            out.key_points = [p.strip() for p in parsed.points if len(p.strip()) > 15]
-            logger.info("Key points: %d (structured)", len(out.key_points))
-            return
+            points = [p.strip() for p in parsed.points if len(p.strip()) > 15]
+            if points:
+                out.key_points = points
+                logger.info("Key points: %d (structured)", len(out.key_points))
+                return
+            logger.info("Key points: structured result unusable — falling back to text parse")
         raw = self._call(prompts.key_points_prompt(query, ctx), "medium")
 
         out.key_points = []

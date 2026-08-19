@@ -71,7 +71,13 @@ export function ResearchResult({ result, model }: ResearchResultProps) {
     /^\[(FINDING|METHOD|DATA|TREND|LIMITATION|DEFINITION)\]/.test(kp) && kp.length > 20
   );
 
-  const realCompareRows = (result.comparison_table || []).filter(r => r.source && r.main_claim);
+  // The `limitation !== "See full source for details"` check filters rows fabricated
+  // by a now-deleted backend fallback that stored payloads before this branch may still
+  // contain. It filters legacy stored payloads only — the current backend never emits
+  // that exact string — and can be removed once old sessions have aged out.
+  const realCompareRows = (result.comparison_table || []).filter(
+    r => r.source && r.main_claim && r.limitation !== "See full source for details"
+  );
   const showCompare = realCompareRows.length >= 2;
 
   const confLabel = confidenceLabel(result.confidence);
