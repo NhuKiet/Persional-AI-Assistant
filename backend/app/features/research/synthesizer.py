@@ -10,6 +10,7 @@ Key design decisions:
 
 import json
 import logging
+import os
 import re
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
@@ -69,6 +70,13 @@ def budget_for(caps) -> ContextBudget:
 # history (service.py) can recognize and drop these — a failed turn is not
 # real content and must not be fed back as context for follow-up questions.
 NO_SUMMARY_FALLBACK = "No summary available."
+
+# Claim-extraction reasoning effort, overridable for measurement runs.
+# "high" is the shipped default; RESEARCH_CLAIM_EFFORT=none isolates the
+# effort variable when attributing a change in grounded fraction, so a drift
+# caused by reasoning depth can be told apart from one caused by which
+# search sources happened to be reachable that day.
+_CLAIM_EFFORT = os.environ.get("RESEARCH_CLAIM_EFFORT", "high")
 
 
 def _content_or_str(content) -> str:
@@ -576,10 +584,10 @@ class Synthesizer:
         try:
             claims = extract_claims(
                 query, sources,
-                lambda p: self._call(p, "high"),
+                lambda p: self._call(p, _CLAIM_EFFORT),
                 self._parse_array,
                 structured_call=lambda p: self._call_structured(
-                    p, output_schemas.Claims, "high",
+                    p, output_schemas.Claims, _CLAIM_EFFORT,
                 ),
             )
             claims = ClaimAuditor().verify(claims, sources)
