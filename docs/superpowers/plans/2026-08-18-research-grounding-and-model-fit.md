@@ -1293,3 +1293,330 @@ git commit -m "chore(research): record post-change probe results"
 | §3, §7 | **withdrawn — no task, by design** |
 
 **Cross-task consistency after pruning revision 1:** three couplings to the removed grounding work were cut deliberately — `ExtractedClaim` carries no `quote` field, `_attach_grounding` constructs a plain `ClaimAuditor()`, and `follow_up_questions_prompt` keeps its single-argument signature. `ModelCapabilities` (Task 1) is consumed by `budget_for` (Task 2) and `_bound`/`_call_structured` (Task 3). `fuse_scores` keyword names match between Task 4's definition and both call sites. `has_compare_intent` (Task 5) matches its import in `synthesizer.py`.
+
+---
+
+## Revision 3 addendum (2026-08-19) — post-measurement corrections
+
+Task 6 measured the change. Two findings require follow-up, both approved by the user.
+
+**Measured outcome of Tasks 1–5a:**
+
+| Metric | Baseline | After | Verdict |
+|---|---|---|---|
+| `mean_ctx_chars` | 7,203 | 39,948 | goal met (×5.5) |
+| comparison calls | 8 of 8 | 2 of 8 | goal met (both compare-intent queries) |
+| `charts_produced` | 1 of 8 | **8 of 8** | **regression — Task 7** |
+| `mean_grounded_fraction` | 0.396 | 0.301 | **unattributed — Task 8** |
+| `mean_confidence` | 0.607 | 0.520 | **unattributed — Task 8** |
+| `mean_wall_seconds` | 75.2 | 99.9 | accepted |
+
+Environment, both runs: Weaviate 503 throughout (knowledge-gate path never exercised) and the BGE reranker failed to load (`XLMRobertaTokenizer has no attribute prepare_for_model`) with no `COHERE_API_KEY`, so cross-encoder reranking never ran in either run — everything fell back to credibility scoring. Semantic Scholar failed on every baseline query but not after, so **the source mix differed between runs**. That is the confound Task 8 exists to remove.
+
+---
+
+### Task 7: Require quotable evidence before emitting a chart
+
+`chart_data` fired on 1 of 8 queries before this work and 8 of 8 after. The cause is attributable: the text path used a `"NO_DATA"` sentinel the model rarely overrode, while the structured path asks for `has_data: bool`, which the model almost always answers true. Chart numbers are LLM-generated and nothing verifies them against the sources, so the regression multiplies exposure to fabricated figures eightfold.
+
+**Files:**
+- Modify: `backend/app/features/research/output_schemas.py`, `prompts.py`, `synthesizer.py`
+- Test: `tests/test_chart_support.py` (create)
+
+**Interfaces:**
+- Produces: `ChartData.source_quote: str`; `chart_is_supported(parsed, ctx: str) -> bool` — module-level **pure** function in `synthesizer.py`.
+
+- [ ] **Step 1: Write the failing tests**
+
+Create `tests/test_chart_support.py`:
+
+```python
+# tests/test_chart_support.py
+from backend.app.features.research.output_schemas import ChartData
+from backend.app.features.research.synthesizer import chart_is_supported
+
+CTX = (
+    "[WEB] Benchmarks\nMMLU results: Llama 3 scores 79.5 while Mistral scores "
+    "71.2 on the same evaluation. Training took 40 days."
+)
+
+
+def _chart(**kw):
+    base = dict(
+        has_data=True, type="bar", title="MMLU",
+        labels=["Llama 3", "Mistral"], values=[79.5, 71.2], unit="score",
+        source_quote="Llama 3 scores 79.5 while Mistral scores 71.2",
+    )
+    base.update(kw)
+    return ChartData(**base)
+
+
+def test_supported_chart_with_verbatim_quote_and_two_numbers():
+    assert chart_is_supported(_chart(), CTX) is True
+
+
+def test_has_data_false_is_rejected():
+    assert chart_is_supported(_chart(has_data=False), CTX) is False
+
+
+def test_single_data_point_is_rejected():
+    assert chart_is_supported(_chart(labels=["Llama 3"], values=[79.5]), CTX) is False
+
+
+def test_mismatched_labels_and_values_are_rejected():
+    assert chart_is_supported(_chart(labels=["a", "b", "c"], values=[1.0, 2.0]), CTX) is False
+
+
+def test_missing_quote_is_rejected():
+    assert chart_is_supported(_chart(source_quote=""), CTX) is False
+
+
+def test_quote_absent_from_context_is_rejected():
+    assert chart_is_supported(
+        _chart(source_quote="Llama 3 scores 91.4 while Mistral scores 88.0"), CTX
+    ) is False
+
+
+def test_values_absent_from_the_quote_are_rejected():
+    """The quote is real but does not contain the plotted numbers."""
+    assert chart_is_supported(
+        _chart(values=[12.0, 34.0], source_quote="Training took 40 days"), CTX
+    ) is False
+
+
+def test_quote_survives_whitespace_differences():
+    assert chart_is_supported(
+        _chart(source_quote="Llama 3 scores 79.5   while  Mistral scores 71.2"), CTX
+    ) is True
+
+
+def test_integral_values_match_without_decimal_noise():
+    ctx = "Model A used 40 GPUs and model B used 12 GPUs."
+    assert chart_is_supported(
+        _chart(labels=["A", "B"], values=[40.0, 12.0], unit="GPUs",
+               source_quote="Model A used 40 GPUs and model B used 12 GPUs"),
+        ctx,
+    ) is True
+```
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+Run: `.venv/Scripts/python.exe -m pytest tests/test_chart_support.py -v`
+
+Expected: FAIL — `ImportError: cannot import name 'chart_is_supported'`.
+
+- [ ] **Step 3: Add the quote field to the schema**
+
+In `backend/app/features/research/output_schemas.py`, replace `ChartData`:
+
+```python
+class ChartData(BaseModel):
+    has_data: bool = Field(
+        description=(
+            "True ONLY when the sources state at least two comparable numbers "
+            "you can quote verbatim. False in every other case."
+        )
+    )
+    type:     str  = Field(default="bar")
+    title:    str  = Field(default="")
+    labels:   list[str]   = Field(default_factory=list)
+    values:   list[float] = Field(default_factory=list)
+    unit:     str  = Field(default="")
+    source_quote: str = Field(
+        default="",
+        description=(
+            "The sentence(s) from the sources containing these numbers, copied "
+            "VERBATIM. Checked against the sources; a chart whose quote is not "
+            "found is discarded."
+        ),
+    )
+```
+
+- [ ] **Step 4: Implement the pure check**
+
+In `backend/app/features/research/synthesizer.py`, add at module level:
+
+```python
+_WS_RE  = re.compile(r"\s+")
+_NUM_RE = re.compile(r"\d+(?:[.,]\d+)?")
+
+_CHART_PUNCT = str.maketrans({
+    "‘": "'", "’": "'", "“": '"', "”": '"',
+    "–": "-", "—": "-", " ": " ",
+})
+
+
+def _normalize_chart_text(text: str) -> str:
+    """Lowercase, fold typographic punctuation, collapse whitespace."""
+    return _WS_RE.sub(" ", (text or "").translate(_CHART_PUNCT).lower()).strip()
+
+
+def _number_forms(value: float) -> set[str]:
+    """String forms a model might have written for `value`.
+
+    40.0 is written "40", not "40.0"; 79.5 may appear as "79.5" or "79,5".
+    """
+    forms = {f"{value:g}"}
+    if float(value).is_integer():
+        forms.add(str(int(value)))
+    return forms | {f.replace(".", ",") for f in forms}
+
+
+def chart_is_supported(parsed, ctx: str) -> bool:
+    """Whether a structured chart is backed by text actually present in `ctx`.
+
+    Pure — no I/O. Charts are the one synthesis output whose content is pure
+    numbers, and nothing else in the pipeline verifies them. Measured: charts
+    fired on 1 of 8 queries under the old "NO_DATA" text sentinel and 8 of 8
+    once the schema asked for a boolean, because the model answers true almost
+    always. Requiring a quote that is really in the sources, containing the
+    numbers really being plotted, puts the decision back on evidence.
+    """
+    if not parsed.has_data:
+        return False
+    if len(parsed.labels) < 2 or len(parsed.values) < 2:
+        return False
+    if len(parsed.labels) != len(parsed.values):
+        return False
+
+    quote = _normalize_chart_text(parsed.source_quote)
+    if len(quote) < 15:
+        return False
+    if quote not in _normalize_chart_text(ctx):
+        return False
+
+    quoted_numbers = set(_NUM_RE.findall(quote))
+    matched = sum(1 for v in parsed.values if _number_forms(v) & quoted_numbers)
+    return matched >= 2
+```
+
+- [ ] **Step 5: Use it in `_make_chart_data`**
+
+Replace the structured branch only:
+
+```python
+    def _make_chart_data(self, query: str, ctx: str, out: ResearchOutput) -> None:
+        parsed = self._call_structured(
+            prompts.chart_data_prompt(query, ctx), output_schemas.ChartData, "low",
+        )
+        if parsed is not None:
+            if chart_is_supported(parsed, ctx):
+                out.chart_data = parsed.model_dump(exclude={"has_data", "source_quote"})
+                logger.info("Chart: %s (structured, quote-verified)",
+                            out.chart_data.get("title", ""))
+            else:
+                logger.info("Chart: rejected — no verifiable numbers in the sources")
+            return
+        raw = self._call(prompts.chart_data_prompt(query, ctx), "low").strip()
+        if raw and "NO_DATA" not in raw.upper():
+            chart = self._parse_obj(raw)
+            if chart and "labels" in chart and "values" in chart:
+                out.chart_data = chart
+                logger.info("Chart: %s", chart.get("title", ""))
+```
+
+The text fallback is left exactly as it was — it was not the regression, and Ollama has no structured path.
+
+- [ ] **Step 6: Tighten the prompt**
+
+In `backend/app/features/research/prompts.py`, replace `chart_data_prompt`. Keep the `NO_DATA` sentinel wording for the text path:
+
+```python
+def chart_data_prompt(query: str, ctx: str) -> str:
+    return (
+        f"Look at these sources about '{query}'.\n\n"
+        f"Sources:\n{ctx}\n\n"
+        f"Do the sources state at least TWO comparable numbers (%, scores, "
+        f"counts, years) that belong on the same chart?\n"
+        f"Most sources do not. Answer no unless the numbers are really there "
+        f"in the text above — do not derive them, estimate them, or bring them "
+        f"in from your own knowledge. A chart you cannot quote from the "
+        f"sources is worse than no chart.\n"
+        f"If YES, return the chart together with the sentence(s) you took the "
+        f"numbers from, copied verbatim into source_quote.\n"
+        f"If NO, set has_data to false and leave the other fields empty. "
+        f"If you are replying as plain text rather than JSON, reply: NO_DATA\n\n"
+        f"Rules for the JSON fields (title/labels/unit) and the numbers themselves:\n"
+        f"{_footer(GROUNDING_RULE, LANGUAGE_RULE)}"
+    )
+```
+
+- [ ] **Step 7: Run tests**
+
+Run: `.venv/Scripts/python.exe -m pytest tests/test_chart_support.py tests/test_structured_output.py tests/test_synthesize_grounded.py -v`
+
+Then the full suite: `.venv/Scripts/python.exe -m pytest tests -q`
+
+Expected: exactly 4 failures, all in `tests/test_news_fetcher.py`.
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add backend/app/features/research/output_schemas.py backend/app/features/research/prompts.py backend/app/features/research/synthesizer.py tests/test_chart_support.py
+git commit -m "fix(research): require quotable source numbers before emitting a chart"
+```
+
+---
+
+### Task 8: Attribute the grounding drift (controlled A/B)
+
+`mean_grounded_fraction` fell 0.396 → 0.301 and `mean_confidence` 0.607 → 0.520. Two candidate causes are confounded: claim extraction now runs at `reasoning_effort="high"` over 5.5× more context, **and** the source mix differed between runs (Semantic Scholar failed on every baseline query, none after). Run both arms back to back so source availability is as close to constant as it can be, varying only the effort setting.
+
+Run this task directly, not through a subagent — an earlier subagent backgrounded a probe and the process died when its turn ended.
+
+- [ ] **Step 1: Make the claim-extraction effort switchable**
+
+In `backend/app/features/research/synthesizer.py`, add `import os` and:
+
+```python
+# Claim-extraction reasoning effort, overridable for measurement runs.
+# "high" is the shipped default; RESEARCH_CLAIM_EFFORT=none isolates the
+# effort variable when attributing a change in grounded fraction.
+_CLAIM_EFFORT = os.environ.get("RESEARCH_CLAIM_EFFORT", "high")
+```
+
+Use `_CLAIM_EFFORT` in `_attach_grounding` in place of the two `"high"` literals passed for claim extraction.
+
+- [ ] **Step 2: Run both arms back to back**
+
+```bash
+PYTHONPATH=. PYTHONIOENCODING=utf-8 RESEARCH_CLAIM_EFFORT=high .venv/Scripts/python.exe tools/research_probe.py --out docs/superpowers/plans/assets/2026-08-19-ab-high.json
+```
+
+```bash
+PYTHONPATH=. PYTHONIOENCODING=utf-8 RESEARCH_CLAIM_EFFORT=none .venv/Scripts/python.exe tools/research_probe.py --out docs/superpowers/plans/assets/2026-08-19-ab-none.json
+```
+
+Each takes roughly 10-13 minutes. Run them in the foreground of a long-lived shell, and capture stderr so the per-arm source failures are recorded.
+
+- [ ] **Step 3: Compare**
+
+```bash
+PYTHONIOENCODING=utf-8 .venv/Scripts/python.exe -c "
+import json
+h = json.load(open('docs/superpowers/plans/assets/2026-08-19-ab-high.json', encoding='utf-8'))
+n = json.load(open('docs/superpowers/plans/assets/2026-08-19-ab-none.json', encoding='utf-8'))
+print('%-46s %6s %6s' % ('query', 'high', 'none'))
+for rh, rn in zip(h['rows'], n['rows']):
+    print('%-46s %6.3f %6.3f' % (rh['query'][:46], rh.get('grounded_fraction', 0), rn.get('grounded_fraction', 0)))
+for k in h['summary']:
+    print('%-24s %12s | %12s' % (k, h['summary'][k], n['summary'][k]))
+"
+```
+
+**Interpretation, fixed in advance so the result cannot be read to taste:**
+
+- If `none` recovers toward 0.396 while `high` stays near 0.301, reasoning effort is the cause: higher effort produces more cross-source synthesized claims, which by construction share fewer tokens with any single cited source, and `is_grounded` is a lexical proxy. The metric fell; whether answer quality fell is a separate question this does not answer.
+- If both arms land near each other, effort is **not** the cause, and the Task 6 drop is attributable to source mix or run-to-run variance — meaning that comparison was too noisy to support any conclusion, which must be stated plainly rather than glossed.
+- Either way, record the per-arm source failures. A run where Semantic Scholar or Tavily degraded is not comparable to one where it did not.
+
+- [ ] **Step 4: Record the outcome in the spec and the ledger**
+
+Append the A/B table to the spec's results section, including the "no conclusion" outcome if that is what the data shows.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add -f backend/app/features/research/synthesizer.py docs/superpowers/plans/assets/2026-08-19-ab-high.json docs/superpowers/plans/assets/2026-08-19-ab-none.json docs/superpowers/specs/2026-08-18-research-grounding-and-model-fit-design.md
+git commit -m "chore(research): attribute grounding drift with a controlled effort A/B"
+```
