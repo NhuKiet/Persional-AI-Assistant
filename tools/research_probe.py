@@ -27,27 +27,34 @@ QUERIES = [
 def _instrument():
     """Wrap pure functions with counters. Returns (counters, restore_fn)."""
     from backend.app.features.research import grounding
+    from backend.app.features.research import synthesizer as synth_mod
     from backend.app.features.research.synthesizer import Synthesizer
 
     counters = {"claims_extracted": 0, "ctx_chars": 0}
     orig_extract = grounding.extract_claims
     orig_ctx = Synthesizer._ctx
 
-    def extract(query, sources, llm_call, parse_array):
-        out = orig_extract(query, sources, llm_call, parse_array)
+    def extract(*args, **kwargs):
+        out = orig_extract(*args, **kwargs)
         counters["claims_extracted"] += len(out)
         return out
 
-    def ctx(self, sources, max_chars, per_source=900):
-        text = orig_ctx(self, sources, max_chars, per_source)
+    # Signature-agnostic on purpose: a later task in this plan changes _ctx's
+    # parameters, and this probe must keep working across that change.
+    def ctx(self, *args, **kwargs):
+        text = orig_ctx(self, *args, **kwargs)
         counters["ctx_chars"] = max(counters["ctx_chars"], len(text))
         return text
 
     grounding.extract_claims = extract
+    # synthesizer.py imported the name at module load, so patching only
+    # grounding.extract_claims leaves the call site pointing at the original.
+    synth_mod.extract_claims = extract
     Synthesizer._ctx = ctx
 
     def restore():
         grounding.extract_claims = orig_extract
+        synth_mod.extract_claims = orig_extract
         Synthesizer._ctx = orig_ctx
 
     return counters, restore
@@ -60,7 +67,11 @@ def run_one(agent, query: str) -> dict:
     output = None
     error = None
     try:
-        core = agent.run_streaming(query)
+        # _run_core, not run_streaming: run_streaming is `yield from
+        # _run_core(...)`, and a yield-from expression discards the delegated
+        # generator's return value — so run_streaming always raises
+        # StopIteration(None) and the ResearchOutput never reaches us.
+        core = agent._run_core(query, None, None, None, None)
         while True:
             try:
                 event = next(core)
