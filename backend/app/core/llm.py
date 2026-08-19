@@ -5,6 +5,7 @@ Import provider lazily để môi trường chưa cài gói vẫn chạy Ollama 
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import AsyncIterator, Iterator
 
 from langchain_core.language_models.chat_models import BaseChatModel
@@ -24,6 +25,39 @@ MODEL_REGISTRY: dict[str, list[tuple[str, str]]] = {
         ("gpt-4o", "GPT-4o"),
         ("gpt-4o-mini", "GPT-4o mini"),
     ],
+}
+
+
+@dataclass(frozen=True)
+class ModelCapabilities:
+    """What a model can actually do. Callers ask this instead of hardcoding
+    limits for whichever model happened to be configured when they were
+    written — see synthesizer.py, whose context budgets were sized for
+    Llama3 8B and starved every larger model that followed."""
+    context_window: int
+    supports_structured_output: bool
+    supports_temperature: bool
+    reasoning_effort_levels: tuple[str, ...] = ()
+
+
+# Unknown models get the conservative option on every axis: assume a small
+# window, assume no structured output, assume temperature works.
+DEFAULT_CAPABILITIES = ModelCapabilities(
+    context_window=8192, supports_structured_output=False, supports_temperature=True,
+)
+
+_LUNA_EFFORTS = ("none", "low", "medium", "high", "xhigh", "max")
+
+MODEL_CAPABILITIES: dict[str, ModelCapabilities] = {
+    # supports_temperature=False is measured, not assumed: langchain_openai
+    # silently drops any value other than 1.0 for this model.
+    "gpt-5.6-luna":  ModelCapabilities(1_050_000, True, False, _LUNA_EFFORTS),
+    "gpt-4.1-mini":  ModelCapabilities(1_047_576, True, True),
+    "gpt-4o":        ModelCapabilities(128_000, True, True),
+    "gpt-4o-mini":   ModelCapabilities(128_000, True, True),
+    "claude-opus-4-8":            ModelCapabilities(200_000, True, True),
+    "claude-sonnet-5":            ModelCapabilities(200_000, True, True),
+    "claude-haiku-4-5-20251001":  ModelCapabilities(200_000, True, True),
 }
 
 
@@ -62,18 +96,44 @@ def _default_model_for(provider: str) -> str | None:
     return settings.DEFAULT_MODEL
 
 
+def _resolve_model(provider: str, model: str | None) -> str:
+    """The model id `get_llm` would actually use, for a given provider.
+
+    Extracted so `capabilities_for` cannot drift from `get_llm` — the two
+    answering differently is exactly how a budget gets computed for one model
+    while the call is made against another.
+    """
+    resolved = model or _default_model_for(provider)
+    if resolved:
+        return resolved
+    if provider == "ollama":
+        return settings.OLLAMA_MODEL
+    if provider == "anthropic":
+        return "claude-sonnet-5"
+    return "gpt-4o-mini"
+
+
+def capabilities_for(
+    provider: str | None = None, model: str | None = None,
+) -> ModelCapabilities:
+    provider = (provider or settings.DEFAULT_PROVIDER).lower()
+    return MODEL_CAPABILITIES.get(_resolve_model(provider, model), DEFAULT_CAPABILITIES)
+
+
 def get_llm(
     provider: str | None = None,
     model: str | None = None,
     temperature: float = 0.1,
 ) -> BaseChatModel:
     provider = (provider or settings.DEFAULT_PROVIDER).lower()
-    model = model or _default_model_for(provider)
+    if provider not in ("ollama", "anthropic", "openai"):
+        raise ValueError(f"Provider không hỗ trợ: {provider!r}")
+    model = _resolve_model(provider, model)
 
     if provider == "ollama":
         from langchain_ollama import ChatOllama
         return ChatOllama(
-            model=model or settings.OLLAMA_MODEL,
+            model=model,
             base_url=settings.OLLAMA_URL,
             temperature=temperature,
             num_gpu=settings.LLM_NUM_GPU,
@@ -84,23 +144,20 @@ def get_llm(
             raise ValueError("ANTHROPIC_API_KEY chưa cấu hình — không dùng được Claude.")
         from langchain_anthropic import ChatAnthropic
         return ChatAnthropic(
-            model=model or "claude-sonnet-5",
+            model=model,
             api_key=settings.ANTHROPIC_API_KEY,
             temperature=temperature,
         )
 
-    if provider == "openai":
-        if not settings.OPENAI_API_KEY:
-            raise ValueError("OPENAI_API_KEY chưa cấu hình — không dùng được OpenAI.")
-        from langchain_openai import ChatOpenAI
-        return ChatOpenAI(
-            model=model or "gpt-4o-mini",
-            api_key=settings.OPENAI_API_KEY,
-            base_url=settings.OPENAI_BASE_URL,
-            temperature=temperature,
-        )
-
-    raise ValueError(f"Provider không hỗ trợ: {provider!r}")
+    if not settings.OPENAI_API_KEY:
+        raise ValueError("OPENAI_API_KEY chưa cấu hình — không dùng được OpenAI.")
+    from langchain_openai import ChatOpenAI
+    return ChatOpenAI(
+        model=model,
+        api_key=settings.OPENAI_API_KEY,
+        base_url=settings.OPENAI_BASE_URL,
+        temperature=temperature,
+    )
 
 
 def available_models() -> list[dict]:
