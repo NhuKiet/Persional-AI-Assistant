@@ -21,8 +21,9 @@ Only the actual network/LLM boundary is faked:
   - the searcher objects' `.search()` methods (no real HTTP calls)
   - `Synthesizer._call` (no real LLM)
   - `crawl._crawl_url` (no real HTTP fetch during web-result enrichment)
-  - `ranking._get_reranker` (no real BGE model load; forces the pure-Python
-    credibility-fallback scoring path inside the real `rerank_results`)
+  - `ranking.cross_encoder_scores` (no real Cohere/BGE call; forces the
+    pure-Python credibility-fallback scoring path inside the real
+    `rerank_results`)
 
 THIN state skips the judge entirely (confirmed by reading agent.py's gate
 code: `else: sufficient, missing = False, None  # THIN không cần judge`),
@@ -150,7 +151,7 @@ def _run_integration(monkeypatch, stored_candidates, stub_web_results,
     # _top_up, _search_all, _process_pipeline, dedup, rerank, persistence)
     # runs for real.
     monkeypatch.setattr(crawl_mod, "_crawl_url", lambda url, timeout=8: None)
-    monkeypatch.setattr(ranking_mod, "_get_reranker", lambda: None)
+    monkeypatch.setattr(ranking_mod, "cross_encoder_scores", lambda q, docs: None)
 
     agent_mod._cache.clear()
     store = _FakeStore(stored_candidates)

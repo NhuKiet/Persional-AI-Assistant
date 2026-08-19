@@ -1,3 +1,5 @@
+import types
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -97,21 +99,21 @@ def test_run_streaming_accepts_provider(monkeypatch):
 def test_search_shares_single_bge_singleton(monkeypatch):
     """search KHÔNG được tự load BGE — phải đi qua singleton của reranker.py.
 
-    Bản cũ khẳng định `_get_reranker.__module__ == "tools.searchers"`, tức chỉ
-    kiểm hàm được định nghĩa ở đâu — không hề kiểm điều nó tuyên bố. Ở đây gọi
-    thật và xem có đúng object mà reranker.py cấp không.
+    Sau task 4, ranking.py không còn giữ hàm `_get_reranker` riêng: nó gọi
+    thẳng `cross_encoder_scores` (nơi DUY NHẤT chạm reranker model) từ
+    reranker.py. Patch `_bge_reranker` ở reranker.py và xác nhận
+    `cross_encoder_scores` (không có Cohere key) trả đúng điểm từ sentinel đó.
     """
     import backend.app.features.research.reranker as rr
     import backend.app.features.research.search as s
 
-    sentinel = object()
-    monkeypatch.setattr(rr, "_bge_reranker", lambda: sentinel)
-    # ranking.py giữ tham chiếu riêng từ lúc import, nên patch cả nơi nó dùng
-    import backend.app.features.research.search.ranking as ranking
-    monkeypatch.setattr(ranking, "_bge_reranker", lambda: sentinel)
+    monkeypatch.setattr(rr.settings, "COHERE_API_KEY", None, raising=False)
+    monkeypatch.setattr(rr, "_bge_reranker", lambda: types.SimpleNamespace(
+        compute_score=lambda pairs, normalize=True: [0.42] * len(pairs)
+    ))
 
-    assert s._get_reranker() is sentinel        # đi qua đúng nguồn duy nhất
-    assert s._CREDIBILITY is rr._CREDIBILITY    # một nguồn sự thật cho credibility
+    assert rr.cross_encoder_scores("q", ["d"]) == [0.42]  # đi qua đúng nguồn duy nhất
+    assert s._CREDIBILITY is rr._CREDIBILITY               # một nguồn sự thật cho credibility
 
 
 def test_arxiv_searcher_parses_results_without_nameerror(monkeypatch):
@@ -386,7 +388,7 @@ def test_rerank_fallback_prefers_more_recent(monkeypatch):
     import backend.app.features.research.search.ranking as ranking
     from backend.app.features.research.models import SearchResult
 
-    monkeypatch.setattr(ranking, "_get_reranker", lambda: None)  # ép fallback
+    monkeypatch.setattr(ranking, "cross_encoder_scores", lambda q, docs: None)  # ép fallback
 
     old = SearchResult(source="web", title="old", url="u1", content="c",
                        score=0.5, extra={"year": 2000})

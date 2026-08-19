@@ -54,3 +54,24 @@ def test_cohere_remap_reorders_shuffled_results():
     out = rr._cohere_remap(fake_results, n=2)
     # remapped back to input order: doc0 -> 0.2, doc1 -> 0.9
     assert out == [0.2, 0.9]
+
+
+def test_fuse_scores_three_signal_weights():
+    assert rr.fuse_scores(rerank=[1.0], base=[1.0], cred=[1.0]) == [1.0]
+    assert abs(rr.fuse_scores(rerank=[1.0], base=[0.0], cred=[0.0])[0] - 0.7) < 1e-9
+
+
+def test_fuse_scores_five_signal_weights():
+    out = rr.fuse_scores(rerank=[1.0], base=[1.0], cred=[1.0], recency=[1.0], citation=[1.0])
+    assert abs(out[0] - 1.0) < 1e-9
+    out = rr.fuse_scores(rerank=[1.0], base=[0.0], cred=[0.0], recency=[0.0], citation=[0.0])
+    assert abs(out[0] - 0.55) < 1e-9
+
+
+def test_fuse_scores_five_signal_without_reranker():
+    out = rr.fuse_scores(rerank=None, base=[1.0], cred=[1.0], recency=[1.0], citation=[1.0])
+    assert abs(out[0] - 1.0) < 1e-9
+
+
+def test_fuse_scores_monotonic_in_rerank():
+    assert rr.fuse_scores([0.9], [0.5], [0.5])[0] > rr.fuse_scores([0.1], [0.5], [0.5])[0]

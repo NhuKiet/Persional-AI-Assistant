@@ -107,15 +107,52 @@ def cross_encoder_scores(query: str, docs: list[str]) -> list[float] | None:
 
 # ── Score fusion (pure) ──────────────────────────────────────────────────────
 
+# Weight sets, previously duplicated with different numbers in
+# search/ranking.py. Neither call site's effective scoring changes — only
+# where the reranker score comes from (ranking.py now uses the Cohere → BGE
+# ladder instead of BGE alone).
+_W_5           = {"rerank": 0.55, "cred": 0.20, "recency": 0.10, "citation": 0.10, "base": 0.05}
+_W_5_NO_RERANK = {"base": 0.40, "cred": 0.35, "citation": 0.15, "recency": 0.10}
+_W_3           = {"rerank": 0.70, "cred": 0.20, "base": 0.10}
+_W_3_NO_RERANK = {"base": 0.70, "cred": 0.30}
+
+
 def fuse_scores(
-    rerank: list[float] | None,
-    base:   list[float],
-    cred:   list[float],
+    rerank:   list[float] | None,
+    base:     list[float],
+    cred:     list[float],
+    recency:  list[float] | None = None,
+    citation: list[float] | None = None,
 ) -> list[float]:
+    """Blend relevance signals into one score per document.
+
+    Five-signal blend when recency/citation are supplied (live search results
+    carry publication dates and citation counts), three-signal otherwise
+    (stored chunks do not).
+    """
+    rich = recency is not None and citation is not None
     out: list[float] = []
     for i in range(len(base)):
-        if rerank is not None:
-            out.append(rerank[i] * 0.7 + cred[i] * 0.2 + base[i] * 0.1)
+        if rich and rerank is not None:
+            w = _W_5
+            out.append(
+                rerank[i] * w["rerank"] + cred[i] * w["cred"]
+                + recency[i] * w["recency"] + citation[i] * w["citation"]
+                + base[i] * w["base"]
+            )
+        elif rich:
+            w = _W_5_NO_RERANK
+            out.append(
+                base[i] * w["base"] + cred[i] * w["cred"]
+                + citation[i] * w["citation"] + recency[i] * w["recency"]
+            )
+        elif rerank is not None:
+            w = _W_3
+            # Order matters for float exactness: rerank+base+cred lands on
+            # exactly 1.0 for the all-ones case, rerank+cred+base does not
+            # (0.9999999999999999) — see test_fuse_scores_three_signal_weights.
+            out.append(rerank[i] * w["rerank"] + base[i] * w["base"] + cred[i] * w["cred"])
         else:
-            out.append(base[i] * 0.7 + cred[i] * 0.3)
+            w = _W_3_NO_RERANK
+            out.append(base[i] * w["base"] + cred[i] * w["cred"])
     return out
