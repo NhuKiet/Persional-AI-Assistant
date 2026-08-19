@@ -8,7 +8,6 @@ Key design decisions:
 - Context is truncated aggressively — local models degrade badly on long contexts
 """
 
-import hashlib
 import json
 import logging
 import re
@@ -23,6 +22,7 @@ from backend.app.features.research.grounding import (
 from backend.app.features.research.models import ResearchOutput, SearchResult
 from backend.app.features.research import prompts
 from backend.app.features.research import output_schemas
+from backend.app.features.research.search.query import has_compare_intent
 from backend.app.features.research.security import frame_untrusted, UNTRUSTED_GUARD
 
 logger = logging.getLogger(__name__)
@@ -411,10 +411,6 @@ class Synthesizer:
             }
             if s.source in ("arxiv", "semantic_scholar", "huggingface"):
                 ref.update(s.extra)
-                if s.extra.get("pdf_url"):
-                    ref["pdf_filename"] = (
-                        hashlib.sha256(s.extra["pdf_url"].encode()).hexdigest()[:16] + ".pdf"
-                    )
                 out.papers.append(ref)
             out.references.append(ref)
 
@@ -468,18 +464,10 @@ class Synthesizer:
             if s.strip().endswith("?") and len(s.strip()) > 15
         ][:4]
 
-        # Comparison + papers từ metadata
-        out.comparison_table = [
-            {
-                "source":     (s.title[:50] or s.url or s.source),
-                "type":       s.source,
-                "main_claim": s.content[:150].replace("\n", " ").strip() or "See source",
-                "strength":   f"{s.source} source",
-                "limitation": "See full source for details",
-            }
-            for s in sources[:5]
-            if s.title or s.content
-        ]
+        # Papers từ metadata. comparison_table stays empty here — it was
+        # fabricated filler ("See full source for details") the frontend
+        # already discarded; the real comparison table only comes from the
+        # gated LLM call in _run_sections.
         self._make_papers_and_refs(sources, out)
 
         logger.info(
@@ -501,11 +489,12 @@ class Synthesizer:
         steps = [
             ("summaries",    self._make_summaries,           (query, ctx, out)),
             ("key_points",   self._make_key_points,          (query, ctx, out)),
-            ("comparison",   self._make_comparison_table,    (query, ranked, out)),
             ("chart",        self._make_chart_data,          (query, ctx, out)),
             ("follow_ups",   self._make_follow_up_questions, (query, out)),
             ("papers",       self._make_papers_and_refs,     (ranked, out)),
         ]
+        if has_compare_intent(query):
+            steps.insert(2, ("comparison", self._make_comparison_table, (query, ranked, out)))
 
         with ThreadPoolExecutor(max_workers=len(steps)) as ex:
             futures = {ex.submit(fn, *args): name for name, fn, args in steps}
@@ -519,18 +508,6 @@ class Synthesizer:
             "Done — short: %r… | points: %d | papers: %d",
             out.summary_short[:60], len(out.key_points), len(out.papers),
         )
-
-    def synthesize(self, query: str, sources: list[SearchResult]) -> ResearchOutput:
-        """Run all synthesis steps. Each step is independent — one failure won't block others."""
-        out = ResearchOutput(query=query)
-
-        if not sources:
-            logger.warning("Synthesize called with 0 sources")
-            out.summary_short = "No sources found. Try a different query."
-            return out
-
-        self._run_sections(query, sources, out)
-        return out
 
     def _attach_grounding(self, out: ResearchOutput, query: str, sources: list[SearchResult]) -> None:
         """Gắn claims đã thẩm định + confidence + limitations vào `out`.
@@ -585,9 +562,3 @@ class Synthesizer:
         out = self.synthesize_rag(query, sources)
         self._attach_grounding(out, query, sources)
         return out
-
-    # ── Follow-up Q&A ─────────────────────────────────────────────────────────
-
-    def answer(self, question: str, context: str) -> str:
-        """Answer a follow-up question grounded in previous research context."""
-        return self._call(prompts.follow_up_answer_prompt(question, context))

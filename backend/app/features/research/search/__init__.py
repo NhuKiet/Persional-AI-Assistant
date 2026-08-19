@@ -16,7 +16,12 @@ from backend.app.features.research.reranker import _CREDIBILITY
 from backend.app.features.research.search.academic import ArxivSearcher, SemanticScholarSearcher
 from backend.app.features.research.search.community import HuggingFaceSearcher, StackOverflowSearcher
 from backend.app.features.research.search.crawl import _crawl_url, _enrich_web_results
-from backend.app.features.research.search.query import contextualize_query, expand_query, get_dynamic_k
+from backend.app.features.research.search.query import (
+    contextualize_query,
+    expand_query,
+    get_dynamic_k,
+    has_compare_intent,
+)
 from backend.app.features.research.search.ranking import rerank_results
 from backend.app.features.research.search.web import DuckDuckGoSearcher, WebSearcher
 
@@ -30,6 +35,7 @@ __all__ = [
     "contextualize_query",
     "expand_query",
     "get_dynamic_k",
+    "has_compare_intent",
     "rerank_results",
     "_crawl_url",
     "_enrich_web_results",

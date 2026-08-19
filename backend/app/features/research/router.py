@@ -1,11 +1,10 @@
 import json
 import logging
-import os
 import threading
 import time
 
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from backend.app.features.research.prompts import DEEP_DIVE_SYSTEM
 from backend.app.features.research.schemas import DeepDiveRequest, ResearchRequest, SessionHistoryResponse
@@ -103,16 +102,6 @@ async def get_research_session_history(session_id: str):
     )
 
 
-@router.get("/api/paper/{filename}")
-async def serve_paper(filename: str):
-    if "/" in filename or ".." in filename:
-        raise HTTPException(status_code=400, detail="Invalid filename")
-    path = f"data/papers/{filename}"
-    if not os.path.exists(path):
-        raise HTTPException(status_code=404, detail="Paper not found")
-    return FileResponse(path, media_type="application/pdf")
-
-
 @router.get("/api/research/trending")
 async def get_trending_papers():
     """Tiêu đề paper nổi bật hôm nay — frontend trộn vào gợi ý research để
@@ -130,10 +119,3 @@ async def get_trending_papers():
                 _trending_cache["ts"] = now
     with _trending_lock:
         return {"suggestions": list(_trending_cache["titles"])}
-
-
-@router.delete("/api/research/cache")
-async def clear_research_cache():
-    """Clear the research query cache (forces re-search on next request)."""
-    get_service().clear_cache()
-    return {"cleared": True, "message": "Research cache cleared"}

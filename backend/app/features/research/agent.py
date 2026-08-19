@@ -316,31 +316,6 @@ class ResearchAgent:
 
     # ── Public API ───────────────────────────────────────────────────────────
 
-    def run(self, query: str) -> ResearchOutput:
-        """Đường đồng bộ, không SSE. Chỉ là một cách drain `_run_core` —
-        dùng CHUNG quyết định 3 tầng (EMPTY/STALE/THIN/MAYBE + judge +
-        top-up) và persistence với `run_streaming`, thay vì có logic riêng.
-
-        Trước đây `run()` tự gọi thẳng `retrieve()` (bỏ qua freshness/
-        coverage) và không lưu gì sau khi search live — hai API cho hai
-        quyết định khác nhau với cùng một câu hỏi. Giờ cả hai đi qua đúng
-        một chỗ.
-        """
-        core = self._run_core(query, provider=None, model=None, cancel_event=None, history=None)
-        error_message = None
-        output: ResearchOutput | None = None
-        try:
-            while True:
-                event = next(core)
-                if event.get("type") == "error":
-                    error_message = event.get("message")
-        except StopIteration as stop:
-            output = stop.value
-
-        if output is None:
-            raise RuntimeError(error_message or f"Research failed for query: {query!r}")
-        return output
-
     def run_streaming(
         self, query: str, provider: str | None = None, model: str | None = None,
         cancel_event: threading.Event | None = None,
@@ -692,15 +667,3 @@ class ResearchAgent:
             logger.error("_run_core failed: %s", e, exc_info=True)
             yield {"type": "error", "message": str(e)}
 
-    # ── Cache / knowledge helpers ─────────────────────────────────────────────
-
-    def clear_cache(self) -> None:
-        _cache.clear()
-        logger.info("Research TTL cache cleared")
-
-    def knowledge_size(self) -> int:
-        return get_store().size()
-
-    def clear_knowledge(self) -> None:
-        get_store().clear()
-        logger.info("Knowledge store cleared")

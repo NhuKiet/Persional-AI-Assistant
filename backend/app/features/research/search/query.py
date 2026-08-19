@@ -70,6 +70,26 @@ def get_dynamic_k(query: str) -> dict[str, int]:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Comparison intent
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Comparison intent. This lived in the frontend (ResearchResult.tsx), which
+# meant the backend made the comparison LLM call on every run and the UI threw
+# the result away unless the query happened to contain one of these. Measured
+# on 8 baseline queries: 8 calls made, 1 displayed. The decision belongs where
+# the call is made.
+_COMPARE_KEYWORDS = (
+    "vs", "versus", "compare", "comparison", "so sánh", "khác nhau",
+    "khác gì", "difference", "differences", "between", "ở điểm nào",
+)
+
+
+def has_compare_intent(query: str) -> bool:
+    q = (query or "").lower()
+    return any(kw in q for kw in _COMPARE_KEYWORDS)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Query expansion
 # ─────────────────────────────────────────────────────────────────────────────
 

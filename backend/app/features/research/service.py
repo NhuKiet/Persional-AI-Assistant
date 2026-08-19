@@ -205,6 +205,3 @@ class ResearchService:
         except Exception as e:  # noqa: BLE001
             logger.error("Deep dive error: %s", e, exc_info=True)
             yield {"type": "error", "message": str(e)}
-
-    def clear_cache(self) -> None:
-        self._agent.clear_cache()

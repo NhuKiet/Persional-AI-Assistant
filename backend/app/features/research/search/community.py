@@ -41,13 +41,9 @@ def fetch_trending_papers(k: int = 6) -> list[str]:
 
 class HuggingFaceSearcher:
     _PAPERS_URL = "https://huggingface.co/api/papers"
-    _MODELS_URL = "https://huggingface.co/api/models"
 
     def search(self, query: str, k: int = 5) -> list[SearchResult]:
-        results = self._search_papers(query, k)
-        if not results:
-            results = self._search_models(query, k)
-        return results
+        return self._search_papers(query, k)
 
     def _search_papers(self, query: str, k: int) -> list[SearchResult]:
         try:
@@ -84,39 +80,6 @@ class HuggingFaceSearcher:
         except Exception as e:
             logger.error("HuggingFace papers search failed: %s", e)
             return []
-
-    def _search_models(self, query: str, k: int) -> list[SearchResult]:
-        try:
-            resp = httpx.get(
-                self._MODELS_URL,
-                params={"search": query, "limit": k, "sort": "downloads"},
-                timeout=10,
-            )
-            resp.raise_for_status()
-            results = []
-            for m in resp.json()[:k]:
-                model_id = m.get("modelId", "")
-                results.append(SearchResult(
-                    source="huggingface",
-                    title=model_id,
-                    url=f"https://huggingface.co/{model_id}",
-                    content=(
-                        f"Downloads: {m.get('downloads', 0):,} | "
-                        f"Likes: {m.get('likes', 0)} | "
-                        f"Tags: {', '.join(m.get('tags', [])[:6])}"
-                    ),
-                    extra={
-                        "downloads": m.get("downloads", 0),
-                        "likes":     m.get("likes", 0),
-                        "tags":      m.get("tags", [])[:6],
-                    },
-                ))
-            return results
-        except Exception as e:
-            logger.error("HuggingFace model search failed: %s", e)
-            return []
-
-
 
 class StackOverflowSearcher:
     """Stack Exchange API (site=stackoverflow) — không cần API key cho search cơ bản."""

@@ -10,7 +10,7 @@ of the prompt, so editing one doesn't require re-threading it through every
 f-string differently.
 """
 
-from backend.app.features.research.security import frame_untrusted, UNTRUSTED_GUARD
+from backend.app.features.research.security import UNTRUSTED_GUARD
 
 # Shared language rule — sources are mostly in English, but the product always
 # answers in Vietnamese regardless of source language.
@@ -133,17 +133,6 @@ def rag_synthesis_prompt(query: str, ctx: str) -> str:
         f"Use the sources below as your knowledge base:\n{ctx}\n\n"
         f"Write a thorough answer covering: what it is, how it works, key components, benefits, limitations, and current trends. "
         f"Be specific and natural. Do not use JSON or special markers.\n\n"
-        f"{_footer(GROUNDING_RULE, LANGUAGE_RULE)}"
-    )
-
-
-def follow_up_answer_prompt(question: str, context: str) -> str:
-    return (
-        f"{UNTRUSTED_GUARD}\n\n"
-        f"You are a research assistant. Answer using the context below.\n"
-        f"Be specific and cite sources when possible.\n\n"
-        f"Context:\n{frame_untrusted(context[:4000])}\n\n"
-        f"Question: {question}\n\nAnswer:\n\n"
         f"{_footer(GROUNDING_RULE, LANGUAGE_RULE)}"
     )
 
