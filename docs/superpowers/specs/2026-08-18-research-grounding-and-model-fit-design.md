@@ -2,7 +2,9 @@
 
 **Date:** 2026-08-18
 
-**Status:** Approved design; awaiting written-spec review
+**Status:** Revision 2 — section 1.1 was FALSIFIED by the baseline measurement it predicted. Sections 3 and 7 are withdrawn. The remaining sections were independently confirmed and are approved for implementation.
+
+**Revision 2 (2026-08-19):** The probe required by section 9 was run before any code change, as section 11 sequences it. It contradicted section 1.1's central claim. Section 1.1 now records what was actually measured and what the original reasoning got wrong; section 9 records the results.
 
 **Scope:** Repair citation grounding, which is inert for Vietnamese queries; retune context budgets and output formats for the current model instead of Llama3 8B; unify the two divergent rerank paths; steer bounded iteration from evidence gaps instead of invented questions; remove code and features with no production caller.
 
@@ -10,7 +12,49 @@ Does not change: the four-state knowledge gate (`sufficiency.assess`), the searc
 
 ## 1. Problem
 
-### 1.1 Grounding is inert for Vietnamese queries
+### 1.1 WITHDRAWN — grounding is NOT inert (falsified 2026-08-19)
+
+**This section's claim was wrong. The work it justified is withdrawn.**
+
+The baseline probe (section 9) measured the live pipeline across 8 Vietnamese
+queries before any code change:
+
+| Metric | This section predicted | Measured |
+|---|---|---|
+| mean grounded fraction | ~0.0 | **0.396** |
+| mean confidence | ~0.0 | **0.607** |
+| iteration rounds | 1 on every query | **6 of 8** (two queries needed none) |
+
+Grounding produced supported claims on all 8 queries; per-query grounded
+fraction ranged 0.188 to 0.857. Nothing downstream is starved: claims are
+non-empty, confidence is meaningful, and iteration is already skipped when
+evidence suffices.
+
+**Why the original reasoning failed.** The measurement below was taken on a
+claim/source pair *authored for the purpose* — the example sentence from
+`prompts.key_points_prompt`, translated into Vietnamese by hand. Real claims
+are not like that. `LANGUAGE_RULE` explicitly instructs the model to "keep
+proper nouns, model/paper names, and technical terms without a standard
+Vietnamese equivalent in their original form", so genuine claims carry model
+names, technical vocabulary and figures in English — exactly the tokens that
+match an English source. The evidence was already visible in the table below
+and was not read correctly: the "DPO giảm 40%" pair scores 0.111, just under
+the 0.12 threshold, *because* it contains DPO, PPO and 40. That was a signal
+about where the matching comes from, not a confirmation of failure.
+
+The method error, stated plainly: a synthetic measurement was treated as
+evidence about production behavior, when the probe that measures production
+behavior directly was available and is cheap.
+
+**Open question this does not settle.** A grounded fraction of 0.396 is not
+self-evidently a defect — rejecting unsupported claims is the feature working.
+Whether rejected claims are rejected *correctly* or *falsely* requires reading
+real claims against real sources, which no metric answers. Until that is done,
+there is no established grounding defect to fix.
+
+The original argument is retained below for the record.
+
+### 1.1-original (superseded) Grounding is inert for Vietnamese queries
 
 `grounding.tokenize` matches `[a-z0-9]+` (`grounding.py:19`). `prompts.LANGUAGE_RULE` requires the LLM to write claims in Vietnamese. Sources are predominantly English. The verification step compares the two with Jaccard token overlap against a 0.12 threshold.
 
@@ -96,13 +140,19 @@ When that call fails, `_make_comparison_table` fabricates rows from metadata (`s
 
 Confirmed with the user during design:
 
-1. **Fix what is broken before adding anything.** Grounding, the wasted iteration round, and the divergent rerank paths come first.
+1. **Fix what is broken before adding anything.** ~~Grounding, the wasted iteration round,~~ and the divergent rerank paths come first. *(Revision 2: grounding and the iteration round were not broken — see section 1.1.)*
 2. **Structured output, not call consolidation.** The seven synthesis calls stay parallel and independently fault-isolated. Only the output format changes.
 3. **Exploit the current model without breaking the local one.** Ollama/llama3 remains a supported path, used rarely. Budgets must be derived per model, never hardcoded to one model's limits.
 4. **Do not remove safety nets in the same change that alters what they protect.** The `RESEARCH_SUFFICIENCY_ENABLED` kill switch and its legacy `retrieve()` path stay.
 5. **Product decisions need evidence.** Whether to keep `chart_data` is deferred until the probe reports how often it produces anything.
 
-## 3. Grounding: Quote-Anchored Verification
+## 3. WITHDRAWN — Grounding: Quote-Anchored Verification
+
+**Withdrawn in revision 2.** This section existed to repair the failure
+described in section 1.1, which does not exist. Quote-anchored verification
+may still be worth building — it detects fabricated figures more directly
+than similarity scoring does — but it must be justified by a measured defect,
+not by this one. Retained below unimplemented.
 
 ### 3.1 Approach
 
@@ -259,7 +309,16 @@ Neither call site's effective scoring changes; only the score *source* changes, 
 
 `recency_score` accepts a `published_at` epoch in addition to `year` / `published`, fixing the silent zero described in 1.3. It remains pure.
 
-## 7. Iteration Steering
+## 7. WITHDRAWN — Iteration Steering
+
+**Withdrawn in revision 2.** The premise was that every run burns a wasted
+iteration round because `needs_iteration` is unconditionally true. Measured:
+6 rounds across 8 queries, with two queries correctly needing none. The
+observation that `follow_up_questions_prompt` never sees the sources remains
+true and remains worth fixing, but it is a quality improvement of unknown
+size, not the repair of a systematic waste. Retained below unimplemented.
+
+### 7-original (superseded) Iteration Steering
 
 `prompts.follow_up_questions_prompt` gains a source-context parameter, so suggested questions reflect what was actually found.
 
@@ -306,6 +365,33 @@ Run once against current `main` for a baseline, once after. Cost is roughly 8 ×
 
 **Falsification criterion:** the baseline is expected to show a grounded fraction near 0, confidence near 0, and exactly one iteration round on every query. If it does not, the diagnosis in section 1.1 is wrong and this design must be revisited before implementation continues.
 
+### 9.1 Baseline result (2026-08-19) — criterion triggered
+
+The criterion fired. Execution stopped before any behavior change.
+
+| Metric | Predicted | Measured | Verdict |
+|---|---|---|---|
+| mean grounded fraction | ~0.0 | 0.396 | **falsifies 1.1** |
+| mean confidence | ~0.0 | 0.607 | **falsifies 1.1** |
+| iteration rounds | 8 of 8 | 6 of 8 | **falsifies 1.1** |
+| mean context chars | ~7,000 | 7,203 | confirms 1.2 |
+| charts produced | — | 1 of 8 | informs requirement 5 |
+| comparison rows | — | 4 on all 8 queries, 1 query had compare intent | confirms 1.5 |
+| mean wall seconds | — | 75.2 | — |
+
+Two probe defects were found and fixed before this run, both of which had
+made the first attempt read as a total pipeline failure:
+`ResearchAgent.run_streaming` is `yield from _run_core(...)`, and a
+yield-from expression discards the delegated generator's return value, so
+`StopIteration.value` was always `None`; and `synthesizer.py` binds
+`extract_claims` into its own namespace at import, so patching
+`grounding.extract_claims` never reached the call site.
+
+**Environment:** Weaviate Cloud returned 503 throughout and Semantic Scholar
+failed on every query. The knowledge-gate path was therefore never exercised
+— this baseline measures the live-search path only, and any comparison run
+must reproduce the same conditions or it compares two different things.
+
 ## 10. Testing
 
 | Target | Cases |
@@ -333,6 +419,12 @@ Run once against current `main` for a baseline, once after. Cost is roughly 8 ×
 8. Probe again and compare.
 
 ## 12. Out of Scope
+
+*(Revision 2 additions: quote-anchored grounding verification (section 3) and
+iteration steering (section 7), both withdrawn for lack of a measured defect.
+Determining whether rejected claims are rejected correctly or falsely — the
+open question in section 1.1 — is separate work requiring qualitative review,
+not a metric.)*
 
 - **Removing `chart_data`.** A product decision, deferred until the probe reports how often it produces anything.
 - **Auditing chart and comparison figures against sources.** Fabricated numbers remain possible (section 5).

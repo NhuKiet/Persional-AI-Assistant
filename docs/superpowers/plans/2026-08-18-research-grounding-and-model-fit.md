@@ -1,937 +1,55 @@
-# Research Grounding Repair and Model Fit — Implementation Plan
+# Research Model Fit — Implementation Plan (Revision 2)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make citation grounding actually work for Vietnamese queries, retune the synthesis pipeline for `gpt-5.6-luna` instead of Llama3 8B, unify the two rerank paths, steer iteration from real evidence gaps, and delete code with no production caller.
+**Revision 2 (2026-08-19):** The baseline probe falsified spec section 1.1. Grounding is **not** inert for Vietnamese queries — measured mean grounded fraction 0.396, mean confidence 0.607, 6 iteration rounds across 8 queries. The grounding repair (revision 1 Tasks 2–5) and iteration steering (revision 1 Task 9) are **removed**; they had no measured defect to fix. Revision 1 is kept at `2026-08-18-research-grounding-and-model-fit.rev1-superseded.md`. What remains is the work the baseline and direct code reading independently confirm.
 
-**Architecture:** Claims carry a verbatim quote copied from the source they cite, so verification becomes a same-language string comparison instead of a doomed Vietnamese-vs-English token overlap. Model limits move into a capability table in `core/llm.py`, from which the synthesizer derives one context budget instead of four hardcoded constants. Structured output becomes the primary parse path with the existing JSON-repair ladder demoted to fallback for Ollama.
+**Goal:** Retune the synthesis pipeline for `gpt-5.6-luna` instead of Llama3 8B, unify the two rerank paths, and delete code and calls with no production consumer.
+
+**Architecture:** Model limits move into a capability table in `core/llm.py`, from which the synthesizer derives one context budget instead of four constants hardcoded for an 8k-token model. Structured output becomes the primary parse path with the existing JSON-repair ladder demoted to a fallback for Ollama. The comparison-table decision moves to the backend, where the call is actually made.
 
 **Tech Stack:** Python 3.11+, FastAPI, LangChain (`langchain-openai` 1.3.3, `langchain-core` 1.4.9), Pydantic 2.13.4, Weaviate, pytest 8.3.4.
 
-**Spec:** `docs/superpowers/specs/2026-08-18-research-grounding-and-model-fit-design.md`
+**Spec:** `docs/superpowers/specs/2026-08-18-research-grounding-and-model-fit-design.md` (revision 2 — sections 3 and 7 are withdrawn; do not implement them)
 
 ## Global Constraints
 
-- Python interpreter for every command: `.venv/Scripts/python.exe` (Windows, Git Bash shell).
+- Python interpreter for every command: `.venv/Scripts/python.exe` (Windows, Git Bash shell). Prefix live-run commands with `PYTHONPATH=. PYTHONIOENCODING=utf-8` — without the latter, Vietnamese output crashes the cp1252 console encoder.
 - Test root is `tests/` (`pyproject.toml` sets `testpaths = ["tests"]`). Backend code lives under `backend/app/`.
-- `tests/test_news_fetcher.py` has **4 pre-existing failures** unrelated to this work. A run showing exactly those 4 failures and nothing else is green. Baseline before this plan: **449 passed, 4 failed, 17 skipped**.
-- `grounding.py`, `sufficiency.py`, `iteration.py`, `chunking.py` and the scoring functions in `ranking.py`/`reranker.py` are **pure — no I/O, no network, no imports of embeddings or LLM clients**. New verification logic must preserve this. Anything needing I/O is injected as a callable by the caller, matching how `extract_claims` already takes `llm_call`.
+- `tests/test_news_fetcher.py` has **4 pre-existing failures** unrelated to this work. A run showing exactly those 4 failures and nothing else is green. Baseline: **449 passed, 4 failed, 17 skipped**.
+- `grounding.py`, `sufficiency.py`, `iteration.py`, `chunking.py` and the scoring functions in `ranking.py`/`reranker.py` are **pure — no I/O, no network, no imports of embeddings or LLM clients**. Preserve this. Anything needing I/O is injected as a callable, matching how `extract_claims` already takes `llm_call`.
 - Every LLM step must degrade non-fatally. A provider outage, a schema violation, or a malformed response must never fail a research run.
-- Vietnamese is the product's answer language (`prompts.LANGUAGE_RULE`). Do not remove it; scope it per-field where needed.
+- **Do not change grounding semantics.** `Claim` gains no fields, `ClaimAuditor` keeps its current verification, `is_grounded`/`lexical_support` keep their thresholds, and `grounding.tokenize` keeps its `[a-z0-9]+` pattern. Revision 2 removed that work; a task that touches it is out of scope.
 - Ollama/llama3 remains supported. Nothing may assume structured output or a large context window is available.
-- Quote verification threshold: `0.85`. Minimum usable quote length: `20` characters. Batch fallback trigger: `>= 3` claims and `< 30%` grounded. Embedding fallback threshold: `0.2`. Anchor-filter safety guard: keep everything if the filter would drop `> 80%`.
 - Context budget formula, exact: `effective_tokens = min(context_window * 0.5, 60_000)`; `max_chars = effective_tokens * 3.5`; `per_source_chars = max_chars // 15`.
-- Commit after every task. Never use `--no-verify`.
+- Commit after every task. Never use `--no-verify`. Branch is `develop` — do not branch, merge, or push.
 
 ---
 
 ## File Structure
 
 **Created:**
-- `tools/research_probe.py` — dev-only measurement script; runs fixed queries in-process and prints mechanical metrics.
 - `backend/app/features/research/output_schemas.py` — Pydantic schemas for LLM structured output. Separate from `schemas.py`, which is HTTP request/response only.
-- `tests/test_grounding_quotes.py` — quote normalization and support scoring.
-- `tests/test_claim_auditor.py` — verification and batch fallback.
 - `tests/test_model_capabilities.py` — capability table, resolution, budget derivation.
 - `tests/test_structured_output.py` — structured path and its fallback.
+- `tests/test_compare_intent.py` — comparison-intent detection.
 
 **Modified:**
 - `backend/app/core/llm.py` — `ModelCapabilities`, `MODEL_CAPABILITIES`, `_resolve_model`, `capabilities_for`.
-- `backend/app/features/research/models.py` — `Claim.quote`.
-- `backend/app/features/research/grounding.py` — unicode tokenizer, `normalize`, `quote_support`, `ClaimAuditor` rework, anchor-filter guard.
-- `backend/app/features/research/prompts.py` — claim extraction quote field, follow-up questions gain source context, remove `follow_up_answer_prompt`.
 - `backend/app/features/research/synthesizer.py` — `ContextBudget`, structured output, reasoning effort, comparison gating, removals.
-- `backend/app/features/research/iteration.py` — `gap_query` priority order.
-- `backend/app/features/research/agent.py` — pass capabilities to `Synthesizer`, pass judge `missing` and claims into iteration, removals.
-- `backend/app/features/research/search/query.py` — `COMPARE_KEYWORDS`, `has_compare_intent`.
+- `backend/app/features/research/grounding.py` — `extract_claims` gains an injected `structured_call`. **No semantic change.**
+- `backend/app/features/research/agent.py` — pass capabilities to `Synthesizer`; removals.
+- `backend/app/features/research/search/query.py` — `_COMPARE_KEYWORDS`, `has_compare_intent`.
 - `backend/app/features/research/search/ranking.py` — use `cross_encoder_scores` and shared `fuse_scores`; `recency_score` accepts `published_at`.
 - `backend/app/features/research/reranker.py` — `fuse_scores` gains recency/citation.
-- `backend/app/features/research/router.py` — remove `/api/paper/{filename}` and `DELETE /api/research/cache`.
-- `backend/app/features/research/service.py` — remove `clear_cache`.
-- `backend/app/features/research/search/community.py` — remove `_search_models`.
-- `frontend/src/components/research/ResearchResult.tsx` — drop `hasCompareIntent`; render quotes under claims.
-- Tests touched by removals: `tests/test_security_framing.py`, `tests/test_research_wiring.py`, `tests/test_iteration_pure.py`, `tests/contract/test_api_contracts.py`.
+- `backend/app/features/research/router.py`, `service.py`, `prompts.py`, `search/community.py` — removals.
+- `frontend/src/components/research/ResearchResult.tsx` — drop `hasCompareIntent`.
+
+**Already done (revision 1, commit `df543e1`):** `tools/research_probe.py` and the baseline at `docs/superpowers/plans/assets/2026-08-18-baseline.json`.
 
 ---
 
-### Task 1: Measurement probe and baseline
-
-Establishes the numbers this whole plan is judged against. Must run **before** any behavior change.
-
-**Files:**
-- Create: `tools/research_probe.py`
-
-**Interfaces:**
-- Produces: a CLI script. No importable API other tasks depend on.
-
-- [ ] **Step 1: Write the probe script**
-
-Create `tools/research_probe.py`:
-
-```python
-"""Dev-only measurement probe for the research pipeline.
-
-Runs a fixed query set in-process and prints the mechanical signals the
-2026-08-18 grounding/model-fit work targets. Deliberately does NOT score
-answer quality — it measures only what is objectively countable.
-
-Usage:  .venv/Scripts/python.exe tools/research_probe.py --out baseline.json
-"""
-from __future__ import annotations
-
-import argparse
-import json
-import time
-
-QUERIES = [
-    "RAG hoạt động thế nào",
-    "So sánh DPO và PPO trong huấn luyện mô hình ngôn ngữ",
-    "Mô hình khuếch tán khác GAN ở điểm nào",
-    "Kỹ thuật lượng tử hóa mô hình ngôn ngữ lớn mới nhất",
-    "Vector database nào phù hợp cho hệ thống RAG production",
-    "Cách đánh giá chất lượng hệ thống RAG",
-    "Mixture of Experts là gì",
-    "Chain of thought prompting có thực sự hiệu quả không",
-]
-
-
-def _instrument():
-    """Wrap pure functions with counters. Returns (counters, restore_fn)."""
-    from backend.app.features.research import grounding
-    from backend.app.features.research.synthesizer import Synthesizer
-
-    counters = {"claims_extracted": 0, "ctx_chars": 0}
-    orig_extract = grounding.extract_claims
-    orig_ctx = Synthesizer._ctx
-
-    def extract(query, sources, llm_call, parse_array):
-        out = orig_extract(query, sources, llm_call, parse_array)
-        counters["claims_extracted"] += len(out)
-        return out
-
-    def ctx(self, sources, max_chars, per_source=900):
-        text = orig_ctx(self, sources, max_chars, per_source)
-        counters["ctx_chars"] = max(counters["ctx_chars"], len(text))
-        return text
-
-    grounding.extract_claims = extract
-    Synthesizer._ctx = ctx
-
-    def restore():
-        grounding.extract_claims = orig_extract
-        Synthesizer._ctx = orig_ctx
-
-    return counters, restore
-
-
-def run_one(agent, query: str) -> dict:
-    counters, restore = _instrument()
-    t0 = time.time()
-    rounds = 0
-    output = None
-    error = None
-    try:
-        core = agent.run_streaming(query)
-        while True:
-            try:
-                event = next(core)
-            except StopIteration as stop:
-                output = stop.value
-                break
-            if event.get("type") == "iteration":
-                rounds += 1
-            if event.get("type") == "error":
-                error = event.get("message")
-    except Exception as e:  # noqa: BLE001 — a probe must report, not crash
-        error = f"{type(e).__name__}: {e}"
-    finally:
-        restore()
-
-    row = {
-        "query": query,
-        "error": error,
-        "wall_seconds": round(time.time() - t0, 1),
-        "iteration_rounds": rounds,
-        "claims_extracted": counters["claims_extracted"],
-        "ctx_chars_max": counters["ctx_chars"],
-    }
-    if output is not None:
-        row.update(
-            claims_grounded=len(output.claims),
-            confidence=output.confidence,
-            sources_into_synthesis=len(output.references),
-            chart_produced=output.chart_data is not None,
-            comparison_rows=len(output.comparison_table),
-        )
-    if row.get("claims_extracted"):
-        row["grounded_fraction"] = round(
-            row.get("claims_grounded", 0) / row["claims_extracted"], 3
-        )
-    return row
-
-
-def main() -> None:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--out", required=True, help="path to write JSON results")
-    args = ap.parse_args()
-
-    from backend.app.features.research.agent import ResearchAgent
-
-    agent = ResearchAgent()
-    rows = []
-    for q in QUERIES:
-        print(f"→ {q}")
-        row = run_one(agent, q)
-        rows.append(row)
-        print(f"   {json.dumps(row, ensure_ascii=False)}")
-
-    ok = [r for r in rows if not r.get("error")]
-    summary = {
-        "runs": len(rows),
-        "errors": len(rows) - len(ok),
-        "mean_grounded_fraction": (
-            round(sum(r.get("grounded_fraction", 0.0) for r in ok) / len(ok), 3) if ok else None
-        ),
-        "mean_confidence": (
-            round(sum((r.get("confidence") or 0.0) for r in ok) / len(ok), 3) if ok else None
-        ),
-        "total_iteration_rounds": sum(r["iteration_rounds"] for r in rows),
-        "charts_produced": sum(1 for r in ok if r.get("chart_produced")),
-        "mean_ctx_chars": (
-            round(sum(r["ctx_chars_max"] for r in ok) / len(ok)) if ok else None
-        ),
-        "mean_wall_seconds": (
-            round(sum(r["wall_seconds"] for r in ok) / len(ok), 1) if ok else None
-        ),
-    }
-    print("\nSUMMARY:", json.dumps(summary, ensure_ascii=False, indent=2))
-    with open(args.out, "w", encoding="utf-8") as f:
-        json.dump({"summary": summary, "rows": rows}, f, ensure_ascii=False, indent=2)
-    print(f"written: {args.out}")
-
-
-if __name__ == "__main__":
-    main()
-```
-
-- [ ] **Step 2: Run the baseline**
-
-Run:
-```bash
-.venv/Scripts/python.exe tools/research_probe.py --out docs/superpowers/plans/assets/2026-08-18-baseline.json
-```
-
-Create the directory first if needed: `mkdir -p docs/superpowers/plans/assets`.
-
-This makes ~8 live research runs. Expect several minutes and roughly $0.02.
-
-- [ ] **Step 3: Check the falsification criterion**
-
-The spec predicts the baseline shows `mean_grounded_fraction` near 0, `mean_confidence` near 0, and `total_iteration_rounds` equal to the number of runs (one forced round each).
-
-**If the baseline does NOT show this, STOP.** The diagnosis in spec §1.1 is wrong and the design must be revisited before any further task. Report the actual numbers and halt.
-
-- [ ] **Step 4: Commit**
-
-```bash
-git add -f tools/research_probe.py docs/superpowers/plans/assets/2026-08-18-baseline.json docs/superpowers/plans/2026-08-18-research-grounding-and-model-fit.md
-git commit -m "chore(research): add measurement probe and record baseline"
-```
-
----
-
-### Task 2: Quote normalization and support scoring
-
-Pure functions only. No callers yet.
-
-**Files:**
-- Modify: `backend/app/features/research/grounding.py`
-- Test: `tests/test_grounding_quotes.py` (create)
-
-**Interfaces:**
-- Produces: `normalize(text: str) -> str`, `quote_support(quote: str, source: str) -> float`, constants `_QUOTE_MIN_CHARS = 20`, `QUOTE_THRESHOLD = 0.85`.
-
-- [ ] **Step 1: Write the failing tests**
-
-Create `tests/test_grounding_quotes.py`:
-
-```python
-# tests/test_grounding_quotes.py
-from backend.app.features.research.grounding import (
-    QUOTE_THRESHOLD, normalize, quote_support,
-)
-
-SOURCE = (
-    "Diffusion models are increasingly replacing GANs for image synthesis "
-    "tasks due to better mode coverage. DPO reduces training time by 40% "
-    "compared to PPO while maintaining similar reward model performance."
-)
-
-
-def test_normalize_collapses_whitespace_and_lowercases():
-    assert normalize("  The   Sky\nis BLUE  ") == "the sky is blue"
-
-
-def test_normalize_maps_curly_quotes_and_dashes_to_ascii():
-    assert normalize("“state–of‐the‑art”") == '"state-of-the-art"'
-
-
-def test_quote_support_exact_substring_is_one():
-    quote = "Diffusion models are increasingly replacing GANs"
-    assert quote_support(quote, SOURCE) == 1.0
-
-
-def test_quote_support_survives_punctuation_substitution():
-    quote = "DPO reduces training time by 40%   compared to PPO"
-    assert quote_support(quote, SOURCE) == 1.0
-
-
-def test_quote_support_partial_paraphrase_is_below_threshold():
-    quote = "Diffusion approaches have gradually supplanted adversarial networks entirely"
-    assert quote_support(quote, SOURCE) < QUOTE_THRESHOLD
-
-
-def test_quote_support_keeps_short_numeric_tokens():
-    # "40" must count — figures are exactly what verification exists to catch.
-    quote = "reduces training time by 40 percent versus PPO baseline"
-    score = quote_support(quote, SOURCE)
-    assert 0.0 < score < 1.0
-
-
-def test_quote_shorter_than_minimum_is_rejected():
-    assert quote_support("GANs", SOURCE) == 0.0
-
-
-def test_quote_empty_is_rejected():
-    assert quote_support("", SOURCE) == 0.0
-    assert quote_support("   ", SOURCE) == 0.0
-
-
-def test_quote_support_empty_source_is_zero():
-    assert quote_support("Diffusion models are increasingly replacing GANs", "") == 0.0
-```
-
-- [ ] **Step 2: Run tests to verify they fail**
-
-Run: `.venv/Scripts/python.exe -m pytest tests/test_grounding_quotes.py -v`
-
-Expected: FAIL — `ImportError: cannot import name 'QUOTE_THRESHOLD'`.
-
-- [ ] **Step 3: Implement**
-
-In `backend/app/features/research/grounding.py`, add after the existing `_TOKEN_RE` block:
-
-```python
-# ── Quote-anchored verification ──────────────────────────────────────────────
-# Claims are written in Vietnamese (prompts.LANGUAGE_RULE) while sources are
-# predominantly English, so token overlap between a claim and its source is
-# near zero even for a faithful claim — measured 0.03-0.11 against a 0.12
-# threshold. Verification therefore compares a verbatim quote the model copied
-# out of the source against that source: same language on both sides, and it
-# answers the stronger question ("is this sentence actually in the source?")
-# instead of the weaker one ("does this look similar?").
-
-QUOTE_THRESHOLD = 0.85
-
-# Below this length a quote matches almost any source by accident — a model
-# returning "AI" would ground every claim.
-_QUOTE_MIN_CHARS = 20
-
-# Models routinely substitute typographic variants when copying text.
-_PUNCT_MAP = str.maketrans({
-    "‘": "'", "’": "'", "‚": "'", "‛": "'",
-    "“": '"', "”": '"', "„": '"', "‟": '"',
-    "‐": "-", "‑": "-", "‒": "-", "–": "-",
-    "—": "-", "―": "-", " ": " ",
-})
-
-_UNICODE_TOKEN_RE = re.compile(r"\w+", re.UNICODE)
-
-
-def normalize(text: str) -> str:
-    """Lowercase, fold typographic punctuation to ASCII, collapse whitespace."""
-    if not text:
-        return ""
-    return " ".join(text.translate(_PUNCT_MAP).lower().split())
-
-
-def _quote_tokens(text: str) -> set[str]:
-    """Tokens for partial quote matching.
-
-    Short tokens are dropped so stopwords can't inflate the score toward the
-    0.85 threshold — except pure digits, which are kept at any length because
-    figures ("40", "7B") are precisely what this check exists to verify.
-    """
-    return {
-        t for t in _UNICODE_TOKEN_RE.findall(text)
-        if len(t) >= 3 or t.isdigit()
-    }
-
-
-def quote_support(quote: str, source: str) -> float:
-    """How well `quote` is backed by `source`, in [0, 1].
-
-    1.0 when the normalized quote appears verbatim. Otherwise the fraction of
-    the quote's substantive tokens present in the source, which tolerates a
-    model that copied almost-faithfully while still failing an invention.
-    """
-    q, s = normalize(quote), normalize(source)
-    if len(q) < _QUOTE_MIN_CHARS or not s:
-        return 0.0
-    if q in s:
-        return 1.0
-    q_tokens = _quote_tokens(q)
-    if not q_tokens:
-        return 0.0
-    return len(q_tokens & _quote_tokens(s)) / len(q_tokens)
-```
-
-- [ ] **Step 4: Run tests to verify they pass**
-
-Run: `.venv/Scripts/python.exe -m pytest tests/test_grounding_quotes.py -v`
-
-Expected: PASS, 9 tests.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add backend/app/features/research/grounding.py tests/test_grounding_quotes.py
-git commit -m "feat(research): add quote normalization and support scoring"
-```
-
----
-
-### Task 3: Unicode tokenizer and the anchor-filter safety guard
-
-These ship together deliberately: the tokenizer fix alone turns a dead filter into a destructive one.
-
-**Files:**
-- Modify: `backend/app/features/research/grounding.py:19` and `filter_by_anchor_relevance`
-- Test: `tests/test_grounding_pure.py` (extend)
-
-**Interfaces:**
-- Consumes: nothing from Task 2.
-- Produces: `tokenize` now unicode-aware; `filter_by_anchor_relevance` gains a batch guard. Signature unchanged: `filter_by_anchor_relevance(query: str, results: list[SearchResult], label: str = "") -> list[SearchResult]`.
-
-- [ ] **Step 1: Write the failing tests**
-
-Append to `tests/test_grounding_pure.py`:
-
-```python
-from backend.app.features.research.grounding import (
-    anchor_tokens, filter_by_anchor_relevance,
-)
-
-
-def _r(title, content=""):
-    return SearchResult(source="web", title=title, url="http://x", content=content)
-
-
-def test_tokenize_keeps_vietnamese_diacritics():
-    assert "khuếch" in tokenize("mô hình khuếch tán")
-    assert "hình" in tokenize("mô hình khuếch tán")
-
-
-def test_anchor_tokens_nonempty_for_vietnamese_query():
-    assert anchor_tokens("mô hình ngôn ngữ lớn là gì")
-
-
-def test_anchor_filter_keeps_all_when_it_would_drop_almost_everything():
-    """Vietnamese query against English sources: zero overlap is a language
-    mismatch, not proof that every source is off-topic."""
-    results = [_r(f"Diffusion models paper {i}", "English abstract text") for i in range(5)]
-    kept = filter_by_anchor_relevance("mô hình khuếch tán là gì", results)
-    assert len(kept) == 5
-
-
-def test_anchor_filter_still_drops_a_lone_off_topic_result():
-    results = [
-        _r("Diffusion models for image synthesis", "diffusion synthesis"),
-        _r("Diffusion probabilistic models", "diffusion models"),
-        _r("Diffusion in materials science", "diffusion coefficient"),
-        _r("Kubernetes autoscaling guide", "horizontal pod autoscaler replicas"),
-    ]
-    kept = filter_by_anchor_relevance("diffusion models image synthesis", results)
-    assert len(kept) == 3
-    assert all("Kubernetes" not in r.title for r in kept)
-```
-
-- [ ] **Step 2: Run tests to verify they fail**
-
-Run: `.venv/Scripts/python.exe -m pytest tests/test_grounding_pure.py -v -k "vietnamese or anchor_filter or anchor_tokens"`
-
-Expected: FAIL — `test_tokenize_keeps_vietnamese_diacritics` and `test_anchor_tokens_nonempty_for_vietnamese_query` fail on the ASCII regex; `test_anchor_filter_keeps_all_when_it_would_drop_almost_everything` passes accidentally today (empty anchors ⇒ no filtering) and must keep passing after the tokenizer change.
-
-- [ ] **Step 3: Implement the tokenizer change**
-
-In `backend/app/features/research/grounding.py`, replace line 19:
-
-```python
-_TOKEN_RE = re.compile(r"[a-z0-9]+")
-```
-
-with:
-
-```python
-# Unicode-aware: `[a-z0-9]+` drops every accented character, so a Vietnamese
-# query tokenizes to fragments ("khuếch" → "khu") or to nothing at all. Same
-# fix, same reason, as sufficiency.py:36.
-_TOKEN_RE = re.compile(r"\w+", re.UNICODE)
-```
-
-- [ ] **Step 4: Implement the batch guard**
-
-Replace the body of `filter_by_anchor_relevance` in the same file:
-
-```python
-# If the anchor would eliminate nearly everything, the anchor is wrong, not
-# the corpus — most often a Vietnamese query against English sources, which
-# share no tokens by construction. Dropping the whole result set would be a
-# far worse failure than skipping this last-resort net.
-_ANCHOR_MAX_DROP_RATIO = 0.8
-
-
-def filter_by_anchor_relevance(
-    query: str, results: list[SearchResult], label: str = "",
-) -> list[SearchResult]:
-    """Drop results that share no substantive term with `query`.
-
-    Meant as a last-resort net against retrieval contamination — apply it
-    to raw search-engine output, anchored to the user's actual (clean)
-    query, never to an LLM-expanded or gap-filling query (those are
-    exactly the noisy text that produces contaminated matches in the
-    first place — filtering against them would just rubber-stamp their
-    own noise).
-    """
-    if not results:
-        return results
-    kept = [r for r in results if shares_anchor_token(query, r.title, r.content)]
-    dropped = len(results) - len(kept)
-    if not dropped:
-        return kept
-    if dropped / len(results) > _ANCHOR_MAX_DROP_RATIO:
-        logger.info(
-            "[RELEVANCE] anchor would drop %d/%d — treating as anchor/corpus "
-            "language mismatch, keeping all%s",
-            dropped, len(results), f" ({label})" if label else "",
-        )
-        return results
-    logger.info(
-        "[RELEVANCE] dropped %d/%d results with no anchor-token overlap%s",
-        dropped, len(results), f" ({label})" if label else "",
-    )
-    return kept
-```
-
-- [ ] **Step 5: Run the full grounding and search test files**
-
-Run: `.venv/Scripts/python.exe -m pytest tests/test_grounding_pure.py tests/test_grounding_quotes.py tests/test_grounding_llm.py tests/test_models_grounding.py -v`
-
-Expected: PASS. `test_tokenize_drops_short_tokens_and_lowercases` still passes — `\w+` matches ASCII identically.
-
-- [ ] **Step 6: Commit**
-
-```bash
-git add backend/app/features/research/grounding.py tests/test_grounding_pure.py
-git commit -m "fix(research): unicode-aware tokenizer with anchor-filter language guard"
-```
-
----
-
-### Task 4: Claim.quote, extraction prompt, and the reworked auditor
-
-**Files:**
-- Modify: `backend/app/features/research/models.py`, `grounding.py`, `prompts.py`
-- Test: `tests/test_claim_auditor.py` (create)
-
-**Interfaces:**
-- Consumes: `quote_support`, `QUOTE_THRESHOLD` (Task 2).
-- Produces:
-  - `Claim(text, source_ids, evidence_type="uncertain", grounded=True, quote="")`
-  - `ClaimAuditor(threshold=0.12, quote_threshold=QUOTE_THRESHOLD, fallback_scorer=None)` with `verify(claims, sources) -> list[Claim]`
-  - `fallback_scorer` type: `Callable[[list[tuple[str, str]]], list[float]]` — takes `(claim_text, cited_source_text)` pairs, returns one similarity in `[0, 1]` per pair, or `[]` on failure.
-  - `FALLBACK_THRESHOLD = 0.2`
-
-- [ ] **Step 1: Write the failing tests**
-
-Create `tests/test_claim_auditor.py`:
-
-```python
-# tests/test_claim_auditor.py
-from backend.app.features.research.grounding import ClaimAuditor
-from backend.app.features.research.models import Claim, SearchResult
-
-SRC_TEXT = (
-    "Diffusion models are increasingly replacing GANs for image synthesis "
-    "tasks due to better mode coverage."
-)
-
-
-def _source():
-    return SearchResult(source="web", title="T", url="http://x", content=SRC_TEXT)
-
-
-def _claim(text, quote, source_id):
-    return Claim(text=text, source_ids=[source_id], evidence_type="direct", quote=quote)
-
-
-def test_claim_with_verbatim_quote_is_grounded():
-    s = _source()
-    c = _claim("Mô hình khuếch tán đang thay thế GAN",
-               "Diffusion models are increasingly replacing GANs", s.id)
-    out = ClaimAuditor().verify([c], [s])
-    assert out[0].grounded is True
-
-
-def test_claim_with_invented_quote_is_not_grounded():
-    s = _source()
-    c = _claim("Mô hình khuếch tán nhanh hơn GAN 12 lần",
-               "Diffusion models run twelve times faster than adversarial networks", s.id)
-    out = ClaimAuditor().verify([c], [s])
-    assert out[0].grounded is False
-
-
-def test_ungrounded_direct_claim_is_downgraded_to_uncertain():
-    s = _source()
-    c = _claim("bịa", "Completely fabricated sentence not present anywhere here", s.id)
-    out = ClaimAuditor().verify([c], [s])
-    assert out[0].evidence_type == "uncertain"
-
-
-def test_claim_without_quote_falls_back_to_lexical_support():
-    """English claim, English source: the legacy lexical path still works."""
-    s = _source()
-    c = Claim(text="diffusion models are replacing gans for image synthesis",
-              source_ids=[s.id], evidence_type="direct", quote="")
-    out = ClaimAuditor().verify([c], [s])
-    assert out[0].grounded is True
-
-
-def test_batch_fallback_fires_when_quotes_are_unusable():
-    s = _source()
-    claims = [_claim(f"claim {i}", f"paraphrased sentence number {i} not in source", s.id)
-              for i in range(4)]
-    seen = {}
-
-    def scorer(pairs):
-        seen["pairs"] = pairs
-        return [0.9] * len(pairs)
-
-    out = ClaimAuditor(fallback_scorer=scorer).verify(claims, [s])
-    assert len(seen["pairs"]) == 4
-    assert all(c.grounded for c in out)
-
-
-def test_batch_fallback_does_not_fire_when_quotes_work():
-    """Four claims so the min-claims guard is satisfied and this test can only
-    pass on the 30% threshold logic — two grounded out of four is 0.5."""
-    s = _source()
-    claims = [
-        _claim("ok1", "Diffusion models are increasingly replacing GANs", s.id),
-        _claim("ok2", "for image synthesis tasks due to better mode coverage", s.id),
-        _claim("bad1", "invented sentence absent from the source text here", s.id),
-        _claim("bad2", "another fabricated sentence nowhere in the source", s.id),
-    ]
-    called = []
-
-    out = ClaimAuditor(fallback_scorer=lambda pairs: called.append(pairs) or []).verify(claims, [s])
-    assert sum(1 for c in out if c.grounded) == 2   # 0.5 >= 0.3, above the trigger
-    assert called == []
-
-
-def test_batch_fallback_needs_at_least_three_claims():
-    s = _source()
-    claims = [_claim(f"c{i}", f"invented sentence number {i} absent from source", s.id)
-              for i in range(2)]
-    called = []
-
-    ClaimAuditor(fallback_scorer=lambda pairs: called.append(pairs) or []).verify(claims, [s])
-    assert called == []
-
-
-def test_batch_fallback_scorer_failure_keeps_quote_verdicts():
-    s = _source()
-    claims = [_claim(f"c{i}", f"invented sentence number {i} absent from source", s.id)
-              for i in range(4)]
-
-    out = ClaimAuditor(fallback_scorer=lambda pairs: []).verify(claims, [s])
-    assert all(not c.grounded for c in out)
-```
-
-- [ ] **Step 2: Run tests to verify they fail**
-
-Run: `.venv/Scripts/python.exe -m pytest tests/test_claim_auditor.py -v`
-
-Expected: FAIL — `TypeError: Claim.__init__() got an unexpected keyword argument 'quote'`.
-
-- [ ] **Step 3: Add the `quote` field**
-
-In `backend/app/features/research/models.py`, replace the `Claim` dataclass:
-
-```python
-@dataclass
-class Claim:
-    text: str
-    source_ids: list[str]
-    evidence_type: str = "uncertain"   # "direct" | "inference" | "opinion" | "uncertain"
-    grounded: bool = True
-    # Verbatim excerpt copied out of the cited source, in the source's own
-    # language. Verification compares this against the source rather than
-    # comparing the Vietnamese `text` against an English source.
-    quote: str = ""
-```
-
-- [ ] **Step 4: Rework `ClaimAuditor`**
-
-In `backend/app/features/research/grounding.py`, replace the whole `ClaimAuditor` class:
-
-```python
-# Cosine threshold for the batch fallback. Measured on Vietnamese claims
-# against their English sources: faithful pairs scored 0.29 and 0.62, an
-# unrelated control 0.02.
-FALLBACK_THRESHOLD = 0.2
-
-_FALLBACK_MIN_CLAIMS = 3
-_FALLBACK_MAX_GROUNDED_FRAC = 0.3
-
-
-class ClaimAuditor:
-    """Decides which claims are actually supported by their cited source.
-
-    Quote matching is the primary signal. A claim without a usable quote
-    falls back to the legacy lexical check, which still works when claim and
-    source share a language.
-
-    If the quote signal collapses across the whole batch — a model that
-    paraphrased instead of copying — that is evidence the *signal* is
-    unusable, not that every claim is fabricated. In that case an injected
-    semantic scorer re-decides. The scorer is injected rather than imported
-    so this module stays pure and testable without network access.
-    """
-
-    def __init__(
-        self,
-        threshold: float = 0.12,
-        quote_threshold: float = QUOTE_THRESHOLD,
-        fallback_scorer=None,
-    ):
-        self._threshold       = threshold
-        self._quote_threshold = quote_threshold
-        self._fallback_scorer = fallback_scorer
-
-    def verify(self, claims: list[Claim], sources: list[SearchResult]) -> list[Claim]:
-        by_id = {s.id: s.content for s in sources}
-        cited_texts = {
-            id(c): [by_id[sid] for sid in c.source_ids if sid in by_id] for c in claims
-        }
-
-        for c in claims:
-            cited = cited_texts[id(c)]
-            if c.quote:
-                c.grounded = any(
-                    quote_support(c.quote, src) >= self._quote_threshold for src in cited
-                )
-            else:
-                c.grounded = is_grounded(c.text, cited, self._threshold)
-
-        if self._should_fall_back(claims):
-            self._apply_fallback(claims, cited_texts)
-
-        for c in claims:
-            if not c.grounded and c.evidence_type == "direct":
-                c.evidence_type = "uncertain"   # gán bảo thủ
-        return claims
-
-    def _should_fall_back(self, claims: list[Claim]) -> bool:
-        if self._fallback_scorer is None or len(claims) < _FALLBACK_MIN_CLAIMS:
-            return False
-        grounded_frac = sum(1 for c in claims if c.grounded) / len(claims)
-        return grounded_frac < _FALLBACK_MAX_GROUNDED_FRAC
-
-    def _apply_fallback(self, claims: list[Claim], cited_texts: dict) -> None:
-        pairs = [(c.text, " ".join(cited_texts[id(c)])) for c in claims]
-        try:
-            scores = self._fallback_scorer(pairs)
-        except Exception as e:  # noqa: BLE001 — keep the quote verdicts
-            logger.warning("[GROUNDING] fallback scorer failed (non-fatal): %s", e)
-            return
-        if not scores or len(scores) != len(claims):
-            logger.warning(
-                "[GROUNDING] fallback scorer returned %d scores for %d claims — ignoring",
-                len(scores or []), len(claims),
-            )
-            return
-        logger.info(
-            "[GROUNDING] quote signal unusable across %d claims — re-verified semantically",
-            len(claims),
-        )
-        for c, score in zip(claims, scores):
-            c.grounded = score >= FALLBACK_THRESHOLD
-```
-
-- [ ] **Step 5: Parse `quote` in `extract_claims`**
-
-In the same file, inside `extract_claims`, after the `et` assignment, replace the append:
-
-```python
-        et = str(item.get("evidence_type", "uncertain")).lower()
-        if et not in _EVIDENCE_TYPES:
-            et = "uncertain"
-        quote = str(item.get("quote", "") or "").strip()[:400]
-        claims.append(Claim(
-            text=text, source_ids=source_ids, evidence_type=et, quote=quote,
-        ))
-```
-
-- [ ] **Step 6: Ask for the quote in the prompt**
-
-In `backend/app/features/research/prompts.py`, replace `claim_extraction_prompt`:
-
-```python
-def claim_extraction_prompt(query: str, numbered_sources: str) -> str:
-    return (
-        f"{UNTRUSTED_GUARD}\n\n"
-        f"From the sources below, extract up to 8 factual claims that answer: {query}\n\n"
-        f"Sources:\n{numbered_sources}\n\n"
-        f'Return ONLY a JSON array. Each item: '
-        f'{{"text": "the claim", "source_id": <source number>, '
-        f'"quote": "the exact sentence from that source that supports it", '
-        f'"evidence_type": "direct|inference|opinion|uncertain"}}\n'
-        f"Use the source number that best supports each claim. Do not invent a "
-        f"claim that isn't actually stated in the numbered sources.\n"
-        f"The \"quote\" field must be COPIED VERBATIM from the numbered source you "
-        f"cite — same wording, same language as the source, do not translate it, "
-        f"do not paraphrase it, do not shorten it below one full sentence. It is "
-        f"checked character by character against the source.\n\n"
-        f"Write the \"text\" field — and ONLY that field — following this rule:\n"
-        f"{_footer(LANGUAGE_RULE)}"
-    )
-```
-
-- [ ] **Step 7: Run tests**
-
-Run: `.venv/Scripts/python.exe -m pytest tests/test_claim_auditor.py tests/test_grounding_llm.py tests/test_models_grounding.py -v`
-
-Expected: PASS, all.
-
-- [ ] **Step 8: Commit**
-
-```bash
-git add backend/app/features/research/models.py backend/app/features/research/grounding.py backend/app/features/research/prompts.py tests/test_claim_auditor.py
-git commit -m "feat(research): verify claims by verbatim quote with semantic batch fallback"
-```
-
----
-
-### Task 5: Wire the embedding fallback and surface quotes
-
-**Files:**
-- Modify: `backend/app/features/research/synthesizer.py`, `agent.py`
-- Modify: `frontend/src/components/research/ResearchResult.tsx`
-
-**Interfaces:**
-- Consumes: `ClaimAuditor(fallback_scorer=...)`, `Claim.quote` (Task 4).
-- Produces: `embedding_pair_scores(pairs: list[tuple[str, str]]) -> list[float]` in `synthesizer.py`; `quote` present in each entry of the `done` event's `claims` array.
-
-- [ ] **Step 1: Add the scorer**
-
-In `backend/app/features/research/synthesizer.py`, add above the `Synthesizer` class:
-
-```python
-def embedding_pair_scores(pairs: list[tuple[str, str]]) -> list[float]:
-    """Cosine similarity per (claim_text, cited_source_text) pair.
-
-    Injected into ClaimAuditor as its batch fallback so grounding.py keeps
-    no dependency on embeddings. Returns [] on any failure — the auditor
-    then keeps its quote-based verdicts rather than guessing.
-    """
-    if not pairs:
-        return []
-    try:
-        import numpy as np
-        from backend.app.features.research.embeddings import embed_texts
-
-        flat = [t for pair in pairs for t in pair]
-        vecs = np.array(embed_texts(flat))
-        vecs = vecs / (np.linalg.norm(vecs, axis=1, keepdims=True) + 1e-9)
-        return [float(vecs[2 * i] @ vecs[2 * i + 1]) for i in range(len(pairs))]
-    except Exception as e:  # noqa: BLE001
-        logger.warning("embedding_pair_scores failed (non-fatal): %s", e)
-        return []
-```
-
-- [ ] **Step 2: Use it in `_attach_grounding`**
-
-In the same file, in `_attach_grounding`, replace the `ClaimAuditor()` call:
-
-```python
-            claims = ClaimAuditor(fallback_scorer=embedding_pair_scores).verify(claims, sources)
-```
-
-- [ ] **Step 3: Emit `quote` in the SSE payload**
-
-In `backend/app/features/research/agent.py`, in the `done` event's claims comprehension, add the field:
-
-```python
-                    "claims": [
-                        {
-                            "text":          c.text,
-                            "quote":         c.quote,
-                            "source_ids":    c.source_ids,
-                            "evidence_type": c.evidence_type,
-                        }
-                        for c in output.claims
-                    ],
-```
-
-- [ ] **Step 4: Render the quote in the UI**
-
-In `frontend/src/components/research/ResearchResult.tsx`, extend the `Claim` type with `quote?: string` and render it beneath the claim text inside the existing `.claims-list` block:
-
-```tsx
-{claims.map((c, i) => (
-  <div className="claim-item" key={i}>
-    <div className="claim-text">{c.text}</div>
-    {c.quote && <blockquote className="claim-quote">{c.quote}</blockquote>}
-  </div>
-))}
-```
-
-Add to `frontend/src/styles/research.css`:
-
-```css
-.claim-quote {
-  margin: 4px 0 0 12px;
-  padding-left: 10px;
-  border-left: 2px solid var(--glass-border, rgba(255,255,255,.25));
-  font-size: .85em;
-  opacity: .75;
-  font-style: italic;
-}
-```
-
-Match the existing markup in that block — if the current code renders claims differently, adapt rather than replace wholesale.
-
-- [ ] **Step 5: Run the suite**
-
-Run: `.venv/Scripts/python.exe -m pytest tests -q`
-
-Expected: `449 passed, 4 failed` (the pre-existing `test_news_fetcher.py` failures) or better.
-
-Run: `cd frontend && npm run build`
-
-Expected: build succeeds.
-
-- [ ] **Step 6: Commit**
-
-```bash
-git add backend/app/features/research/synthesizer.py backend/app/features/research/agent.py frontend/src/components/research/ResearchResult.tsx frontend/src/styles/research.css
-git commit -m "feat(research): wire semantic grounding fallback and show source quotes"
-```
-
----
-
-### Task 6: Model capability table
+### Task 1: Model capability table
 
 **Files:**
 - Modify: `backend/app/core/llm.py`
@@ -940,7 +58,7 @@ git commit -m "feat(research): wire semantic grounding fallback and show source 
 **Interfaces:**
 - Produces:
   - `ModelCapabilities(context_window: int, supports_structured_output: bool, supports_temperature: bool, reasoning_effort_levels: tuple[str, ...] = ())` — frozen dataclass.
-  - `MODEL_CAPABILITIES: dict[str, ModelCapabilities]`
+  - `DEFAULT_CAPABILITIES`, `MODEL_CAPABILITIES: dict[str, ModelCapabilities]`
   - `_resolve_model(provider: str, model: str | None) -> str`
   - `capabilities_for(provider: str | None = None, model: str | None = None) -> ModelCapabilities`
 
@@ -999,9 +117,9 @@ Run: `.venv/Scripts/python.exe -m pytest tests/test_model_capabilities.py -v`
 
 Expected: FAIL — `ImportError: cannot import name 'capabilities_for'`.
 
-- [ ] **Step 3: Implement**
+- [ ] **Step 3: Implement the table**
 
-In `backend/app/core/llm.py`, add after `MODEL_REGISTRY`:
+In `backend/app/core/llm.py`, add `from dataclasses import dataclass` to the imports, then add after `MODEL_REGISTRY`:
 
 ```python
 @dataclass(frozen=True)
@@ -1037,8 +155,6 @@ MODEL_CAPABILITIES: dict[str, ModelCapabilities] = {
 }
 ```
 
-Add `from dataclasses import dataclass` to the imports at the top of the file.
-
 Then add, above `get_llm`:
 
 ```python
@@ -1068,7 +184,7 @@ def capabilities_for(
 
 - [ ] **Step 4: Make `get_llm` use `_resolve_model`**
 
-Replace the three per-provider branches' model expressions in `get_llm` so the defaults live in one place:
+Replace `get_llm` so the per-provider defaults live in exactly one place:
 
 ```python
 def get_llm(
@@ -1111,7 +227,7 @@ def get_llm(
     )
 ```
 
-Note the unknown-provider check moved **before** model resolution, so `get_llm(provider="nope")` still raises `ValueError` as `test_get_llm_unknown_provider_raises` expects.
+The unknown-provider check moved **before** model resolution so `get_llm(provider="nope")` still raises `ValueError`, as the existing `tests/test_llm.py` expects.
 
 - [ ] **Step 5: Run tests**
 
@@ -1128,14 +244,14 @@ git commit -m "feat(llm): add model capability table and single model resolution
 
 ---
 
-### Task 7: Context budget from capabilities
+### Task 2: Context budget from capabilities
 
 **Files:**
 - Modify: `backend/app/features/research/synthesizer.py`, `agent.py`
 - Test: `tests/test_model_capabilities.py` (extend)
 
 **Interfaces:**
-- Consumes: `ModelCapabilities`, `capabilities_for` (Task 6).
+- Consumes: `ModelCapabilities`, `capabilities_for` (Task 1).
 - Produces: `ContextBudget(max_chars: int, per_source_chars: int)` and `budget_for(caps: ModelCapabilities) -> ContextBudget` in `synthesizer.py`; `Synthesizer(llm=None, capabilities=None)`.
 
 - [ ] **Step 1: Write the failing tests**
@@ -1172,7 +288,7 @@ Expected: FAIL — `ImportError: cannot import name 'budget_for'`.
 
 - [ ] **Step 3: Implement the budget**
 
-In `backend/app/features/research/synthesizer.py`, **delete** these four constants:
+In `backend/app/features/research/synthesizer.py`, add `from dataclasses import dataclass` to the imports and **delete** these four constants:
 
 ```python
 _CTX_SUMMARY = 7000
@@ -1188,7 +304,8 @@ Replace with:
 # constants above were sized for "Llama3 8B có context 8k tokens" and starved
 # every larger model that followed: each source was truncated to 900 chars
 # after the pipeline spent a crawl, a dedup pass and a rerank producing 15
-# sources of up to 8000 chars each.
+# sources of up to 8000 chars each. Measured before this change, the largest
+# context actually sent was 7,203 chars against a 1,050,000-token window.
 #
 # The four graded budgets they replaced had no technical basis — each section
 # is an independent call with the whole context window available to it, so
@@ -1220,8 +337,6 @@ def budget_for(caps) -> ContextBudget:
     )
 ```
 
-Add `from dataclasses import dataclass` to the imports.
-
 - [ ] **Step 4: Use the budget in `Synthesizer`**
 
 Replace `Synthesizer.__init__`:
@@ -1234,7 +349,7 @@ Replace `Synthesizer.__init__`:
         self.budget = budget_for(self.caps)
 ```
 
-Replace `_ctx` so `per_source` defaults to the budget:
+Replace `_ctx` so both limits default to the budget:
 
 ```python
     def _ctx(self, sources: list[SearchResult], max_chars: int | None = None,
@@ -1256,11 +371,23 @@ Replace `_ctx` so `per_source` defaults to the budget:
         return f"{UNTRUSTED_GUARD}\n\n{body}" if body else body
 ```
 
-In `_run_sections`, replace the four `self._ctx(ranked, _CTX_*)` calls with `self._ctx(ranked)`.
+In `_run_sections`, build the context once and reuse it — four calls built it four times over the same sources:
+
+```python
+        ctx = self._ctx(ranked)
+        steps = [
+            ("summaries",    self._make_summaries,           (query, ctx, out)),
+            ("key_points",   self._make_key_points,          (query, ctx, out)),
+            ("comparison",   self._make_comparison_table,    (query, ranked, out)),
+            ("chart",        self._make_chart_data,          (query, ctx, out)),
+            ("follow_ups",   self._make_follow_up_questions, (query, out)),
+            ("papers",       self._make_papers_and_refs,     (ranked, out)),
+        ]
+```
 
 In `synthesize_rag`, replace `self._ctx(sources, max_chars=6500, per_source=1300)` with `self._ctx(sources)`.
 
-In `_make_comparison_table`, remove the `[:4]` and `[:200]` caps:
+In `_make_comparison_table`, remove the 4-source and 200-char caps:
 
 ```python
         src_text = "\n".join(
@@ -1288,7 +415,7 @@ In `backend/app/features/research/agent.py`, in `_run_core`, replace the per-req
 
 Run: `.venv/Scripts/python.exe -m pytest tests -q`
 
-Expected: `449 passed, 4 failed` or better. If `tests/test_synthesize_grounded.py` references the deleted constants, update it to use `budget_for` instead.
+Expected: `449 passed, 4 failed` or better. If `tests/test_synthesize_grounded.py` references the deleted constants, update it to use `budget_for`.
 
 - [ ] **Step 7: Commit**
 
@@ -1299,18 +426,20 @@ git commit -m "feat(research): derive context budget from model capabilities"
 
 ---
 
-### Task 8: Structured output with reasoning effort
+### Task 3: Structured output with reasoning effort
 
 **Files:**
 - Create: `backend/app/features/research/output_schemas.py`
-- Modify: `backend/app/features/research/synthesizer.py`, `prompts.py`
+- Modify: `backend/app/features/research/synthesizer.py`, `grounding.py`
 - Test: `tests/test_structured_output.py` (create)
 
 **Interfaces:**
-- Consumes: `self.caps` (Task 7).
-- Produces: `Synthesizer._call(prompt, effort=None) -> str` and `Synthesizer._call_structured(prompt, schema, effort=None) -> BaseModel | None`.
+- Consumes: `self.caps`, `self.budget` (Task 2).
+- Produces: `Synthesizer._bound(effort)`, `Synthesizer._call(prompt, effort=None) -> str`, `Synthesizer._call_structured(prompt, schema, effort=None) -> BaseModel | None`; `grounding.extract_claims(query, sources, llm_call, parse_array, structured_call=None)`.
 
 Verified on the installed stack (`langchain-openai` 1.3.3): `llm.bind(reasoning_effort="low").with_structured_output(Schema).invoke(prompt)` returns a validated model instance from `gpt-5.6-luna`.
+
+**Scope note:** this task changes *how output is parsed*, never what grounding decides. `ExtractedClaim` mirrors exactly the fields `extract_claims` already reads today — `text`, `source_id`, `evidence_type`. Do not add a `quote` field; that belongs to withdrawn spec section 3.
 
 - [ ] **Step 1: Write the schemas**
 
@@ -1369,9 +498,9 @@ class FollowUps(BaseModel):
 
 
 class ExtractedClaim(BaseModel):
+    """Mirrors exactly what extract_claims already reads from the text path."""
     text:          str
     source_id:     int
-    quote:         str = Field(description="Verbatim excerpt copied from the cited source")
     evidence_type: str = Field(description="one of: direct, inference, opinion, uncertain")
 
 
@@ -1414,8 +543,10 @@ class _FakeLLM:
         return _FakeStructured(self._structured)
 
     def invoke(self, prompt):
+        text = self._text
+
         class _R:
-            content = self._text
+            content = text
         return _R()
 
 
@@ -1430,8 +561,7 @@ _PLAIN_CAPS      = ModelCapabilities(8192, False, True)
 def test_structured_path_returns_parsed_model():
     want = SummaryShortMedium(short="s", medium="m")
     s = _synth(_FakeLLM(structured_result=want), _STRUCTURED_CAPS)
-    got = s._call_structured("p", SummaryShortMedium)
-    assert got.short == "s"
+    assert s._call_structured("p", SummaryShortMedium).short == "s"
 
 
 def test_structured_path_skipped_when_capability_absent():
@@ -1444,20 +574,31 @@ def test_structured_failure_returns_none_so_caller_falls_back():
     assert s._call_structured("p", SummaryShortMedium) is None
 
 
-def test_effort_is_bound_only_when_model_supports_it():
+def test_effort_is_bound_when_model_supports_it():
     llm = _FakeLLM(structured_result=SummaryShortMedium(short="s", medium="m"))
     _synth(llm, _STRUCTURED_CAPS)._call_structured("p", SummaryShortMedium, effort="high")
     assert {"reasoning_effort": "high"} in llm.bind_calls
 
-    llm2 = _FakeLLM()
-    _synth(llm2, _PLAIN_CAPS)._call("p", effort="high")
-    assert llm2.bind_calls == []
+
+def test_effort_not_bound_when_model_lacks_the_knob():
+    llm = _FakeLLM()
+    _synth(llm, _PLAIN_CAPS)._call("p", effort="high")
+    assert llm.bind_calls == []
 
 
 def test_unsupported_effort_level_is_not_bound():
     llm = _FakeLLM()
-    _synth(llm, _STRUCTURED_CAPS)._call("p", effort="xhigh")   # not in ("low","medium","high")
+    _synth(llm, _STRUCTURED_CAPS)._call("p", effort="xhigh")   # not in this model's tuple
     assert llm.bind_calls == []
+
+
+def test_call_returns_text_and_survives_provider_error():
+    class _Raiser(_FakeLLM):
+        def invoke(self, prompt):
+            raise RuntimeError("provider down")
+
+    assert _synth(_FakeLLM(), _PLAIN_CAPS)._call("p") == "SUMMARY: s\nOVERVIEW: m"
+    assert _synth(_Raiser(), _PLAIN_CAPS)._call("p") == ""
 ```
 
 - [ ] **Step 3: Run tests to verify they fail**
@@ -1468,14 +609,29 @@ Expected: FAIL — `AttributeError: 'Synthesizer' object has no attribute '_call
 
 - [ ] **Step 4: Implement the call layer**
 
-In `backend/app/features/research/synthesizer.py`, replace `_call` and add `_call_structured`:
+In `backend/app/features/research/synthesizer.py`, add above the `Synthesizer` class:
+
+```python
+def _content_or_str(content) -> str:
+    """Anthropic returns content blocks rather than a plain string."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "".join(
+            b if isinstance(b, str) else b.get("text", "")
+            for b in content if isinstance(b, (str, dict))
+        )
+    return str(content or "")
+```
+
+Replace `_call` and add the two new methods:
 
 ```python
     def _bound(self, effort: str | None):
         """The LLM with reasoning effort applied, when the model supports it.
 
-        Call sites always pass their intended effort; models that don't have
-        the knob simply ignore it here, so no call site branches on model.
+        Call sites always pass their intended effort; models without the knob
+        simply ignore it here, so no call site branches on model.
         """
         if effort and effort in self.caps.reasoning_effort_levels:
             try:
@@ -1495,9 +651,9 @@ In `backend/app/features/research/synthesizer.py`, replace `_call` and add `_cal
             return ""
 
     def _call_structured(self, prompt: str, schema, effort: str | None = None):
-        """Return a validated schema instance, or None to signal "use the
-        text fallback". Never raises: a schema violation must degrade to the
-        legacy parse path, not fail the section."""
+        """Return a validated schema instance, or None meaning "use the text
+        fallback". Never raises: a schema violation must degrade to the legacy
+        parse path, not fail the section."""
         if not self.caps.supports_structured_output:
             return None
         try:
@@ -1510,23 +666,13 @@ In `backend/app/features/research/synthesizer.py`, replace `_call` and add `_cal
             return None
 ```
 
-Add the small helper above the class (the existing `_call` assumed `.content` is a string; Anthropic returns content blocks):
+Add `from backend.app.features.research import output_schemas` to the imports.
 
-```python
-def _content_or_str(content) -> str:
-    if isinstance(content, str):
-        return content
-    if isinstance(content, list):
-        return "".join(
-            b if isinstance(b, str) else b.get("text", "")
-            for b in content if isinstance(b, (str, dict))
-        )
-    return str(content or "")
-```
+- [ ] **Step 5: Migrate each section**
 
-- [ ] **Step 5: Migrate the sections**
+Each maker tries structured first and keeps its existing body as the fallback. Read the current file and preserve the existing parsing code exactly where the snippets below say "unchanged".
 
-Rewrite each maker to try structured first and keep the existing body as fallback. `_make_summaries`:
+`_make_summaries`:
 
 ```python
     def _make_summaries(self, query: str, ctx: str, out: ResearchOutput) -> None:
@@ -1568,10 +714,9 @@ Rewrite each maker to try structured first and keep the existing body as fallbac
         )
 ```
 
-`_make_key_points` — prepend before the existing parsing:
+`_make_key_points` — insert before the existing body:
 
 ```python
-    def _make_key_points(self, query: str, ctx: str, out: ResearchOutput) -> None:
         parsed = self._call_structured(
             prompts.key_points_prompt(query, ctx), output_schemas.KeyPoints, "medium",
         )
@@ -1583,7 +728,7 @@ Rewrite each maker to try structured first and keep the existing body as fallbac
         # ... existing regex parsing and its two fallbacks, unchanged ...
 ```
 
-`_make_comparison_table` — after building `src_text`:
+`_make_comparison_table` — after `src_text` is built:
 
 ```python
         parsed = self._call_structured(
@@ -1595,13 +740,15 @@ Rewrite each maker to try structured first and keep the existing body as fallbac
             logger.info("Comparison: %d rows (structured)", len(out.comparison_table))
             return
         raw = self._call(prompts.comparison_table_prompt(query, src_text), "medium")
-        parsed_rows = self._parse_array(raw)
-        valid = [r for r in parsed_rows if isinstance(r, dict) and "source" in r and "main_claim" in r]
+        valid = [
+            r for r in self._parse_array(raw)
+            if isinstance(r, dict) and "source" in r and "main_claim" in r
+        ]
         out.comparison_table = valid
         logger.info("Comparison: %d rows", len(out.comparison_table))
 ```
 
-Note the metadata-fabricated fallback is gone — Task 10 covers why.
+The metadata-fabricated fallback is deleted here — Task 5 explains why.
 
 `_make_chart_data`:
 
@@ -1623,69 +770,29 @@ Note the metadata-fabricated fallback is gone — Task 10 covers why.
                 logger.info("Chart: %s", chart.get("title", ""))
 ```
 
-`_make_follow_up_questions` — takes `ctx` now (Task 9 changes the prompt; wire the parameter here):
+`_make_follow_up_questions` — signature stays `(self, query, out)`:
 
 ```python
-    def _make_follow_up_questions(self, query: str, ctx: str, out: ResearchOutput) -> None:
         parsed = self._call_structured(
-            prompts.follow_up_questions_prompt(query, ctx),
-            output_schemas.FollowUps, "low",
+            prompts.follow_up_questions_prompt(query), output_schemas.FollowUps, "low",
         )
         if parsed is not None:
             out.follow_up_questions = [q.strip() for q in parsed.questions if "?" in q][:4]
             logger.info("Follow-up questions: %d (structured)", len(out.follow_up_questions))
             return
-        raw = self._call(prompts.follow_up_questions_prompt(query, ctx), "low")
+        raw = self._call(prompts.follow_up_questions_prompt(query), "low")
         # ... existing parsing, unchanged ...
 ```
 
-Update the `steps` list in `_run_sections` so `follow_ups` receives the context:
+- [ ] **Step 6: Route claim extraction through the structured path**
 
-```python
-        ctx = self._ctx(ranked)
-        steps = [
-            ("summaries",    self._make_summaries,           (query, ctx, out)),
-            ("key_points",   self._make_key_points,          (query, ctx, out)),
-            ("comparison",   self._make_comparison_table,    (query, ranked, out)),
-            ("chart",        self._make_chart_data,          (query, ctx, out)),
-            ("follow_ups",   self._make_follow_up_questions, (query, ctx, out)),
-            ("papers",       self._make_papers_and_refs,     (ranked, out)),
-        ]
-```
-
-Building `ctx` once instead of four times also removes three redundant passes over the sources.
-
-`extract_claims` in `grounding.py` stays as-is (it takes injected callables); route it through the structured path from `_attach_grounding` instead:
-
-```python
-    def _attach_grounding(self, out: ResearchOutput, query: str, sources: list[SearchResult]) -> None:
-        if not getattr(settings, "RESEARCH_GROUNDING_ENABLED", True) or not sources:
-            return
-        try:
-            claims = extract_claims(
-                query, sources,
-                lambda p: self._call(p, "high"),
-                self._parse_array,
-                structured_call=lambda p: self._call_structured(
-                    p, output_schemas.Claims, "high",
-                ),
-            )
-            claims = ClaimAuditor(fallback_scorer=embedding_pair_scores).verify(claims, sources)
-            out.claims      = [c for c in claims if c.grounded]
-            out.confidence  = compute_confidence(claims, len(sources))
-            out.limitations = derive_limitations(sources, claims)
-        except Exception as e:
-            logger.error("Grounding failed (non-fatal): %s", e, exc_info=True)
-```
-
-And in `grounding.extract_claims`, accept the optional structured path while staying free of any LLM import:
+In `grounding.py`, change only how the raw list is obtained. **Do not change the validation loop or any threshold.**
 
 ```python
 def extract_claims(query, sources, llm_call, parse_array, structured_call=None) -> list[Claim]:
     """`structured_call` is an injected callable returning an object with a
-    `.claims` list of items carrying text/source_id/quote/evidence_type, or
-    None to use the text path. Injected, not imported, so this module stays
-    pure."""
+    `.claims` list carrying text/source_id/evidence_type, or None to use the
+    text path. Injected, not imported, so this module stays pure."""
     if not sources:
         return []
     parsed = None
@@ -1706,34 +813,43 @@ def extract_claims(query, sources, llm_call, parse_array, structured_call=None) 
     # ... existing per-item validation loop, unchanged ...
 ```
 
-Add `from backend.app.features.research import output_schemas` to the synthesizer imports.
+In `synthesizer._attach_grounding`, pass the two callables. `ClaimAuditor()` is constructed exactly as today:
 
-- [ ] **Step 6: Add `NO_DATA` guidance to the chart prompt for the fallback path**
+```python
+            claims = extract_claims(
+                query, sources,
+                lambda p: self._call(p, "high"),
+                self._parse_array,
+                structured_call=lambda p: self._call_structured(
+                    p, output_schemas.Claims, "high",
+                ),
+            )
+            claims = ClaimAuditor().verify(claims, sources)
+```
 
-`prompts.chart_data_prompt` is unchanged — it already handles both. Leave it.
-
-- [ ] **Step 7: Run tests**
+- [ ] **Step 7: Run tests, then a live check**
 
 Run: `.venv/Scripts/python.exe -m pytest tests -q`
 
 Expected: `449 passed, 4 failed` or better.
 
-Then a live smoke check:
+Then confirm the structured path actually engages against the real model:
 
 ```bash
-PYTHONIOENCODING=utf-8 .venv/Scripts/python.exe -c "
+PYTHONPATH=. PYTHONIOENCODING=utf-8 .venv/Scripts/python.exe -c "
 from backend.app.features.research.synthesizer import Synthesizer
 from backend.app.features.research.models import SearchResult
 s = Synthesizer()
+print('structured:', s.caps.supports_structured_output, '| budget:', s.budget)
 src = [SearchResult(source='web', title='Diffusion', url='http://x',
        content='Diffusion models are increasingly replacing GANs for image synthesis due to better mode coverage.')]
 out = s.synthesize_grounded('mo hinh khuech tan la gi', src)
 print('claims:', len(out.claims), 'confidence:', out.confidence)
-for c in out.claims: print(' -', c.text[:60], '||', c.quote[:60])
+print('short:', out.summary_short[:90])
 "
 ```
 
-Expected: at least one grounded claim with a non-empty quote, and a non-zero confidence. This is the first end-to-end proof the grounding repair works.
+Expected: `structured: True`, `ContextBudget(max_chars=210000, per_source_chars=14000)`, a non-empty summary, and grounding behaving as before this task.
 
 - [ ] **Step 8: Commit**
 
@@ -1744,194 +860,7 @@ git commit -m "feat(research): structured output with per-call-site reasoning ef
 
 ---
 
-### Task 9: Iteration steered by real evidence gaps
-
-**Files:**
-- Modify: `backend/app/features/research/iteration.py`, `prompts.py`, `agent.py`
-- Test: `tests/test_iteration_pure.py` (extend)
-
-**Interfaces:**
-- Consumes: `Claim.quote`/`Claim.grounded` (Task 4).
-- Produces: `gap_query(query: str, output: ResearchOutput, missing: str | None = None, ungrounded: list[str] | None = None) -> str | None`; `prompts.follow_up_questions_prompt(query: str, ctx: str) -> str`.
-
-- [ ] **Step 1: Write the failing tests**
-
-Append to `tests/test_iteration_pure.py`:
-
-```python
-from backend.app.features.research.iteration import gap_query
-from backend.app.features.research.models import ResearchOutput
-
-
-def test_gap_query_prefers_judge_missing():
-    out = ResearchOutput(query="q", follow_up_questions=["Invented question?"])
-    assert gap_query("q", out, missing="FLOPs benchmark numbers") == "FLOPs benchmark numbers"
-
-
-def test_gap_query_uses_ungrounded_claims_when_no_missing():
-    out = ResearchOutput(query="q", follow_up_questions=["Invented question?"])
-    got = gap_query("q", out, ungrounded=["throughput on A100 is 3x higher"])
-    assert got == "throughput on A100 is 3x higher"
-
-
-def test_gap_query_falls_back_to_follow_up_question():
-    out = ResearchOutput(query="q", follow_up_questions=["What about limitations?"])
-    assert gap_query("q", out) == "What about limitations?"
-
-
-def test_gap_query_final_fallback_is_anchored_to_query():
-    out = ResearchOutput(query="q")
-    assert gap_query("diffusion models", out) == "diffusion models evidence details"
-
-
-def test_gap_query_truncates_to_200_chars():
-    out = ResearchOutput(query="q")
-    assert len(gap_query("q", out, missing="x" * 500)) == 200
-
-
-def test_gap_query_ignores_blank_signals():
-    out = ResearchOutput(query="q", follow_up_questions=["Real question?"])
-    assert gap_query("q", out, missing="   ", ungrounded=["", "  "]) == "Real question?"
-```
-
-- [ ] **Step 2: Run tests to verify they fail**
-
-Run: `.venv/Scripts/python.exe -m pytest tests/test_iteration_pure.py -v -k gap_query`
-
-Expected: FAIL — `TypeError: gap_query() got an unexpected keyword argument 'missing'`.
-
-- [ ] **Step 3: Implement**
-
-Replace `gap_query` in `backend/app/features/research/iteration.py`:
-
-```python
-def gap_query(
-    query: str,
-    output: ResearchOutput,
-    missing: str | None = None,
-    ungrounded: list[str] | None = None,
-) -> str | None:
-    """Query for the supplementary search round, in order of evidential value.
-
-    The follow-up question used to come first, but it is generated without
-    the model having seen any source (prompts.follow_up_questions_prompt) —
-    so the top-up search was steered by an invention. The real gap is
-    already known: the judge names it, and failed claims mark exactly where
-    evidence is thin. Both now outrank the invented question.
-
-    Pure. The caller anchors the result to the user's query via
-    sufficiency.anchor_gap_query.
-    """
-    if missing and missing.strip():
-        return missing.strip()[:200]
-
-    for claim_text in (ungrounded or []):
-        if claim_text and claim_text.strip():
-            return claim_text.strip()[:200]
-
-    if output.follow_up_questions:
-        fq = output.follow_up_questions[0].strip()
-        if fq:
-            return fq[:200]
-
-    q = query.strip()
-    if not q:
-        return None
-    return f"{q} evidence details"[:200]
-```
-
-- [ ] **Step 4: Give follow-up questions the sources**
-
-In `backend/app/features/research/prompts.py`, replace `follow_up_questions_prompt`:
-
-```python
-def follow_up_questions_prompt(query: str, ctx: str) -> str:
-    return (
-        f"Sources:\n{ctx}\n\n"
-        f"Suggest 4 follow-up research questions about '{query}'.\n"
-        f"Base them on what the sources above actually cover and, especially, "
-        f"on what they leave unanswered — a question the sources already "
-        f"answer is not a follow-up.\n"
-        f'Return ONLY a JSON array: ["Q1?", "Q2?", "Q3?", "Q4?"]\n\n'
-        f"{_footer(LANGUAGE_RULE)}"
-    )
-```
-
-- [ ] **Step 5: Thread the real signals through the agent**
-
-In `backend/app/features/research/agent.py`, `_iteration_step` gains the two signals:
-
-```python
-    def _iteration_step(self, query, sources, output, synth, missing=None):
-        """Một vòng search bù nhắm vào khoảng trống grounding.
-
-        Trả (new_sources, new_output, newly_fetched), hoặc None để dừng.
-        """
-        ungrounded = [c.text for c in output.claims if not c.grounded]
-        gq = gap_query(query, output, missing=missing, ungrounded=ungrounded)
-        if not gq:
-            return None
-        try:
-            merged, newly = self._top_up(query, sources, gq)
-            new_output = synth.synthesize_grounded(query, merged)
-            return merged, new_output, newly
-        except Exception as e:  # noqa: BLE001 — non-fatal, giữ output trước đó
-            logger.warning("[ITERATION] round failed (non-fatal): %s", e)
-            return None
-```
-
-`output.claims` holds only grounded claims by the time it reaches here, so also keep the full set. In `Synthesizer._attach_grounding`, store it for this purpose:
-
-```python
-            out.claims      = [c for c in claims if c.grounded]
-            out.all_claims  = claims
-```
-
-Add to `ResearchOutput` in `models.py`:
-
-```python
-    # Every extracted claim including the ones that failed verification.
-    # Not serialized to the client — used only to steer the iteration round
-    # toward where evidence is actually thin.
-    all_claims: list[Claim] = field(default_factory=list)
-```
-
-And in `_iteration_step` read from it:
-
-```python
-        ungrounded = [c.text for c in (output.all_claims or []) if not c.grounded]
-```
-
-In `_run_core`, capture the judge's `missing` so the iteration can use it. Where `verdict` is unpacked, keep it:
-
-```python
-                    sufficient, missing = verdict
-                    judge_missing = missing
-```
-
-Initialize `judge_missing = None` next to `decision = reason = None`, and pass it at the call site:
-
-```python
-                    step = self._iteration_step(query, all_sources, output, synth,
-                                                missing=judge_missing)
-```
-
-- [ ] **Step 6: Run tests**
-
-Run: `.venv/Scripts/python.exe -m pytest tests -q`
-
-Expected: `449 passed, 4 failed` or better. Update any test that calls `follow_up_questions_prompt(query)` with one argument.
-
-- [ ] **Step 7: Commit**
-
-```bash
-git add backend/app/features/research/iteration.py backend/app/features/research/prompts.py backend/app/features/research/agent.py backend/app/features/research/models.py tests/test_iteration_pure.py
-git commit -m "fix(research): steer iteration from judge gaps and failed claims"
-```
-
----
-
-### Task 10: Unify the two rerank paths
+### Task 4: Unify the two rerank paths
 
 **Files:**
 - Modify: `backend/app/features/research/reranker.py`, `search/ranking.py`
@@ -1946,10 +875,8 @@ Append to `tests/test_reranker.py`:
 
 ```python
 def test_fuse_scores_three_signal_weights():
-    out = rr.fuse_scores(rerank=[1.0], base=[1.0], cred=[1.0])
-    assert out == [1.0]
-    out = rr.fuse_scores(rerank=[1.0], base=[0.0], cred=[0.0])
-    assert abs(out[0] - 0.7) < 1e-9
+    assert rr.fuse_scores(rerank=[1.0], base=[1.0], cred=[1.0]) == [1.0]
+    assert abs(rr.fuse_scores(rerank=[1.0], base=[0.0], cred=[0.0])[0] - 0.7) < 1e-9
 
 
 def test_fuse_scores_five_signal_weights():
@@ -1965,9 +892,7 @@ def test_fuse_scores_five_signal_without_reranker():
 
 
 def test_fuse_scores_monotonic_in_rerank():
-    low  = rr.fuse_scores([0.1], [0.5], [0.5])[0]
-    high = rr.fuse_scores([0.9], [0.5], [0.5])[0]
-    assert high > low
+    assert rr.fuse_scores([0.9], [0.5], [0.5])[0] > rr.fuse_scores([0.1], [0.5], [0.5])[0]
 ```
 
 Append to `tests/test_ranking_signals.py`:
@@ -2004,13 +929,13 @@ Expected: FAIL — `fuse_scores() got an unexpected keyword argument 'recency'`,
 Replace it in `backend/app/features/research/reranker.py`:
 
 ```python
-# Weight sets, both previously duplicated with different numbers in
-# search/ranking.py. Neither call site's effective scoring changes here —
-# only where the reranker score comes from (ranking.py now uses the
-# Cohere → BGE ladder instead of BGE alone).
-_W_5 = {"rerank": 0.55, "cred": 0.20, "recency": 0.10, "citation": 0.10, "base": 0.05}
+# Weight sets, previously duplicated with different numbers in
+# search/ranking.py. Neither call site's effective scoring changes — only
+# where the reranker score comes from (ranking.py now uses the Cohere → BGE
+# ladder instead of BGE alone).
+_W_5           = {"rerank": 0.55, "cred": 0.20, "recency": 0.10, "citation": 0.10, "base": 0.05}
 _W_5_NO_RERANK = {"base": 0.40, "cred": 0.35, "citation": 0.15, "recency": 0.10}
-_W_3 = {"rerank": 0.70, "cred": 0.20, "base": 0.10}
+_W_3           = {"rerank": 0.70, "cred": 0.20, "base": 0.10}
 _W_3_NO_RERANK = {"base": 0.70, "cred": 0.30}
 
 
@@ -2023,9 +948,9 @@ def fuse_scores(
 ) -> list[float]:
     """Blend relevance signals into one score per document.
 
-    Five-signal blend when recency/citation are supplied (live search
-    results carry publication dates and citation counts), three-signal
-    otherwise (stored chunks do not).
+    Five-signal blend when recency/citation are supplied (live search results
+    carry publication dates and citation counts), three-signal otherwise
+    (stored chunks do not).
     """
     rich = recency is not None and citation is not None
     out: list[float] = []
@@ -2063,8 +988,8 @@ def recency_score(extra: dict, ref_year: int | None = None) -> float:
     Accepts three shapes because the pipeline produces three: live academic
     results carry "year" or "published", while knowledge-store chunks carry
     "published_at" as an epoch (knowledge_store._rank_candidates). Reading
-    only the first two meant every stored source scored 0.0 regardless of
-    how recent it was.
+    only the first two meant every stored source scored 0.0 no matter how
+    recent it was.
     """
     if ref_year is None:
         ref_year = datetime.now(timezone.utc).year
@@ -2089,7 +1014,7 @@ def recency_score(extra: dict, ref_year: int | None = None) -> float:
 
 - [ ] **Step 5: Route `rerank_results` through the shared ladder**
 
-In the same file, replace `rerank_results`:
+Replace `rerank_results` in the same file:
 
 ```python
 def rerank_results(
@@ -2120,17 +1045,18 @@ def rerank_results(
                        len(rerank), len(results))
         rerank = None
 
-    final = fuse_scores(rerank, base, cred, recency=recency, citation=citation)
+    final  = fuse_scores(rerank, base, cred, recency=recency, citation=citation)
     ranked = sorted(zip(results, final), key=lambda x: x[1], reverse=True)
-    top = [r for r, _ in ranked[:top_k]]
+    top    = [r for r, _ in ranked[:top_k]]
     logger.info(
         "Reranked %d → top %d results (%s)",
-        len(results), len(top), "cross-encoder" if rerank is not None else "credibility fallback",
+        len(results), len(top),
+        "cross-encoder" if rerank is not None else "credibility fallback",
     )
     return top
 ```
 
-Change the imports at the top of `ranking.py`:
+Change the import at the top of `ranking.py` to:
 
 ```python
 from backend.app.features.research.reranker import (
@@ -2144,7 +1070,7 @@ and delete the now-unused `_get_reranker` helper.
 
 Run: `.venv/Scripts/python.exe -m pytest tests -q`
 
-Expected: `449 passed, 4 failed` or better. Any test asserting the old `rerank_results` internals should be updated to assert ordering behavior, not weights.
+Expected: `449 passed, 4 failed` or better. A test asserting the old `rerank_results` internals should assert ordering behavior instead of weights.
 
 - [ ] **Step 7: Commit**
 
@@ -2155,17 +1081,20 @@ git commit -m "refactor(research): one rerank ladder and one fusion function"
 
 ---
 
-### Task 11: Remove dead code and move comparison gating to the backend
+### Task 5: Remove dead code and move comparison gating to the backend
+
+Measured on the baseline: the comparison table was populated with 4 rows on **all 8** queries, while only 1 of those queries had comparison intent. Seven of eight comparison calls were made and discarded.
 
 **Files:**
-- Modify: `synthesizer.py`, `agent.py`, `router.py`, `service.py`, `prompts.py`, `search/community.py`, `search/query.py`
+- Modify: `synthesizer.py`, `agent.py`, `router.py`, `service.py`, `prompts.py`, `search/community.py`, `search/query.py`, `search/__init__.py`
 - Modify: `frontend/src/components/research/ResearchResult.tsx`
 - Modify: `tests/test_security_framing.py`, `tests/test_research_wiring.py`, `tests/contract/test_api_contracts.py`
+- Test: `tests/test_compare_intent.py` (create)
 
 **Interfaces:**
 - Produces: `has_compare_intent(query: str) -> bool` in `search/query.py`, exported through `search/__init__.py`.
 
-- [ ] **Step 1: Write the failing test for comparison gating**
+- [ ] **Step 1: Write the failing test**
 
 Create `tests/test_compare_intent.py`:
 
@@ -2205,9 +1134,10 @@ Add to `backend/app/features/research/search/query.py`:
 
 ```python
 # Comparison intent. This lived in the frontend (ResearchResult.tsx), which
-# meant the backend made the comparison LLM call on every run and the UI
-# threw the result away unless the query happened to contain one of these.
-# The decision belongs where the call is made.
+# meant the backend made the comparison LLM call on every run and the UI threw
+# the result away unless the query happened to contain one of these. Measured
+# on 8 baseline queries: 8 calls made, 1 displayed. The decision belongs where
+# the call is made.
 _COMPARE_KEYWORDS = (
     "vs", "versus", "compare", "comparison", "so sánh", "khác nhau",
     "khác gì", "difference", "differences", "between", "ở điểm nào",
@@ -2223,14 +1153,15 @@ Export it from `backend/app/features/research/search/__init__.py` alongside `exp
 
 - [ ] **Step 4: Gate the call in the synthesizer**
 
-In `_run_sections`, replace the unconditional comparison step:
+In `_run_sections`, drop the unconditional comparison step and add it only when the query asks for one:
 
 ```python
+        ctx = self._ctx(ranked)
         steps = [
             ("summaries",    self._make_summaries,           (query, ctx, out)),
             ("key_points",   self._make_key_points,          (query, ctx, out)),
             ("chart",        self._make_chart_data,          (query, ctx, out)),
-            ("follow_ups",   self._make_follow_up_questions, (query, ctx, out)),
+            ("follow_ups",   self._make_follow_up_questions, (query, out)),
             ("papers",       self._make_papers_and_refs,     (ranked, out)),
         ]
         if has_compare_intent(query):
@@ -2239,11 +1170,11 @@ In `_run_sections`, replace the unconditional comparison step:
 
 Import at the top: `from backend.app.features.research.search.query import has_compare_intent`.
 
-Also delete the metadata-fabricated `comparison_table` block in `synthesize_rag` (the same `"See full source for details"` filler), leaving `out.comparison_table` empty there.
+Also delete the metadata-fabricated `comparison_table` block in `synthesize_rag` — the same `"See full source for details"` filler the frontend already discards — leaving `out.comparison_table` empty there.
 
 - [ ] **Step 5: Drop the frontend gate**
 
-In `frontend/src/components/research/ResearchResult.tsx`, delete `COMPARE_KEYWORDS`, `queryLower`, and `hasCompareIntent`, and change:
+In `frontend/src/components/research/ResearchResult.tsx`, delete `COMPARE_KEYWORDS`, `queryLower` and `hasCompareIntent`, and replace the two lines that used them:
 
 ```tsx
   const realCompareRows = (result.comparison_table || []).filter(r => r.source && r.main_claim);
@@ -2257,24 +1188,24 @@ In `frontend/src/components/research/ResearchResult.tsx`, delete `COMPARE_KEYWOR
 | `synthesizer.py` | `Synthesizer.synthesize()`, `Synthesizer.answer()` |
 | `prompts.py` | `follow_up_answer_prompt` |
 | `agent.py` | `ResearchAgent.run()`, `knowledge_size()`, `clear_knowledge()`, `clear_cache()` |
-| `router.py` | `serve_paper` and its `@router.get("/api/paper/{filename}")`, `clear_research_cache` and its `@router.delete("/api/research/cache")`, plus the now-unused `os` import |
+| `router.py` | `serve_paper` with its `@router.get("/api/paper/{filename}")`, `clear_research_cache` with its `@router.delete("/api/research/cache")`, and the then-unused `os` import |
 | `service.py` | `ResearchService.clear_cache` |
-| `synthesizer.py` | the `pdf_filename` sha256 block in `_make_papers_and_refs` (keep `pdf_url` — the UI links it directly) |
-| `search/community.py` | `HuggingFaceSearcher._search_models` and the `_MODELS_URL` constant; `search()` becomes `return self._search_papers(query, k)` |
+| `synthesizer.py` | the `pdf_filename` sha256 block in `_make_papers_and_refs` — keep `pdf_url`, which the UI links directly |
+| `search/community.py` | `HuggingFaceSearcher._search_models` and `_MODELS_URL`; `search()` becomes `return self._search_papers(query, k)` |
 
 Keep `_QueryCache` and the module-level `_cache` — `_top_up` reads it.
 
 - [ ] **Step 7: Update the tests that exercised removed code**
 
 - `tests/test_security_framing.py`: delete `test_answer_frames_context`. Coverage is preserved by `test_deep_dive_context_frames_client_content` in the same file, which exercises the live deep-dive path.
-- `tests/test_research_wiring.py`: delete the two tests calling `agent.run(...)` (around lines 295 and 374). `run_streaming` coverage in the same file is unaffected.
+- `tests/test_research_wiring.py`: delete the two tests calling `agent.run(...)` (near lines 295 and 374). `run_streaming` coverage in the same file is unaffected.
 - `tests/contract/test_api_contracts.py`: remove any assertion referencing `/api/paper/` or `DELETE /api/research/cache`.
 
-- [ ] **Step 8: Run the whole suite and the frontend build**
+- [ ] **Step 8: Run the suite and the frontend build**
 
 Run: `.venv/Scripts/python.exe -m pytest tests -q`
 
-Expected: 4 failures, all in `tests/test_news_fetcher.py`. Total passed will be lower than 449 because tests for removed code were deleted — that is expected and correct.
+Expected: 4 failures, all in `tests/test_news_fetcher.py`. The passing total drops below 449 because tests for removed code were deleted — expected and correct.
 
 Run: `cd frontend && npm run build`
 
@@ -2289,21 +1220,21 @@ git commit -m "refactor(research): remove uncalled code, gate comparison call in
 
 ---
 
-### Task 12: Re-measure and compare
+### Task 6: Re-measure and compare
 
 **Files:**
 - Create: `docs/superpowers/plans/assets/2026-08-18-after.json`
 
-- [ ] **Step 1: Run the probe again**
+- [ ] **Step 1: Re-run the probe**
 
-Run:
 ```bash
-.venv/Scripts/python.exe tools/research_probe.py --out docs/superpowers/plans/assets/2026-08-18-after.json
+PYTHONPATH=. PYTHONIOENCODING=utf-8 .venv/Scripts/python.exe tools/research_probe.py --out docs/superpowers/plans/assets/2026-08-18-after.json
 ```
+
+Run this from a shell that stays alive for the full ~10 minutes; the run makes 8 live research calls.
 
 - [ ] **Step 2: Compare against the baseline**
 
-Run:
 ```bash
 PYTHONIOENCODING=utf-8 .venv/Scripts/python.exe -c "
 import json
@@ -2316,22 +1247,28 @@ for k in b:
 
 **Expected direction:**
 
-| Metric | Before | After |
-|---|---|---|
-| `mean_grounded_fraction` | ~0.0 | substantially above 0 |
-| `mean_confidence` | ~0.0 | substantially above 0 |
-| `total_iteration_rounds` | one per run | fewer than one per run |
-| `mean_ctx_chars` | bounded near 7,000 | far larger |
+| Metric | Baseline | Expected after | Why |
+|---|---|---|---|
+| `mean_ctx_chars` | 7,203 | far larger | the budget no longer caps at a Llama3-era constant |
+| `comparison_rows` | 4 on all 8 queries | 0 on 7 of 8 | the call is gated on intent |
+| `mean_grounded_fraction` | 0.396 | **unchanged** | grounding semantics were deliberately untouched |
+| `mean_confidence` | 0.607 | **unchanged** | same |
+| `total_iteration_rounds` | 6 | roughly unchanged | same |
+| `mean_wall_seconds` | 75.2 | may rise | more context, `high` effort on two calls |
 
-`mean_wall_seconds` may rise — sending more context and using `high` reasoning effort on two calls costs time. That is an accepted trade, not a regression.
+**A material move in `mean_grounded_fraction` or `mean_confidence` is a regression signal, not a win.** This plan does not change grounding; if those numbers shift, something changed that should not have. Investigate before proceeding.
 
-- [ ] **Step 3: Report and record**
+Compare per-row `comparison_rows` directly — the 7-of-8 drop is this plan's clearest measurable outcome.
 
-If `mean_grounded_fraction` did **not** rise materially, do not declare the work done. Report the numbers, and investigate whether the model is copying quotes verbatim (check logs for `quote signal unusable`) before making further changes.
+- [ ] **Step 3: Reproduce the baseline's conditions or say so**
 
-Append a short results table to the spec under a new `## 13. Results` section, with the before/after numbers.
+The baseline ran while Weaviate returned 503 and Semantic Scholar failed on every query, so it measured the live-search path only. If those services are reachable this time, the runs are not comparable — record that rather than reporting a difference as if this work caused it.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 4: Record the results**
+
+Append a `## 13. Results` section to the spec with the before/after table and the environment note.
+
+- [ ] **Step 5: Commit**
 
 ```bash
 git add -f docs/superpowers/plans/assets/2026-08-18-after.json docs/superpowers/specs/2026-08-18-research-grounding-and-model-fit-design.md
@@ -2342,26 +1279,17 @@ git commit -m "chore(research): record post-change probe results"
 
 ## Self-Review
 
-**Spec coverage:**
+**Spec coverage (revision 2 scope only):**
 
 | Spec section | Task |
 |---|---|
-| §3.1–3.4 quote verification, batch fallback | 2, 4 |
-| §3.5 unicode tokenizer + 80% anchor guard | 3 |
-| §3.6 quote in SSE, UI display | 5 |
-| §4.1 capability table | 6 |
-| §4.2 context budget | 7 |
-| §4.3 reasoning effort per call site | 8 |
-| §5 structured output + fallback ladder | 8 |
-| §6 rerank unification + `recency_score` epoch fix | 10 |
-| §7 iteration steering | 9 |
-| §8 removals + comparison gating | 11 |
-| §9 probe, baseline, falsification criterion | 1, 12 |
-| §10 testing | every task |
-| §11 sequencing | task order |
+| §4.1 capability table | 1 |
+| §4.2 context budget | 2 |
+| §4.3 reasoning effort per call site | 3 |
+| §5 structured output + fallback ladder | 3 |
+| §6 rerank unification + `recency_score` epoch fix | 4 |
+| §8 removals + comparison gating | 5 |
+| §9 probe and comparison | 6 (baseline already done, commit `df543e1`) |
+| §3, §7 | **withdrawn — no task, by design** |
 
-No spec requirement is unassigned.
-
-**Type consistency:** `Claim.quote` (Task 4) is read in Task 5's SSE payload and Task 9's `all_claims` filter. `ModelCapabilities` (Task 6) is consumed by `budget_for` (Task 7) and `_bound`/`_call_structured` (Task 8). `fuse_scores` keyword names (`recency`, `citation`) match between Task 10's definition and its two call sites. `has_compare_intent` (Task 11) matches its import in `synthesizer.py`.
-
-**Known ordering constraint:** Task 8 changes `extract_claims`'s signature, which Task 4 also touches. Task 4 must land first; the plan's order enforces this.
+**Cross-task consistency after pruning revision 1:** three couplings to the removed grounding work were cut deliberately — `ExtractedClaim` carries no `quote` field, `_attach_grounding` constructs a plain `ClaimAuditor()`, and `follow_up_questions_prompt` keeps its single-argument signature. `ModelCapabilities` (Task 1) is consumed by `budget_for` (Task 2) and `_bound`/`_call_structured` (Task 3). `fuse_scores` keyword names match between Task 4's definition and both call sites. `has_compare_intent` (Task 5) matches its import in `synthesizer.py`.
