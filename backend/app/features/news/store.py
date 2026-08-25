@@ -39,7 +39,7 @@ class _SupabaseNewsStore:
                         kwargs={"row_factory": dict_row, "connect_timeout": 5},
                     )
                     try:
-                        pool.open(wait=True)
+                        pool.open(wait=True, timeout=3.0)
                     except Exception:
                         pool.close()
                         raise

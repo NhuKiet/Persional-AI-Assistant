@@ -546,3 +546,66 @@ The judge answered "insufficient" on 15 of the 16 evaluations run here, across t
 That is a cost question, not a correctness question, and it has a cheap answer available: `RESEARCH_SUFFICIENCY_ENABLED=False` skips the judge, at which point a MAYBE state reuses whatever was retrieved. Deciding between them needs the qualitative comparison that section 13.5 already flags as the outstanding work — whether answers built from stored chunks are actually worse. No metric here answers that.
 
 **Not changed.** Both the threshold and the judge are left exactly as they are. Retuning either on this evidence would be changing behaviour to improve a number that was never the goal.
+
+## 15. Qualitative claim audit (2026-08-25) — section 1.1's withdrawal was wrong
+
+Sections 13.5 and 14.4 both ended on the same unanswered question: are rejected claims rejected correctly or falsely? It has now been answered by reading them.
+
+### 15.1 Method
+
+22 claims across 3 queries, extracted by the live pipeline from real stored sources, each read against the exact source text it cites. Sources came from the knowledge store rather than a live search, and only the grounding step ran — the question is about the auditor, not the rest of the pipeline.
+
+### 15.2 Result
+
+**All 22 claims are genuinely supported by the source they cite.** The auditor accepted 11 and rejected 11.
+
+**Every one of the 11 rejections is a false rejection.** Not a marginal call among them. Representative cases:
+
+| # | Claim (VI) | Cited source says | Score |
+|---|---|---|---|
+| 4 | "MoE có các ứng dụng trong NLP, thị giác máy tính và các hệ thống đa nhiệm." | "…với nhiều ứng dụng trong NLP, thị giác máy tính và hệ thống đa nhiệm." | 0.037 |
+| 5 | "Nên đánh giá liên tục chất lượng phản hồi bằng các bộ dữ liệu kiểm thử thực tế." | "Luôn đánh giá chất lượng phản hồi của hệ thống RAG bằng các bộ dữ liệu kiểm thử thực tế." | **0.000** |
+| 8 | "…mã nguồn mở, hỗ trợ CRUD, kiến trúc phân tán, hỗ trợ bản sao và khả năng mở rộng." | "…open-source availability, CRUD support, distributed architecture, replica support, scalability" | 0.055 |
+| 11 | "Vector database giữ embedding và trả về các đoạn văn bản gần nhất để ứng dụng RAG dùng làm ngữ cảnh." | "A vector database stores embeddings and returns the chunks a RAG app uses as context." | 0.010 |
+
+No false accepts were found: all 11 accepted claims are supported too.
+
+So the verdict is right 11 times and wrong 11 times, and its errors run in one direction only. What the auditor actually measures is not whether a claim is supported — it is whether the claim happens to share surface tokens with its source relative to that source's length.
+
+### 15.3 Two mechanisms, and why neither is fixable by tuning
+
+Case 5 is the clean demonstration. Claim and source are **both Vietnamese** and say nearly the same sentence, and the score is exactly 0.000, because `tokenize` matches `[a-z0-9]+` and Vietnamese words shred into sub-3-character fragments that are then filtered out.
+
+Cases 1-4 add a second, independent mechanism: `lexical_support` is Jaccard, `|A∩B| / |A∪B|`. A 30-token claim compared against a 900-token document has a union dominated by the document, so even a verbatim quotation scores low by construction. Containment, `|A∩B| / |A|`, is the metric the question actually calls for.
+
+Both fixes were measured on these pairs. Neither is sufficient:
+
+| | accepted claims | rejected claims |
+|---|---|---|
+| containment (unicode), min | 0.24 | 0.12 |
+| containment (unicode), median | 0.73 | 0.22 |
+| containment (unicode), max | 0.92 | 0.93 |
+
+A containment threshold of 0.70 would recover 5 of the 11 false rejections — and the two distributions overlap end to end. **No lexical threshold separates these groups, because they are not "supported" and "unsupported" groups.** All 22 are supported. The property that separates them is surface similarity, which is not the property being asked about. A lexical measure cannot answer a semantic question, and no amount of retuning changes that.
+
+### 15.4 Consequence for what users see
+
+`compute_confidence` is `grounded_fraction × source_factor`. On this sample the grounded fraction is 0.50 against a true value of 1.00, so displayed confidence is roughly half what the evidence supports. `derive_limitations` additionally tells the user "N nhận định không tìm được nguồn hỗ trợ trực tiếp" — 11 false warnings in 22 claims. And `out.claims` keeps only grounded claims, so half of a correctly-sourced answer is withheld from the UI.
+
+### 15.5 Section 1.1 was withdrawn on bad evidence
+
+Revision 2 withdrew the grounding work because the baseline probe measured a grounded fraction of 0.396 rather than the predicted ~0.0, and iteration rounds of 6 of 8 rather than 8 of 8. Those numbers were real. The inference from them was not.
+
+**Grounded fraction is computed by the component under test.** A value of 0.396 says 39.6% of claims shared enough tokens to clear the threshold; it says nothing about whether that verdict was right, and it cannot, because the metric and the defect are the same quantity. Falsifying "the auditor is broken" with "the auditor reports a healthy-looking number" is circular, and that is what revision 2 did.
+
+The original section 1.1 reached the right conclusion — grounding does not work for this corpus — via a synthetic measurement whose reasoning was partly wrong (it blamed cross-language token mismatch alone; case 5 shows the failure occurs within Vietnamese too, and cases 1-4 show Jaccard-vs-document-length is a separate cause). Being right for incomplete reasons, then being talked out of it by a metric that cannot detect the failure, produced a worse outcome than either.
+
+### 15.6 What this implies for the withdrawn design
+
+Section 3's quote-anchored verification is the approach this evidence supports, for the reason section 3.1 originally gave: it replaces "does this claim resemble the source" with "did the model copy text that is actually in the source", which is checkable without a lexical similarity judgement. Section 3.4's embedding fallback covers the cross-language cases (6-11) that no lexical method reaches. Section 3.5's unicode tokenizer fixes case 5.
+
+The one part now known to be insufficient on its own is the lexical path retained for claims without a quote — §3.4 kept `is_grounded` as the fallback for same-language claims, and cases 1-4 are same-language failures. That fallback needs containment rather than Jaccard, or it reproduces this defect.
+
+**Sample size:** 22 claims, 3 queries, one corpus. Large enough to establish that the failure exists and is systematic — 11 of 11, no exceptions, two independent mechanisms identified and separately demonstrated — and not large enough to quantify a rate. No rate is claimed.
+
+**Not implemented.** Reinstating withdrawn work is a scope decision for the user, not a conclusion this audit gets to act on by itself.

@@ -54,7 +54,7 @@ class _SupabaseSessionStore:
                         kwargs={"row_factory": dict_row, "connect_timeout": 5},
                     )
                     try:
-                        pool.open(wait=True)
+                        pool.open(wait=True, timeout=3.0)
                     except Exception:
                         # open() failed (e.g. DB unreachable) — this pool's
                         # background reconnect workers must be shut down
