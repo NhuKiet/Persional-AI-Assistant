@@ -486,3 +486,63 @@ Both outside this work's scope. Recorded because they change how the numbers abo
 ### 13.5 Open question, still open
 
 Section 1.1 closed the question of whether grounding is inert — it is not. It did not settle whether rejected claims are rejected *correctly* or *falsely*. That needs a person reading real claims against real sources; no metric in this document answers it, and the A/B above makes it more pointed rather than less, since the two effort settings disagree on roughly a third of claims.
+
+## 14. Knowledge-gate path, measured for the first time (2026-08-25)
+
+Weaviate was restored, so the branch of `_run_core` that had never been observed in any earlier measurement could finally be run. The store held 1,199 chunks accumulated from previous probe runs of these same eight queries — the most favourable corpus this path will ever see.
+
+### 14.1 Gate outcomes
+
+| Decision | Queries |
+|---|---|
+| `top_up` | **7 of 8** |
+| `search` (store empty for that query) | 1 of 8 |
+| `reuse` | **0 of 8** |
+| `degraded` | 0 |
+
+The tier-2 LLM judge ran on six queries and answered "insufficient" on all six.
+
+Wall time rose to 92.6s from 86.4s / 81.6s on the live-search-only runs: the gate adds a retrieval and a judge round-trip per query.
+
+### 14.2 The candidate set is thin, and that is not why reuse fails
+
+`retrieve_candidates` surfaces only 1-5 chunks out of 1,199. The cause is a units mismatch: `HybridFusion.RELATIVE_SCORE` normalises scores *within the returned batch*, so the best hit is 1.0 by construction and the third is already ~0.25, while `KNOWLEDGE_CANDIDATE_THRESHOLD = 0.65` is an absolute cut. An absolute threshold is being applied to a relative score.
+
+Lowering the threshold does widen the candidate set substantially:
+
+| Threshold | Candidates per query |
+|---|---|
+| 0.65 | 1 - 5 |
+| 0.40 | 5 - 14 |
+| 0.25 | 7 - 24 |
+| 0.10 | 15 - 37 |
+
+Tier-1 coverage is 1.00 at every level, so tier 1 was never the constraint. Running the judge directly at both thresholds settles what the extra sources buy:
+
+| | reuse fires |
+|---|---|
+| threshold 0.65 | 0 of 8 |
+| threshold 0.40 | 1 of 8 |
+
+**Tripling the evidence changes almost nothing.** The judge rejects 14 sources for the same reasons it rejects 2. The threshold mismatch is real and worth recording, but it is not the reason reuse never happens, and retuning it would not deliver the reuse path.
+
+### 14.3 What this means — the design is behaving as specified
+
+`_top_up` merges the stored sources with the new search results (`agent.py`: `combined = deduplicate_results(base_sources + extra)`), so stored knowledge feeds the answer on 7 of 8 queries. What never happens is *avoiding a search*.
+
+Measured against the requirements the RAG design (2026-07-25 §2) actually stated:
+
+1. "Shallow answers are the worse failure. Spending extra seconds to verify or supplement beats answering thinly from stale data."
+2. "Partial knowledge is topped up, not discarded."
+
+`top_up` on 7 of 8 queries is requirement 2, exactly. A judge that demands evidence to answer "fully and specifically" before reusing is requirement 1, exactly. **Reuse at 0 of 8 is not a defect; it is the stated preference being honoured.**
+
+The earlier framing in this section's first draft — "the knowledge store costs more than it saves" — measured the right numbers and drew the wrong conclusion from them, by scoring the feature against a goal (cache hits) that its own design document had explicitly rejected in favour of another.
+
+### 14.4 The one question this does leave open
+
+The judge answered "insufficient" on 15 of the 16 evaluations run here, across two very different evidence volumes. A decision procedure whose output barely varies with its input is weak value for a per-query LLM round-trip, whatever its verdict happens to be.
+
+That is a cost question, not a correctness question, and it has a cheap answer available: `RESEARCH_SUFFICIENCY_ENABLED=False` skips the judge, at which point a MAYBE state reuses whatever was retrieved. Deciding between them needs the qualitative comparison that section 13.5 already flags as the outstanding work — whether answers built from stored chunks are actually worse. No metric here answers that.
+
+**Not changed.** Both the threshold and the judge are left exactly as they are. Retuning either on this evidence would be changing behaviour to improve a number that was never the goal.

@@ -66,6 +66,8 @@ def run_one(agent, query: str) -> dict:
     rounds = 0
     output = None
     error = None
+    decision = reason = None
+    stored = fresh = 0
     try:
         # _run_core, not run_streaming: run_streaming is `yield from
         # _run_core(...)`, and a yield-from expression discards the delegated
@@ -80,6 +82,11 @@ def run_one(agent, query: str) -> dict:
                 break
             if event.get("type") == "iteration":
                 rounds += 1
+            if event.get("type") == "knowledge_decision":
+                decision = event.get("decision")
+                reason = event.get("reason")
+                stored = event.get("stored_count")
+                fresh = event.get("fresh_count")
             if event.get("type") == "error":
                 error = event.get("message")
     except Exception as e:  # noqa: BLE001 — a probe must report, not crash
@@ -94,6 +101,12 @@ def run_one(agent, query: str) -> dict:
         "iteration_rounds": rounds,
         "claims_extracted": counters["claims_extracted"],
         "ctx_chars_max": counters["ctx_chars"],
+        # Knowledge-gate outcome. Weaviate was unreachable for every earlier
+        # measurement, so this path had never been observed at all.
+        "gate_decision": decision,
+        "gate_reason": reason,
+        "gate_stored": stored,
+        "gate_fresh": fresh,
     }
     if output is not None:
         row.update(
@@ -140,6 +153,10 @@ def main() -> None:
         "mean_ctx_chars": (
             round(sum(r["ctx_chars_max"] for r in ok) / len(ok)) if ok else None
         ),
+        "gate_decisions": {
+            d: sum(1 for r in ok if r.get("gate_decision") == d)
+            for d in ("search", "reuse", "top_up", "degraded")
+        },
         "mean_wall_seconds": (
             round(sum(r["wall_seconds"] for r in ok) / len(ok), 1) if ok else None
         ),
