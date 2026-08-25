@@ -90,6 +90,28 @@ NO_SUMMARY_FALLBACK = "No summary available."
 _CLAIM_EFFORT = os.environ.get("RESEARCH_CLAIM_EFFORT") or None
 
 
+def embedding_pair_scores(pairs: list[tuple[str, str]]) -> list[float]:
+    """Cosine similarity per (claim_text, cited_source_text) pair.
+
+    Injected into ClaimAuditor as its batch fallback so grounding.py keeps no
+    dependency on embeddings. Returns [] on any failure, at which point the
+    auditor keeps its quote-based verdicts rather than guessing.
+    """
+    if not pairs:
+        return []
+    try:
+        import numpy as np
+        from backend.app.features.research.embeddings import embed_texts
+
+        flat = [t for pair in pairs for t in pair]
+        vecs = np.array(embed_texts(flat))
+        vecs = vecs / (np.linalg.norm(vecs, axis=1, keepdims=True) + 1e-9)
+        return [float(vecs[2 * i] @ vecs[2 * i + 1]) for i in range(len(pairs))]
+    except Exception as e:  # noqa: BLE001
+        logger.warning("embedding_pair_scores failed (non-fatal): %s", e)
+        return []
+
+
 def _content_or_str(content) -> str:
     """Anthropic returns content blocks rather than a plain string."""
     if isinstance(content, str):
@@ -622,7 +644,7 @@ class Synthesizer:
                     p, output_schemas.Claims, _CLAIM_EFFORT,
                 ),
             )
-            claims = ClaimAuditor().verify(claims, sources)
+            claims = ClaimAuditor(fallback_scorer=embedding_pair_scores).verify(claims, sources)
             out.claims      = [c for c in claims if c.grounded]
             out.confidence  = compute_confidence(claims, len(sources))
             out.limitations = derive_limitations(sources, claims)

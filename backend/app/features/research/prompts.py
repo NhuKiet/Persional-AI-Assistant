@@ -153,10 +153,16 @@ def claim_extraction_prompt(query: str, numbered_sources: str) -> str:
         f"Sources:\n{numbered_sources}\n\n"
         f'Return ONLY a JSON array. Each item: '
         f'{{"text": "the claim", "source_id": <source number>, '
+        f'"quote": "the exact sentence from that source", '
         f'"evidence_type": "direct|inference|opinion|uncertain"}}\n'
         f"Use the source number that best supports each claim. Do not invent a "
-        f"claim that isn't actually stated in the numbered sources.\n\n"
-        f"Write the \"text\" field following this rule:\n"
+        f"claim that isn't actually stated in the numbered sources.\n"
+        f"The \"quote\" field must be COPIED VERBATIM out of the numbered source "
+        f"you cite — same wording, same language as that source, not translated, "
+        f"not paraphrased, not shortened below one full sentence. It is checked "
+        f"against the source text, and a claim whose quote is not found there is "
+        f"discarded.\n\n"
+        f"Write the \"text\" field — and ONLY that field — following this rule:\n"
         f"{_footer(LANGUAGE_RULE)}"
     )
 

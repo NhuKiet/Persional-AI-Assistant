@@ -75,6 +75,10 @@ for q in QUERIES:
         rows.append({
             "query": q,
             "claim": c.text,
+            "quote": c.quote,
+            "quote_support": round(
+                max((g.quote_support(c.quote, s2.content) for s2 in cited), default=0.0), 4
+            ),
             "grounded": c.grounded,
             "evidence_type": c.evidence_type,
             "support_cited": round(best_sup, 4),

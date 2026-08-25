@@ -63,9 +63,16 @@ class FollowUps(BaseModel):
 
 
 class ExtractedClaim(BaseModel):
-    """Mirrors exactly what extract_claims already reads from the text path."""
     text:          str
     source_id:     int
+    quote:         str = Field(
+        default="",
+        description=(
+            "The sentence from the cited source that supports this claim, "
+            "copied VERBATIM in the source's own language. Checked against "
+            "the source text."
+        ),
+    )
     evidence_type: str = Field(description="one of: direct, inference, opinion, uncertain")
 
 

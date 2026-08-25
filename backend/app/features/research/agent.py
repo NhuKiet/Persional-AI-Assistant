@@ -652,6 +652,7 @@ class ResearchAgent:
                     "claims": [
                         {
                             "text":          c.text,
+                            "quote":         c.quote,
                             "source_ids":    c.source_ids,
                             "evidence_type": c.evidence_type,
                         }

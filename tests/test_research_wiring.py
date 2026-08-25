@@ -68,8 +68,11 @@ def test_run_streaming_done_includes_grounding_keys(monkeypatch):
     done = [e for e in events if e.get("type") == "done"]
     assert done, f"no done event; events={events}"
     assert {"claims", "confidence", "limitations"} <= set(done[0]["data"])
+    # `quote` carries the excerpt the model copied out of the cited source, so
+    # the UI can show the evidence under each claim rather than asking the
+    # reader to take the citation on trust.
     assert done[0]["data"]["claims"] == [
-        {"text": "c", "source_ids": ["x"], "evidence_type": "uncertain"}
+        {"text": "c", "quote": "", "source_ids": ["x"], "evidence_type": "uncertain"}
     ]
     assert done[0]["data"]["confidence"] == 0.5
     assert done[0]["data"]["limitations"] == ["ít nguồn"]

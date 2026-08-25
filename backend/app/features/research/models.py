@@ -23,6 +23,10 @@ class Claim:
     source_ids: list[str]
     evidence_type: str = "uncertain"   # "direct" | "inference" | "opinion" | "uncertain"
     grounded: bool = True
+    # Verbatim excerpt copied out of the cited source, in that source's own
+    # language. Verification checks this against the source instead of judging
+    # how similar the Vietnamese `text` looks to it.
+    quote: str = ""
 
 
 @dataclass
