@@ -1,4 +1,6 @@
 import asyncio
+from datetime import datetime, timedelta, timezone
+from email.utils import format_datetime
 
 import httpx
 import pytest
@@ -25,6 +27,18 @@ def _feed(items: list[dict]) -> bytes:
     return _RSS_TEMPLATE.format(items=body).encode()
 
 
+def _recent_pubdate(days_ago: int = 1) -> str:
+    """An RFC-2822 date `days_ago` days old, computed at run time.
+
+    These tests used to hardcode "Mon, 27 Jul 2026 10:00:00 GMT". That sat
+    inside NEWS_MAX_ITEM_AGE_DAYS (14) when they were written and outside it a
+    fortnight later, at which point `fetch_all_sources` dropped every fixture
+    item and four tests started failing for a reason unrelated to what they
+    were testing. A fixture that expires is a test that lies about the code.
+    """
+    return format_datetime(datetime.now(timezone.utc) - timedelta(days=days_ago))
+
+
 def _mock_transport(handler):
     return httpx.MockTransport(handler)
 
@@ -41,7 +55,7 @@ def _small_source_list(monkeypatch):
 def test_one_slow_source_does_not_block_others(monkeypatch):
     good_feed = _feed([{
         "title": "Fast item", "link": "https://a.example/1",
-        "description": "desc", "pubdate": "Mon, 27 Jul 2026 10:00:00 GMT",
+        "description": "desc", "pubdate": _recent_pubdate(),
     }])
 
     async def handler(request: httpx.Request) -> httpx.Response:
@@ -94,7 +108,7 @@ def test_items_older_than_max_age_are_dropped(monkeypatch):
         "description": "d", "pubdate": "Mon, 01 Jan 2001 00:00:00 GMT",
     }, {
         "title": "New", "link": "https://a.example/new",
-        "description": "d", "pubdate": "Mon, 27 Jul 2026 10:00:00 GMT",
+        "description": "d", "pubdate": _recent_pubdate(),
     }])
 
     async def handler(request: httpx.Request) -> httpx.Response:
@@ -110,7 +124,7 @@ def test_items_older_than_max_age_are_dropped(monkeypatch):
 def test_per_feed_item_cap_is_enforced(monkeypatch):
     monkeypatch.setattr(settings, "NEWS_MAX_ITEMS_PER_FEED", 2)
     many_feed = _feed([
-        {"title": f"Item {n}", "link": f"https://a.example/{n}", "description": "d", "pubdate": "Mon, 27 Jul 2026 10:00:00 GMT"}
+        {"title": f"Item {n}", "link": f"https://a.example/{n}", "description": "d", "pubdate": _recent_pubdate()}
         for n in range(5)
     ])
 
@@ -143,7 +157,7 @@ def test_entries_missing_a_link_are_skipped(monkeypatch):
 def test_fetched_items_carry_source_and_topic_and_unsummarized_vi_fields(monkeypatch):
     feed = _feed([{
         "title": "Some Title", "link": "https://a.example/1",
-        "description": "Some description", "pubdate": "Mon, 27 Jul 2026 10:00:00 GMT",
+        "description": "Some description", "pubdate": _recent_pubdate(),
     }])
 
     async def handler(request: httpx.Request) -> httpx.Response:

@@ -120,10 +120,18 @@ def _number_forms(value: float) -> set[str]:
     """String forms a model might have written for `value`.
 
     40.0 is written "40", not "40.0"; 79.5 may appear as "79.5" or "79,5".
+
+    Deliberately not `f"{value:g}"`: that switches to scientific notation above
+    about 1e6, so a genuine "2500000" in the quote would never match the value
+    being plotted. Large counts (parameters, downloads, tokens) are exactly the
+    figures a research chart carries.
     """
-    forms = {f"{value:g}"}
+    forms: set[str] = set()
     if float(value).is_integer():
         forms.add(str(int(value)))
+    else:
+        # Trim trailing zeros without ever reaching exponent form.
+        forms.add(f"{value:.6f}".rstrip("0").rstrip("."))
     return forms | {f.replace(".", ",") for f in forms}
 
 
@@ -407,11 +415,21 @@ class Synthesizer:
         if len(sources) < 2:
             return
 
-        src_text = "\n".join(
-            f"{i+1}. [{s.source}] {s.title}: "
-            f"{frame_untrusted(s.content[:self.budget.per_source_chars].replace(chr(10), ' '))}"
-            for i, s in enumerate(sources)
-        )
+        # Per-source truncation alone only stays inside the budget while
+        # callers pass <= _RERANK_TOP_K sources (per_source_chars is
+        # max_chars // 15). Cap the total too, so raising top_k somewhere else
+        # cannot silently push this prompt past the model's window.
+        parts, total = [], 0
+        for i, s in enumerate(sources):
+            chunk = (
+                f"{i+1}. [{s.source}] {s.title}: "
+                f"{frame_untrusted(s.content[:self.budget.per_source_chars].replace(chr(10), ' '))}"
+            )
+            if total + len(chunk) > self.budget.max_chars:
+                break
+            parts.append(chunk)
+            total += len(chunk)
+        src_text = "\n".join(parts)
 
         parsed = self._call_structured(
             prompts.comparison_table_prompt(query, src_text),

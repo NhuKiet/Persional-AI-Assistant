@@ -75,3 +75,61 @@ def test_fuse_scores_five_signal_without_reranker():
 
 def test_fuse_scores_monotonic_in_rerank():
     assert rr.fuse_scores([0.9], [0.5], [0.5])[0] > rr.fuse_scores([0.1], [0.5], [0.5])[0]
+
+
+# ── Regression: the reranker that loaded but could not score ─────────────────
+# FlagEmbedding 1.4.0 called `prepare_for_model`, removed from transformers 5.x
+# slow tokenizers. The model loaded fine, so every health signal looked green,
+# and only `compute_score` raised — swallowed as "fall back to credibility".
+# Cross-encoder reranking was therefore dead for an unknown period with no
+# symptom. These pin the two behaviours that let that hide.
+
+def test_bge_scores_returns_none_instead_of_raising(monkeypatch):
+    """A scoring failure must degrade, never propagate into the pipeline."""
+    import types
+
+    monkeypatch.setattr(rr, "_bge_reranker", lambda: types.SimpleNamespace(
+        predict=_raise_runtime_error
+    ))
+    assert rr._bge_scores("q", ["d1", "d2"]) is None
+
+
+def _raise_runtime_error(pairs):
+    raise RuntimeError("XLMRobertaTokenizer has no attribute prepare_for_model")
+
+
+def test_selfcheck_reports_a_model_that_loads_but_cannot_score(monkeypatch):
+    """Loading is not evidence of working — the exact shape of the outage."""
+    import types
+
+    monkeypatch.setattr(rr, "_bge_reranker", lambda: types.SimpleNamespace(
+        predict=_raise_runtime_error
+    ))
+    problem = rr.reranker_selfcheck()
+    assert problem is not None
+    assert "prepare_for_model" in problem
+
+
+def test_selfcheck_passes_on_a_working_reranker(monkeypatch):
+    import types
+
+    monkeypatch.setattr(rr, "_bge_reranker", lambda: types.SimpleNamespace(
+        predict=lambda pairs: [0.5] * len(pairs)
+    ))
+    assert rr.reranker_selfcheck() is None
+
+
+def test_selfcheck_reports_a_missing_model(monkeypatch):
+    monkeypatch.setattr(rr, "_bge_reranker", lambda: None)
+    assert rr.reranker_selfcheck() == "reranker model unavailable"
+
+
+def test_bge_scores_are_clamped_into_unit_range(monkeypatch):
+    """fuse_scores weights assume [0, 1]; a stray value outside it would let
+    one document outrank every other regardless of the other signals."""
+    import types
+
+    monkeypatch.setattr(rr, "_bge_reranker", lambda: types.SimpleNamespace(
+        predict=lambda pairs: [1.4, -0.3, 0.62]
+    ))
+    assert rr._bge_scores("q", ["a", "b", "c"]) == [1.0, 0.0, 0.62]

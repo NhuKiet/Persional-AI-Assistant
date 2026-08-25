@@ -41,8 +41,20 @@ async def lifespan(app: FastAPI):
     # của user gánh việc tải model đó (từng khiến research "bị treo" hàng
     # phút sau mỗi lần restart container/cache trống).
     def _warm_reranker():
-        from backend.app.features.research.reranker import _bge_reranker
-        _bge_reranker()
+        from backend.app.features.research.reranker import reranker_selfcheck
+        # Self-check, not just load: the reranker spent an unknown period
+        # loading fine and failing at scoring time, which the caller swallows
+        # as "fall back to credibility". Silent permanent degradation of the
+        # main ranking signal is worth one log line at ERROR on boot.
+        problem = reranker_selfcheck()
+        if problem:
+            logger.error(
+                "Cross-encoder reranking is NOT working (%s) — research will "
+                "rank by credibility only. Check RERANKER_MODEL, the "
+                "sentence-transformers/transformers versions, or set "
+                "COHERE_API_KEY to use the hosted reranker instead.",
+                problem,
+            )
 
     threading.Thread(target=_warm_reranker, daemon=True).start()
 

@@ -109,7 +109,7 @@ def test_search_shares_single_bge_singleton(monkeypatch):
 
     monkeypatch.setattr(rr.settings, "COHERE_API_KEY", None, raising=False)
     monkeypatch.setattr(rr, "_bge_reranker", lambda: types.SimpleNamespace(
-        compute_score=lambda pairs, normalize=True: [0.42] * len(pairs)
+        predict=lambda pairs: [0.42] * len(pairs)
     ))
 
     assert rr.cross_encoder_scores("q", ["d"]) == [0.42]  # đi qua đúng nguồn duy nhất

@@ -61,3 +61,26 @@ def test_budget_for_small_context_model_stays_small():
 def test_budget_per_source_never_degenerates():
     b = budget_for(ModelCapabilities(1024, False, True))
     assert b.per_source_chars >= 200
+
+
+def test_temperature_is_omitted_for_models_that_reject_it(monkeypatch):
+    """supports_temperature must actually gate the parameter, not just be
+    stored — otherwise the table documents a rule nothing enforces."""
+    captured = {}
+
+    class _FakeChatOpenAI:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+    import sys, types as _t
+    fake = _t.ModuleType("langchain_openai")
+    fake.ChatOpenAI = _FakeChatOpenAI
+    monkeypatch.setitem(sys.modules, "langchain_openai", fake)
+    monkeypatch.setattr(llm_mod.settings, "OPENAI_API_KEY", "sk-test")
+
+    llm_mod.get_llm("openai", "gpt-5.6-luna", temperature=0.1)
+    assert "temperature" not in captured
+
+    captured.clear()
+    llm_mod.get_llm("openai", "gpt-4o-mini", temperature=0.1)
+    assert captured["temperature"] == 0.1

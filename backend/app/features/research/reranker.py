@@ -35,7 +35,16 @@ _bge_tried = False
 
 
 def _bge_reranker():
-    """FlagReranker instance hoặc None. Chỉ thử load MỘT lần (tránh retry storm)."""
+    """CrossEncoder instance hoặc None. Chỉ thử load MỘT lần (tránh retry storm).
+
+    Dùng sentence-transformers thay vì FlagEmbedding: FlagEmbedding 1.4.0 gọi
+    `prepare_for_model`, thứ transformers 5.x đã bỏ khỏi API tokenizer chậm.
+    Model vẫn LOAD được, nên `_bge_reranker()` trả về một object trông bình
+    thường — chỉ `compute_score` mới ném lỗi, và lỗi đó bị nuốt thành
+    "fallback về credibility". Kết quả: rerank bằng cross-encoder chưa từng
+    chạy lần nào mà không ai biết. CrossEncoder nạp đúng model đó qua đường
+    tokenizer nhanh.
+    """
     global _bge, _bge_tried
     if _bge is not None or _bge_tried:
         return _bge
@@ -45,15 +54,38 @@ def _bge_reranker():
         _bge_tried = True
         try:
             import torch
-            from FlagEmbedding import FlagReranker
+            from sentence_transformers import CrossEncoder
             use_cuda = torch.cuda.is_available()
             logger.info("Loading reranker: %s (GPU=%s)", settings.RERANKER_MODEL, use_cuda)
-            _bge = FlagReranker(settings.RERANKER_MODEL, use_fp16=use_cuda, use_cuda=use_cuda)
+            _bge = CrossEncoder(
+                settings.RERANKER_MODEL,
+                max_length=512,
+                device="cuda" if use_cuda else "cpu",
+            )
             logger.info("Reranker loaded on %s", "GPU" if use_cuda else "CPU")
         except Exception as e:
             logger.warning("BGE reranker load failed (non-fatal): %s", e)
             _bge = None
     return _bge
+
+
+def reranker_selfcheck() -> str | None:
+    """Chấm thử một cặp để biết đường rerank có THỰC SỰ chạy không.
+
+    Trả None nếu ổn, chuỗi mô tả lỗi nếu không. Tồn tại vì việc chỉ load model
+    lúc khởi động không đủ: lần hỏng vừa rồi load thành công và chỉ chết ở bước
+    chấm điểm, nên hệ thống âm thầm chạy bằng credibility scoring vô thời hạn.
+    Một cặp thật ở lúc boot biến hỏng-âm-thầm thành hỏng-có-tiếng.
+    """
+    model = _bge_reranker()
+    if model is None:
+        return "reranker model unavailable"
+    try:
+        scores = model.predict([("healthcheck query", "healthcheck document")])
+        float(scores[0])
+        return None
+    except Exception as e:  # noqa: BLE001
+        return f"{type(e).__name__}: {e}"
 
 
 # ── Backends ─────────────────────────────────────────────────────────────────
@@ -89,10 +121,13 @@ def _bge_scores(query: str, docs: list[str]) -> list[float] | None:
     if model is None:
         return None
     try:
-        raw = model.compute_score([(query, d) for d in docs], normalize=True)
+        raw = model.predict([(query, d) for d in docs])
         if isinstance(raw, (int, float)):
             raw = [raw]
-        return [float(x) for x in raw]
+        # CrossEncoder already applies sigmoid for single-logit models, so
+        # these are relevance probabilities in [0, 1] — squashing them again
+        # would flatten every score toward 0.5 and destroy the ranking.
+        return [min(1.0, max(0.0, float(x))) for x in raw]
     except Exception as e:
         logger.warning("BGE rerank failed (non-fatal): %s", e)
         return None

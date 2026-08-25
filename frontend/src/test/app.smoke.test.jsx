@@ -47,6 +47,11 @@ async function openTool(titleRe) {
   return user;
 }
 
+// Các smoke test dưới đây khẳng định landing ĐÃ render, không khẳng định nó
+// nói câu gì. Trước đây chúng khớp chính xác chuỗi "hội tụ thành trợ lý";
+// bản redesign landing đổi headline và cả năm test đỏ cùng lúc, dù ứng dụng
+// vẫn chạy đúng. Một smoke test gắn vào câu chữ marketing sẽ hỏng mỗi lần
+// marketing đổi ý, nên ở đây kiểm h1 theo role thay vì theo nội dung.
 describe("Trang chủ (\"/\") — landing, không phải chat", () => {
   // Landing giờ là hero "Capability Reactor" (canvas 3D + nav); không còn ô
   // nhập chat hay bảng 6 công cụ trực tiếp trên "/" — lối vào duy nhất là CTA
@@ -55,7 +60,7 @@ describe("Trang chủ (\"/\") — landing, không phải chat", () => {
   it("hiện headline và CTA vào trợ lý", async () => {
     render(<App />);
     expect(await screen.findByRole("button", { name: /Mở trợ lý/i })).toBeInTheDocument();
-    expect(await screen.findByText(/hội tụ thành trợ lý/i)).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1 })).toBeInTheDocument();
   });
 
   it("bấm CTA điều hướng sang /chat", async () => {
@@ -90,7 +95,7 @@ describe("Trang chat (/chat)", () => {
     const user = userEvent.setup();
     render(<App />);
     await user.click(await screen.findByRole("button", { name: /Trang chủ/i }));
-    expect(await screen.findByText(/hội tụ thành trợ lý/i)).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1 })).toBeInTheDocument();
     expect(window.location.pathname).toBe("/");
   });
 });
@@ -121,7 +126,7 @@ describe("điều hướng sang từng tool", () => {
   it("quay lại trang chủ từ một tool có route riêng (Research)", async () => {
     const user = await openTool(TOOL_TITLE.research);
     await user.click(await screen.findByRole("button", { name: /Trang chủ/i }));
-    expect(await screen.findByText(/hội tụ thành trợ lý/i)).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1 })).toBeInTheDocument();
     expect(window.location.pathname).toBe("/");
   });
 
@@ -131,7 +136,7 @@ describe("điều hướng sang từng tool", () => {
   it("quay lại trang chủ từ một tool dùng route chung (/tool/:id)", async () => {
     const user = await openTool(TOOL_TITLE.homework);
     await user.click(await screen.findByRole("button", { name: /Trang chủ/i }));
-    expect(await screen.findByText(/hội tụ thành trợ lý/i)).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1 })).toBeInTheDocument();
     expect(window.location.pathname).toBe("/");
   });
 });
@@ -163,7 +168,7 @@ describe("routing — mỗi tool có URL riêng nên F5 không rơi về home", 
   it("URL lạ thì đưa về home", async () => {
     window.history.pushState({}, "", "/khong-ton-tai");
     render(<App />);
-    expect(await screen.findByText(/hội tụ thành trợ lý/i)).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1 })).toBeInTheDocument();
     expect(window.location.pathname).toBe("/");
   });
 });

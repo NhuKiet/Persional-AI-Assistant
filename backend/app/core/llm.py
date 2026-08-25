@@ -130,13 +130,23 @@ def get_llm(
         raise ValueError(f"Provider không hỗ trợ: {provider!r}")
     model = _resolve_model(provider, model)
 
+    # Reasoning models reject any temperature other than 1.0. langchain
+    # currently drops the value silently for those, which works but leaves
+    # MODEL_CAPABILITIES.supports_temperature describing a rule nothing
+    # enforces — so the day a provider starts erroring instead of ignoring,
+    # the table would already say the right thing and change nothing. Omit
+    # the parameter here instead of relying on someone else to discard it.
+    temp_kwargs: dict = {}
+    if capabilities_for(provider, model).supports_temperature:
+        temp_kwargs["temperature"] = temperature
+
     if provider == "ollama":
         from langchain_ollama import ChatOllama
         return ChatOllama(
             model=model,
             base_url=settings.OLLAMA_URL,
-            temperature=temperature,
             num_gpu=settings.LLM_NUM_GPU,
+            **temp_kwargs,
         )
 
     if provider == "anthropic":
@@ -146,7 +156,7 @@ def get_llm(
         return ChatAnthropic(
             model=model,
             api_key=settings.ANTHROPIC_API_KEY,
-            temperature=temperature,
+            **temp_kwargs,
         )
 
     if not settings.OPENAI_API_KEY:
@@ -156,7 +166,7 @@ def get_llm(
         model=model,
         api_key=settings.OPENAI_API_KEY,
         base_url=settings.OPENAI_BASE_URL,
-        temperature=temperature,
+        **temp_kwargs,
     )
 
 

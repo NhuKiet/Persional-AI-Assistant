@@ -84,16 +84,20 @@ def get_dynamic_k(query: str) -> dict[str, int]:
 # "devs"` is True, and a question about what devs are building is not a
 # comparison request. The Vietnamese entries are multi-word phrases, which
 # cannot collide the same way, so plain containment is right for them.
+# "between" is deliberately absent. On its own it is not a comparison
+# request — "the relationship between attention and memory" asks for a
+# mechanism, not a table — and the phrasing that does want one ("difference
+# between X and Y") is already caught by "difference".
 _COMPARE_WORDS = (
-    "vs", "versus", "compare", "comparison", "difference", "differences", "between",
+    "vs", "versus", "compare", "comparison", "difference", "differences",
 )
 _COMPARE_PHRASES = (
     "so sánh", "khác nhau", "khác gì", "ở điểm nào",
 )
 
-_COMPARE_WORD_RE = re.compile(
-    r"\b(?:" + "|".join(_COMPARE_WORDS) + r")\b", re.IGNORECASE
-)
+# No re.IGNORECASE: has_compare_intent lowercases the query before matching,
+# so the flag would only invite the two to drift apart.
+_COMPARE_WORD_RE = re.compile(r"\b(?:" + "|".join(_COMPARE_WORDS) + r")\b")
 
 
 def has_compare_intent(query: str) -> bool:
