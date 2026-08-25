@@ -1,8 +1,18 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
-import { vi } from "vitest";
+import { beforeEach, vi } from "vitest";
 import { AppRoutes } from "../App";
+
+// HomePage's idle view (rendered by several tests below) now mounts
+// TimeWeatherWidget, which calls fetch() once on mount (Open-Meteo). Give
+// every test in this file a harmless default response so none of them hit
+// the real network; tests that need a specific fetch behavior (see
+// mockPdfUpload below) call vi.stubGlobal("fetch", ...) again afterward,
+// which overrides this default for that test.
+beforeEach(() => {
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({}), { status: 200 })));
+});
 
 function mockPdfUpload() {
   vi.stubGlobal("fetch", vi.fn(async (input, init) => {
@@ -42,6 +52,7 @@ test.each([
   ["/coding", /Coding/i],
   ["/pdf", /PDF/i],
   ["/tool/homework", /Bài tập/i],
+  ["/news", /News/],
 ])("keeps public route %s renderable", async (path, expectedContent) => {
   render(
     <MemoryRouter initialEntries={[path]}>

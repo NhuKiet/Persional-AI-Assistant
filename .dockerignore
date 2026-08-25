@@ -15,8 +15,20 @@ requirements.txt
 # Dữ liệu runtime — mount qua volume, đừng bake vào image
 data/
 
+# Worktrees, cache & dev tools
+.worktrees/
+.pytest_cache/
+**/.pytest_cache/
+.superpowers/
+.claude/
+.agents/
+.vscode/
+node_modules/
+**/node_modules/
+
 # Frontend build riêng bằng frontend/Dockerfile, backend image không cần
 frontend/
 docs/
 tests/
 *.md
+

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import ModelPicker from "../components/ModelPicker";
+import TimeWeatherWidget from "../components/TimeWeatherWidget";
 import mainlogo from "../assets/mainlogo.png";
 import { AppShell } from "../components/AppShell";
 import { InputBar } from "../components/InputBar";
@@ -116,6 +117,8 @@ export function HomePage() {
               </div>
             </div>
           )}
+
+          {!chatActive && <TimeWeatherWidget />}
 
           {/* Idle */}
           {!chatActive && (

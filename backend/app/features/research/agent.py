@@ -7,6 +7,7 @@ from concurrent.futures import TimeoutError as FutureTimeoutError
 from typing import Generator
 
 from backend.app.core.config import settings
+from backend.app.features.research.grounding import filter_by_anchor_relevance
 from backend.app.features.research.iteration import needs_iteration, gap_query
 from backend.app.features.research.models import ResearchOutput, SearchResult
 from backend.app.features.research import sufficiency
@@ -227,15 +228,26 @@ class ResearchAgent:
         query:      str,
         raw_results: list[SearchResult],
         top_k:      int = 15,
+        anchor:     str | None = None,
     ) -> list[SearchResult]:
         """
         Post-search pipeline:
+        0. Drop results with no anchor-token overlap (retrieval contamination)
         1. Enrich web results with trafilatura
         2. Deduplicate
         3. Rerank (BGE + credibility)
+
+        `anchor` is the query to sanity-check topical relevance against —
+        defaults to `query`, but callers driving this off an LLM-expanded or
+        gap-filling query (noisy by construction) should pass the real,
+        clean user query instead, since filtering against the noisy text
+        itself would just rubber-stamp its own contamination.
         """
+        # Step 0: drop off-topic results before spending enrich/rerank work on them
+        relevant = filter_by_anchor_relevance(anchor or query, raw_results, label=query[:40])
+
         # Step 1: Enrich web results
-        enriched = _enrich_web_results(raw_results)
+        enriched = _enrich_web_results(relevant)
 
         # Step 2: Deduplicate
         deduped = deduplicate_results(enriched, threshold=0.92)
@@ -244,8 +256,8 @@ class ResearchAgent:
         reranked = rerank_results(query, deduped, top_k=top_k)
 
         logger.info(
-            "Pipeline: %d raw → %d enriched → %d deduped → %d reranked",
-            len(raw_results), len(enriched), len(deduped), len(reranked),
+            "Pipeline: %d raw → %d relevant → %d enriched → %d deduped → %d reranked",
+            len(raw_results), len(relevant), len(enriched), len(deduped), len(reranked),
         )
         return reranked
 
@@ -262,7 +274,7 @@ class ResearchAgent:
         base_ids = {s.id for s in base_sources}
         try:
             extra_raw = self._search_all(gap_query)
-            extra     = self._process_pipeline(gap_query, extra_raw)
+            extra     = self._process_pipeline(gap_query, extra_raw, anchor=query)
         except Exception as e:  # noqa: BLE001 — non-fatal, giữ nguyên nguồn cũ
             logger.warning("[TOP-UP] search failed (non-fatal): %s", e)
             return base_sources, []
@@ -273,6 +285,18 @@ class ResearchAgent:
         logger.info("[TOP-UP] %d base + %d extra → %d merged, %d new",
                     len(base_sources), len(extra), len(merged), len(newly))
         return merged, newly
+
+    def _store_sources(self, knowledge, query: str, sources: list) -> None:
+        """Ghi nguồn mới vào knowledge store. Non-fatal — lưu hỏng thì câu
+        trả lời vẫn trả về bình thường, chỉ lần hỏi sau không tận dụng được.
+        """
+        if not sources:
+            return
+        try:
+            n = knowledge.add_results(query, sources)
+            logger.info("[KNOWLEDGE] STORED: %d chunks from %d new sources", n, len(sources))
+        except Exception as e:  # noqa: BLE001
+            logger.warning("[KNOWLEDGE] STORE failed (non-fatal): %s", e)
 
     def _iteration_step(self, query, sources, output, synth):
         """Một vòng search bù nhắm vào khoảng trống grounding.
@@ -291,31 +315,6 @@ class ResearchAgent:
             return None
 
     # ── Public API ───────────────────────────────────────────────────────────
-
-    def run(self, query: str) -> ResearchOutput:
-        """Đường đồng bộ, không SSE. Chỉ là một cách drain `_run_core` —
-        dùng CHUNG quyết định 3 tầng (EMPTY/STALE/THIN/MAYBE + judge +
-        top-up) và persistence với `run_streaming`, thay vì có logic riêng.
-
-        Trước đây `run()` tự gọi thẳng `retrieve()` (bỏ qua freshness/
-        coverage) và không lưu gì sau khi search live — hai API cho hai
-        quyết định khác nhau với cùng một câu hỏi. Giờ cả hai đi qua đúng
-        một chỗ.
-        """
-        core = self._run_core(query, provider=None, model=None, cancel_event=None, history=None)
-        error_message = None
-        output: ResearchOutput | None = None
-        try:
-            while True:
-                event = next(core)
-                if event.get("type") == "error":
-                    error_message = event.get("message")
-        except StopIteration as stop:
-            output = stop.value
-
-        if output is None:
-            raise RuntimeError(error_message or f"Research failed for query: {query!r}")
-        return output
 
     def run_streaming(
         self, query: str, provider: str | None = None, model: str | None = None,
@@ -343,8 +342,10 @@ class ResearchAgent:
             logger.info("[QUERY] %s", query)
 
             if provider or model:
-                from backend.app.core.llm import get_llm
-                synth = Synthesizer(get_llm(provider, model))
+                from backend.app.core.llm import capabilities_for, get_llm
+                synth = Synthesizer(
+                    get_llm(provider, model), capabilities_for(provider, model),
+                )
             else:
                 synth = self.synth
 
@@ -411,6 +412,7 @@ class ResearchAgent:
                     yield {"type": "status", "message": "Bổ sung nguồn còn thiếu…",
                            "source": "knowledge"}
                     all_sources, newly = self._top_up(query, fresh, gap)
+                    yield {"type": "source_done", "source": "knowledge", "count": len(newly)}
                     newly_fetched.extend(newly)
                     if newly:
                         decision = "top_up"
@@ -442,13 +444,6 @@ class ResearchAgent:
                 # expansion actually reflects what they picked in the UI
                 # rather than only settings.DEFAULT_PROVIDER.
                 yield {"type": "status", "message": "Expanding query…", "source": "llm"}
-                expansions = expand_query(query, provider=provider, model=model)
-                if len(expansions) > 1:
-                    yield {
-                        "type":    "status",
-                        "message": f"Generated {len(expansions) - 1} query expansion(s)",
-                        "source":  "llm",
-                    }
 
                 dynamic_k = get_dynamic_k(query)
 
@@ -463,14 +458,37 @@ class ResearchAgent:
                 futures: dict = {}
                 ex = ThreadPoolExecutor(max_workers=10)
                 cancelled_mid_search = False
+                expansions = [query]
                 try:
+                    # Expansion is an LLM round-trip, but only the *extra*
+                    # academic queries depend on it — the searches for the
+                    # user's own query don't. Kick those off first so the
+                    # expansion call overlaps them instead of delaying every
+                    # source by a full LLM latency.
+                    exp_future = ex.submit(expand_query, query, provider=provider, model=model)
+
                     for name, attr, _ in _SOURCES:
                         k = dynamic_k.get(name, 4)
                         futures[ex.submit(
                             getattr(getattr(self, attr), "search"), query, k
                         )] = name
+
+                    try:
+                        expansions = exp_future.result()
+                    except Exception as e:  # noqa: BLE001 — expansion is nice-to-have
+                        logger.warning("[SEARCH] query expansion failed (non-fatal): %s", e)
+
+                    if len(expansions) > 1:
+                        yield {
+                            "type":    "status",
+                            "message": f"Generated {len(expansions) - 1} query expansion(s)",
+                            "source":  "llm",
+                        }
                         # Expansions for academic sources
-                        if len(expansions) > 1 and name in ("arxiv", "semantic"):
+                        for name, attr, _ in _SOURCES:
+                            if name not in ("arxiv", "semantic"):
+                                continue
+                            k = dynamic_k.get(name, 4)
                             for eq in expansions[1:]:
                                 futures[ex.submit(
                                     getattr(getattr(self, attr), "search"), eq, max(2, k // 2)
@@ -523,8 +541,16 @@ class ResearchAgent:
                 _cache.set(query, raw_results)
 
                 # ── Post-processing pipeline ──────────────────────────────────
+                # Anchored to `query` (the clean, contextualized user query) —
+                # NOT the LLM-generated expansion queries that fired some of
+                # these searches, since those are exactly the noisy text that
+                # produces off-topic matches in the first place (e.g. arXiv
+                # matching an unrelated paper purely because both titles
+                # contain the generic phrase "A Comparative Study of…").
+                relevant_results = filter_by_anchor_relevance(query, raw_results)
+
                 yield {"type": "status", "message": "Enriching web content…", "source": "web"}
-                enriched = _enrich_web_results(raw_results)
+                enriched = _enrich_web_results(relevant_results)
 
                 yield {"type": "status", "message": "Deduplicating results…", "source": "pipeline"}
                 deduped = deduplicate_results(enriched, threshold=0.92)
@@ -534,8 +560,8 @@ class ResearchAgent:
                 newly_fetched.extend(all_sources)
 
                 logger.info(
-                    "[PIPELINE] %d raw → %d enriched → %d deduped → %d reranked (%.1fs)",
-                    len(raw_results), len(enriched), len(deduped),
+                    "[PIPELINE] %d raw → %d relevant → %d enriched → %d deduped → %d reranked (%.1fs)",
+                    len(raw_results), len(relevant_results), len(enriched), len(deduped),
                     len(all_sources), time.time() - t0,
                 )
 
@@ -545,6 +571,17 @@ class ResearchAgent:
                 return
 
             yield {"type": "synthesizing", "message": "Synthesizing with AI…", "source": "llm"}
+
+            # Embedding + writing the new sources doesn't feed synthesis — it
+            # only pays off for *future* queries. Start it now so it runs under
+            # the LLM calls below instead of making the user wait for it after
+            # their answer is already finished. Joined before "done" is
+            # emitted, so a run still ends with its sources persisted.
+            dispatched  = len(newly_fetched)
+            store_future = (
+                self._pool.submit(self._store_sources, knowledge, query, list(newly_fetched))
+                if newly_fetched else None
+            )
 
             if rag_path:
                 output = synth.synthesize_rag_grounded(query, all_sources)
@@ -584,18 +621,20 @@ class ResearchAgent:
 
             output.query = original_query
 
-            # ── Persistence: một điểm duy nhất, sau grounding ────────────────
-            # Trước đây có HAI call site (run và run_streaming), cả hai nằm
-            # trong nhánh live search và chạy TRƯỚC synthesis — vừa ghi đúp
-            # khi thêm điểm lưu mới, vừa bắt người dùng đợi qua phần việc
-            # không đóng góp gì cho câu trả lời của họ.
-            if newly_fetched:
-                try:
-                    n = knowledge.add_results(query, newly_fetched)
-                    logger.info("[KNOWLEDGE] STORED: %d chunks from %d new sources",
-                                n, len(newly_fetched))
-                except Exception as e:
-                    logger.warning("[KNOWLEDGE] STORE failed (non-fatal): %s", e)
+            # ── Persistence ──────────────────────────────────────────────────
+            # Một điểm duy nhất cho mỗi tập nguồn. Trước đây có HAI call site
+            # (run và run_streaming), cả hai nằm trong nhánh live search và
+            # chạy TRƯỚC synthesis — vừa ghi đúp khi thêm điểm lưu mới, vừa
+            # bắt người dùng đợi qua phần việc không đóng góp gì cho câu trả
+            # lời của họ.
+            if store_future is not None:
+                store_future.result()
+
+            # Iteration có thể đã lấy thêm nguồn SAU khi lô trên được gửi đi;
+            # ghi phần dôi ra, và chỉ phần dôi ra — hai lô luôn rời nhau nên
+            # không nguồn nào bị ghi hai lần.
+            if len(newly_fetched) > dispatched:
+                self._store_sources(knowledge, query, newly_fetched[dispatched:])
 
             yield {
                 "type": "done",
@@ -628,15 +667,3 @@ class ResearchAgent:
             logger.error("_run_core failed: %s", e, exc_info=True)
             yield {"type": "error", "message": str(e)}
 
-    # ── Cache / knowledge helpers ─────────────────────────────────────────────
-
-    def clear_cache(self) -> None:
-        _cache.clear()
-        logger.info("Research TTL cache cleared")
-
-    def knowledge_size(self) -> int:
-        return get_store().size()
-
-    def clear_knowledge(self) -> None:
-        get_store().clear()
-        logger.info("Knowledge store cleared")

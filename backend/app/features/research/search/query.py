@@ -1,5 +1,6 @@
 """tools/search/query.py — phan loai query, chon k dong, mo rong query."""
 import logging
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +68,37 @@ def get_dynamic_k(query: str) -> dict[str, int]:
         logger.info("Query type: GENERAL")
 
     return k
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Comparison intent
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Comparison intent. This lived in the frontend (ResearchResult.tsx), which
+# meant the backend made the comparison LLM call on every run and the UI threw
+# the result away unless the query happened to contain one of these. Measured
+# on 8 baseline queries: 8 calls made, 2 displayable. The decision belongs where
+# the call is made.
+#
+# Single words are matched on word boundaries, not as substrings: `"vs" in
+# "devs"` is True, and a question about what devs are building is not a
+# comparison request. The Vietnamese entries are multi-word phrases, which
+# cannot collide the same way, so plain containment is right for them.
+_COMPARE_WORDS = (
+    "vs", "versus", "compare", "comparison", "difference", "differences", "between",
+)
+_COMPARE_PHRASES = (
+    "so sánh", "khác nhau", "khác gì", "ở điểm nào",
+)
+
+_COMPARE_WORD_RE = re.compile(
+    r"\b(?:" + "|".join(_COMPARE_WORDS) + r")\b", re.IGNORECASE
+)
+
+
+def has_compare_intent(query: str) -> bool:
+    q = (query or "").lower()
+    return bool(_COMPARE_WORD_RE.search(q)) or any(p in q for p in _COMPARE_PHRASES)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

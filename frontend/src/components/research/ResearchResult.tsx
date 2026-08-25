@@ -71,13 +71,14 @@ export function ResearchResult({ result, model }: ResearchResultProps) {
     /^\[(FINDING|METHOD|DATA|TREND|LIMITATION|DEFINITION)\]/.test(kp) && kp.length > 20
   );
 
-  const COMPARE_KEYWORDS = ["vs", "versus", "compare", "so sánh", "khác nhau", "difference", "between"];
-  const queryLower = (result.query || "").toLowerCase();
-  const hasCompareIntent = COMPARE_KEYWORDS.some(kw => queryLower.includes(kw));
-  const realCompareRows = (result.comparison_table || []).filter(r =>
-    r.source && r.main_claim && r.main_claim !== "See source"
+  // The `limitation !== "See full source for details"` check filters rows fabricated
+  // by a now-deleted backend fallback that stored payloads before this branch may still
+  // contain. It filters legacy stored payloads only — the current backend never emits
+  // that exact string — and can be removed once old sessions have aged out.
+  const realCompareRows = (result.comparison_table || []).filter(
+    r => r.source && r.main_claim && r.limitation !== "See full source for details"
   );
-  const showCompare = hasCompareIntent && realCompareRows.length >= 2;
+  const showCompare = realCompareRows.length >= 2;
 
   const confLabel = confidenceLabel(result.confidence);
   const claims = result.claims || [];

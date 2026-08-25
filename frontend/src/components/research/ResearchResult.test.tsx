@@ -52,4 +52,32 @@ describe("ResearchResult — grounded claims, source chips, confidence, limitati
     // HPanel content is collapsed by default; assert the existing panel still renders as before.
     expect(screen.getByText("Key Points (3)")).toBeInTheDocument();
   });
+
+  it("hides the Compare panel for legacy sessions whose rows carry the deleted fallback's signature", () => {
+    const result = {
+      query: "q", summary_short: "s", summary_medium: "", summary_detailed: "",
+      key_points: [], chart_data: undefined, papers: [],
+      references: [], follow_up_questions: [],
+      comparison_table: [
+        { source: "web", type: "web", main_claim: "First 150 chars of the source text...", strength: "web source", limitation: "See full source for details" },
+        { source: "wiki", type: "wiki", main_claim: "First 150 chars of another source...", strength: "wiki source", limitation: "See full source for details" },
+      ],
+    };
+    render(<ResearchResult result={result as any} model={null} />);
+    expect(screen.queryByText(/Compare/)).not.toBeInTheDocument();
+  });
+
+  it("still shows the Compare panel for genuine comparison rows", () => {
+    const result = {
+      query: "q", summary_short: "s", summary_medium: "", summary_detailed: "",
+      key_points: [], chart_data: undefined, papers: [],
+      references: [], follow_up_questions: [],
+      comparison_table: [
+        { source: "web", type: "web", main_claim: "Approach A improves latency by 20%", strength: "Directly measured", limitation: "Small sample size" },
+        { source: "wiki", type: "wiki", main_claim: "Approach B improves latency by 10%", strength: "Peer reviewed", limitation: "Older benchmark" },
+      ],
+    };
+    render(<ResearchResult result={result as any} model={null} />);
+    expect(screen.getByText(/Compare/)).toBeInTheDocument();
+  });
 });

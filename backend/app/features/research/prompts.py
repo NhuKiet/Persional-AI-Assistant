@@ -10,7 +10,7 @@ of the prompt, so editing one doesn't require re-threading it through every
 f-string differently.
 """
 
-from backend.app.features.research.security import frame_untrusted, UNTRUSTED_GUARD
+from backend.app.features.research.security import UNTRUSTED_GUARD
 
 # Shared language rule — sources are mostly in English, but the product always
 # answers in Vietnamese regardless of source language.
@@ -109,9 +109,16 @@ def chart_data_prompt(query: str, ctx: str) -> str:
     return (
         f"Look at these sources about '{query}'.\n\n"
         f"Sources:\n{ctx}\n\n"
-        f"Do you see numbers that can be compared (%, scores, counts, years)?\n"
-        f'If YES, return ONLY this JSON: {{"type":"bar","title":"title","labels":["a","b"],"values":[1,2],"unit":""}}\n'
-        f"If NO, reply: NO_DATA\n\n"
+        f"Do the sources state at least TWO comparable numbers (%, scores, "
+        f"counts, years) that belong on the same chart?\n"
+        f"Most sources do not. Answer no unless the numbers are really there "
+        f"in the text above — do not derive them, estimate them, or bring them "
+        f"in from your own knowledge. A chart you cannot quote from the "
+        f"sources is worse than no chart.\n"
+        f"If YES, return the chart together with the sentence(s) you took the "
+        f"numbers from, copied verbatim into source_quote.\n"
+        f"If NO, set has_data to false and leave the other fields empty. "
+        f"If you are replying as plain text rather than JSON, reply: NO_DATA\n\n"
         f"Rules for the JSON fields (title/labels/unit) and the numbers themselves:\n"
         f"{_footer(GROUNDING_RULE, LANGUAGE_RULE)}"
     )
@@ -133,17 +140,6 @@ def rag_synthesis_prompt(query: str, ctx: str) -> str:
         f"Use the sources below as your knowledge base:\n{ctx}\n\n"
         f"Write a thorough answer covering: what it is, how it works, key components, benefits, limitations, and current trends. "
         f"Be specific and natural. Do not use JSON or special markers.\n\n"
-        f"{_footer(GROUNDING_RULE, LANGUAGE_RULE)}"
-    )
-
-
-def follow_up_answer_prompt(question: str, context: str) -> str:
-    return (
-        f"{UNTRUSTED_GUARD}\n\n"
-        f"You are a research assistant. Answer using the context below.\n"
-        f"Be specific and cite sources when possible.\n\n"
-        f"Context:\n{frame_untrusted(context[:4000])}\n\n"
-        f"Question: {question}\n\nAnswer:\n\n"
         f"{_footer(GROUNDING_RULE, LANGUAGE_RULE)}"
     )
 

@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Liquid glass — News header</title>
+<style>
+  :root {
+    --ink: #101a43;
+    --spring: cubic-bezier(0.175, 0.885, 0.32, 2.2);
+    color-scheme: light;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; }
+
+  body {
+    min-height: 100vh;
+    margin: 0;
+    padding: 40px 20px;
+    color: var(--ink);
+    background:
+      radial-gradient(60% 70% at -6% 22%, rgba(150, 210, 255, 0.42), transparent 62%),
+      radial-gradient(52% 64% at 106% 8%, rgba(176, 186, 255, 0.40), transparent 60%),
+      #f8faff;
+  }
+
+  .page { max-width: 900px; margin: 0 auto; }
+
+  /* ── 4 lớp kính lỏng: effect (blur+distort) → tint → shine → content ── */
+  .lg { position: relative; isolation: isolate; transition: all .4s var(--spring); }
+  .lg > .lg-effect, .lg > .lg-tint, .lg > .lg-shine {
+    position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  }
+  .lg-effect { z-index: 0; overflow: hidden; backdrop-filter: blur(3px); filter: url(#glass-distortion); }
+  .lg-tint   { z-index: 1; background: #ffffff80; }
+  .lg-shine  { z-index: 2; box-shadow: inset 2px 2px 1px 0 #ffffff80, inset -1px -1px 1px 1px #ffffff80; }
+  .lg-content { display: flex; position: relative; z-index: 3; align-items: center; width: 100%; height: 100%; }
+
+  .bar {
+    height: 76px; padding: 10px 13px; border-radius: 28px;
+    box-shadow: 0 6px 6px #00000033, 0 0 20px #0000001a;
+  }
+  .bar > .lg-content { gap: 16px; }
+
+  .bar-title {
+    flex: 1; min-width: 0; margin: 0 0 0 14px;
+    font-size: clamp(1.45rem, 2.7vw, 2rem); font-weight: 650; letter-spacing: -.045em;
+  }
+  .back {
+    display: grid; width: 58px; height: 52px; flex: 0 0 auto; place-items: center;
+    border-radius: 18px; border: 0; background: none; color: inherit; cursor: pointer;
+  }
+  .refresh {
+    display: inline-flex; width: 146px; height: 52px; flex: 0 0 auto;
+    justify-content: center; align-items: center; gap: 9px;
+    padding: 0 14px; border-radius: 18px; border: 0; background: none;
+    color: inherit; font: inherit; font-weight: 540; cursor: pointer;
+  }
+  .refresh svg { color: #1f8fe0; }
+  .back svg, .refresh svg { transition: transform .4s var(--spring); transform-origin: center center; }
+  .back:hover svg, .refresh:hover svg { transform: scale(0.95); }
+
+  .tabs { display: flex; flex-wrap: wrap; justify-content: center; gap: 16px; margin-top: 21px; }
+  .tab-label { font-size: 1rem; font-weight: 520; }
+  .tab {
+    height: 48px; padding-inline: clamp(22px, 5vw, 60px); border-radius: 999px;
+    border: 0; background: none; color: inherit; font: inherit; cursor: pointer;
+    box-shadow: 0 6px 6px #00000033, 0 0 20px #0000001a;
+  }
+  .tab > .lg-content { justify-content: center; }
+  .tab-active > .lg-tint {
+    background: linear-gradient(100deg, #17c9e2 0%, #1d9ae0 46%, #3f74ea 100%);
+  }
+  .tab-active .tab-label { color: #fff; text-shadow: 0 1px 2px rgba(9,44,96,.34); }
+
+  .back:focus-visible, .refresh:focus-visible, .tab:focus-visible {
+    outline: 3px solid rgba(12,124,209,.9); outline-offset: 5px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .lg, .back svg, .refresh svg { transition: none; }
+  }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute">
+  <defs>
+    <filter id="glass-distortion" x="0%" y="0%" width="100%" height="100%">
+      <feTurbulence type="turbulence" baseFrequency="0.008" numOctaves="2" seed="5" result="noise" />
+      <feDisplacementMap in="SourceGraphic" in2="noise" scale="77"
+                         xChannelSelector="R" yChannelSelector="G" />
+    </filter>
+  </defs>
+</svg>
+
+<div class="page">
+
+  <div class="lg bar">
+    <div class="lg-effect"></div><div class="lg-tint"></div><div class="lg-shine"></div>
+    <div class="lg-content">
+      <button class="back lg" style="border-radius:18px" aria-label="Về trang chủ">
+        <div class="lg-effect"></div><div class="lg-tint"></div><div class="lg-shine"></div>
+        <span class="lg-content" style="justify-content:center">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M19 12H5.6M12 5.6 5.6 12l6.4 6.4"/></svg>
+        </span>
+      </button>
+      <h1 class="bar-title">Tin tức AI &amp; Robotics</h1>
+      <button class="refresh lg" style="border-radius:18px">
+        <div class="lg-effect"></div><div class="lg-tint"></div><div class="lg-shine"></div>
+        <span class="lg-content" style="justify-content:center;gap:9px">
+          <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true">
+            <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M20.4 11.4a8.4 8.4 0 1 1-2.5-5.9"/>
+            <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M20.6 3.4v5.2h-5.2"/>
+          </svg>
+          <span>Làm mới</span>
+        </span>
+      </button>
+    </div>
+  </div>
+
+  <div class="tabs" id="tabs">
+    <button class="tab lg tab-active"><div class="lg-effect"></div><div class="lg-tint"></div><div class="lg-shine"></div><span class="lg-content"><span class="tab-label">Tất cả</span></span></button>
+    <button class="tab lg"><div class="lg-effect"></div><div class="lg-tint"></div><div class="lg-shine"></div><span class="lg-content"><span class="tab-label">Model mới</span></span></button>
+    <button class="tab lg"><div class="lg-effect"></div><div class="lg-tint"></div><div class="lg-shine"></div><span class="lg-content"><span class="tab-label">Nghiên cứu</span></span></button>
+    <button class="tab lg"><div class="lg-effect"></div><div class="lg-tint"></div><div class="lg-shine"></div><span class="lg-content"><span class="tab-label">Robotics</span></span></button>
+    <button class="tab lg"><div class="lg-effect"></div><div class="lg-tint"></div><div class="lg-shine"></div><span class="lg-content"><span class="tab-label">Cộng đồng</span></span></button>
+  </div>
+
+</div>
+
+<script>
+  document.getElementById("tabs").addEventListener("click", e => {
+    const btn = e.target.closest("button");
+    if (!btn) return;
+    for (const b of document.getElementById("tabs").children) b.classList.remove("tab-active");
+    btn.classList.add("tab-active");
+  });
+</script>
+</body>
+</html>

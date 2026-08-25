@@ -15,6 +15,7 @@ import {
   type PdfSearchResult,
   type ResolvedOutlineItem,
 } from "../components/pdf/pdfDocument";
+import { usePdfAssistantResize } from "../components/pdf/usePdfAssistantResize";
 import { usePdfLayout, usePdfLayoutMode } from "../components/pdf/usePdfLayout";
 import {
   fetchSessionHistory,
@@ -65,6 +66,7 @@ export function PDFPage() {
   const nextMessageId = useCallback(() => (nextMessageIdRef.current += 1), []);
   const layoutMode = usePdfLayoutMode();
   const layout = usePdfLayout(layoutMode);
+  const assistantResize = usePdfAssistantResize();
 
   const startFreshSession = useCallback(() => {
     const newId = SESSION_ID();
@@ -481,6 +483,9 @@ export function PDFPage() {
             outlineOpen={layout.outlineOpen}
             assistantOpen={layout.assistantOpen}
             onCloseOverlays={layout.closeOverlays}
+            assistantWidth={assistantResize.width}
+            assistantContainerRef={assistantResize.containerRef}
+            onAssistantResizeStart={assistantResize.onMouseDown}
             toolbar={(
               <>
                 <PdfToolbar

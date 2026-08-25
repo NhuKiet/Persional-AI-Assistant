@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>KiNg — Cinematic Hologram Core</title>
+<style>
+  :root{
+    --void:#01040d;--deep:#061124;--cyan:#62eaff;--mint:#91ffd3;
+    --ice:#eaffff;--violet:#998cff;--muted:#7ea5b9;--line:rgba(123,226,255,.2)
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:100%;height:100%;overflow:hidden;background:var(--void);color:var(--ice)}
+  body{font-family:Inter,"Helvetica Neue",Arial,sans-serif;-webkit-font-smoothing:antialiased}
+  .mono{font-family:ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace}
+  #stage{position:fixed;inset:0;overflow:hidden;isolation:isolate;background:
+    radial-gradient(55% 42% at 50% 39%,rgba(71,198,255,.12),transparent 68%),
+    linear-gradient(180deg,#0b122b 0%,#030916 48%,#01040c 100%)}
+  .chamber-shell{position:absolute;inset:0;z-index:0;overflow:hidden;pointer-events:none}
+  .chamber-shell::before{content:"";position:absolute;inset:0;background:
+    radial-gradient(54% 20% at 50% 6%,rgba(245,226,255,.18),transparent 68%),
+    radial-gradient(70% 58% at 50% 54%,transparent 42%,rgba(1,3,11,.82) 100%)}
+  .chamber-ring{position:absolute;left:50%;border-radius:50%;transform:translateX(-50%);
+    border:clamp(22px,4vw,66px) solid rgba(50,83,120,.68);box-shadow:
+    inset 0 -8px 18px rgba(157,239,255,.2),0 16px 50px rgba(32,175,255,.13),0 0 0 1px rgba(174,239,255,.15)}
+  .chamber-ring.outer{width:124vw;height:43vw;top:-29vw}
+  .chamber-ring.inner{width:82vw;height:26vw;top:-16.5vw;border-width:clamp(10px,2vw,34px);opacity:.7}
+  .chamber-ring.bottom{width:108vw;height:26vw;bottom:-20vw;border-width:clamp(18px,3vw,46px);opacity:.5}
+  .projection-beam{position:absolute;left:50%;top:2%;bottom:-12%;width:min(23vw,340px);transform:translateX(-50%);
+    background:linear-gradient(90deg,transparent,rgba(75,222,255,.05) 18%,rgba(189,255,255,.2) 50%,rgba(75,222,255,.05) 82%,transparent);
+    filter:blur(7px);clip-path:polygon(29% 0,71% 0,100% 100%,0 100%)}
+  .structural-pillars{position:absolute;inset:0;background:
+    linear-gradient(102deg,transparent 0 8%,rgba(50,79,119,.25) 8.3% 13%,transparent 13.3% 26%,rgba(50,79,119,.18) 26.3% 30%,transparent 30.3%),
+    linear-gradient(258deg,transparent 0 8%,rgba(50,79,119,.25) 8.3% 13%,transparent 13.3% 26%,rgba(50,79,119,.18) 26.3% 30%,transparent 30.3%);
+    filter:drop-shadow(0 0 14px rgba(99,217,255,.12))}
+  #scene-canvas{position:absolute;inset:0;width:100%;height:100%;display:block;z-index:2;opacity:0;transition:opacity 1s ease;touch-action:none}
+  body.webgl-ready #scene-canvas{opacity:1}
+  .atmospheric-overlay{position:absolute;inset:0;z-index:3;pointer-events:none;background:
+    repeating-linear-gradient(180deg,rgba(190,250,255,.018) 0 1px,transparent 1px 5px),
+    radial-gradient(62% 50% at 50% 45%,rgba(65,216,255,.08),transparent 65%),
+    radial-gradient(120% 110% at 50% 50%,transparent 42%,rgba(0,2,9,.75) 100%);mix-blend-mode:screen}
+  .atmospheric-overlay::after{content:"";position:absolute;inset:0;background:radial-gradient(115% 110% at 50% 50%,transparent 47%,rgba(0,1,8,.8));mix-blend-mode:normal}
+  #fallback{position:absolute;inset:0;z-index:1;display:flex;align-items:center;justify-content:center;opacity:1;transition:opacity .65s ease;pointer-events:none}
+  body.webgl-ready #fallback{opacity:0;visibility:hidden}
+  body.webgl-failed #fallback{display:flex;opacity:1;visibility:visible}
+  body.webgl-failed #scene-canvas{display:none}
+  .fallback-globe{position:absolute;top:21%;width:min(51vmin,480px);aspect-ratio:1;border:2px solid rgba(185,255,255,.9);border-radius:50%;
+    background:repeating-radial-gradient(ellipse at center,transparent 0 8%,rgba(112,238,255,.65) 8.4% 8.8%,transparent 9.2% 16%),
+    linear-gradient(90deg,transparent 49%,rgba(176,255,255,.7) 49.5% 50.5%,transparent 51%),radial-gradient(circle,rgba(60,213,255,.2),rgba(8,67,121,.18) 52%,transparent 70%);
+    box-shadow:0 0 18px var(--cyan),0 0 80px rgba(56,184,255,.45),inset 0 0 55px rgba(86,230,255,.35)}
+  .fallback-globe::before{content:"";position:absolute;inset:0;border-radius:50%;background:repeating-linear-gradient(90deg,transparent 0 11%,rgba(111,237,255,.48) 11.4% 11.8%,transparent 12.2% 20%);clip-path:circle(49%)}
+  .fallback-ribbon{position:absolute;top:40%;left:50%;width:min(66vmin,620px);height:64px;transform:translate(-50%,-50%) rotate(-4deg);border:1px solid rgba(213,255,255,.85);border-radius:50%;
+    color:#efffff;text-align:center;font:600 clamp(8px,1.1vw,13px)/62px ui-monospace;letter-spacing:.18em;text-shadow:0 0 8px white;box-shadow:0 0 12px rgba(98,234,255,.8);white-space:nowrap;overflow:hidden}
+  .fallback-energy{position:absolute;top:65%;left:50%;width:min(52vmin,500px);height:28%;transform:translateX(-50%)}
+  .fallback-energy i{position:absolute;left:50%;border:2px solid rgba(99,236,255,.7);border-radius:50%;transform:translateX(-50%);box-shadow:0 0 12px rgba(74,217,255,.7)}
+  .fallback-energy i:nth-child(1){width:100%;height:28%;top:0}.fallback-energy i:nth-child(2){width:66%;height:21%;top:31%}.fallback-energy i:nth-child(3){width:34%;height:14%;top:59%}
+  .hud-top{position:absolute;z-index:5;left:0;right:0;top:0;padding:20px 28px;display:flex;justify-content:space-between;align-items:center;
+    font-size:9px;letter-spacing:.22em;color:#b4d8e7;text-transform:uppercase;text-shadow:0 0 12px rgba(83,217,255,.5)}
+  .hud-top::after{content:"";position:absolute;left:28px;right:28px;bottom:9px;height:1px;background:linear-gradient(90deg,transparent,var(--line),transparent)}
+  .hud-top .online{color:var(--mint)}.hud-top .online i{display:inline-block;width:6px;height:6px;margin-right:7px;border-radius:50%;background:var(--mint);box-shadow:0 0 10px var(--mint)}
+  .hud-corners{position:absolute;inset:0;z-index:5;pointer-events:none;color:rgba(153,195,212,.72);font-size:8px;line-height:1.75;letter-spacing:.18em;text-transform:uppercase}
+  .hud-left{position:absolute;left:28px;bottom:25px}.hud-right{position:absolute;right:28px;bottom:25px;text-align:right}
+  @media (max-width:720px){
+    .chamber-ring.outer{width:170vw;height:66vw;top:-45vw}.chamber-ring.inner{width:120vw;height:42vw;top:-29vw}
+    .projection-beam{width:42vw}.structural-pillars{opacity:.62}.hud-top{padding:17px 16px;font-size:7px}.hud-top::after{left:16px;right:16px}
+    .hud-left{left:16px;bottom:18px}.hud-right{right:16px;bottom:18px;max-width:46vw}.fallback-globe{top:24%;width:76vmin}.fallback-ribbon{top:43%;width:94vmin}
+  }
+  @media (prefers-reduced-motion: reduce){#scene-canvas,#fallback{transition:none}.atmospheric-overlay{background:radial-gradient(62% 50% at 50% 45%,rgba(65,216,255,.08),transparent 65%)}}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="chamber-shell" aria-hidden="true">
+    <div class="chamber-ring outer"></div><div class="chamber-ring inner"></div><div class="chamber-ring bottom"></div>
+    <div class="projection-beam"></div><div class="structural-pillars"></div>
+  </div>
+  <canvas id="scene-canvas" aria-label="Lõi hologram tương tác"></canvas>
+  <div class="atmospheric-overlay" aria-hidden="true"></div>
+  <div id="fallback" aria-hidden="true">
+    <div class="fallback-globe"></div>
+    <div class="fallback-ribbon">KING · HOLOGRAM CORE · SYSTEM ONLINE</div>
+    <div class="fallback-energy"><i></i><i></i><i></i></div>
+  </div>
+  <header class="hud-top mono"><span>KING / CORE 05</span><span class="online"><i></i> HỆ THỐNG TRỰC TUYẾN</span></header>
+  <div class="hud-corners mono"><span class="hud-left">HOLOGRAM CORE<br>DỮ LIỆU ĐỒNG BỘ</span><span class="hud-right">KÉO ĐỂ XOAY · CUỘN ĐỂ PHÓNG</span></div>
+</div>
+
+<script type="importmap">
+{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/"}}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+
+const CONFIG = {
+  seed: 20260801, background: 0x01040d, exposure: 1.18, fogDensity: 0.024,
+  quality: {
+    full: { dpr: 1.85, globeSegments: 128, ambientParticles: 420, bloom: 0.82 },
+    compact: { dpr: 1.35, globeSegments: 72, ambientParticles: 180, bloom: 0.58 }
+  },
+  camera: { fov: 39, z: 13.2, zoomMin: 11.2, zoomMax: 16.5 },
+  globe: { radius: 2.94, meridians: 32, parallels: 16, selfSpin: 0.032, lineOpacity: 0.42 },
+  ribbon: { radius: 3.25, height: 0.58, color: 0xcaffff, scrollSpeed: 0.018 },
+  funnel: { layers: 7, topRadius: 2.65, bottomRadius: 0.54, topY: -2.34, bottomY: -5.35 },
+  motion: { autoSpin: 0.045, damping: 6, parallax: 0.035 },
+  bloom: { radius: 0.5, threshold: 0.27 }
+};
+
+const canvas = document.getElementById('scene-canvas');
+const reducedQuery = matchMedia('(prefers-reduced-motion: reduce)');
+let prefersReduced = reducedQuery.matches;
+let qualityProfile;
+let renderer, scene, camera, composer = null, bloomPass;
+let chamberGroup, hologramGroup, atmosphereGroup;
+let volumeCore, globeLines, continentDots, networkGroup, textRibbonMesh, ribbonTexture;
+let energyColumn, ambientPoints, scanSprite;
+const energyRings = [], energyPulses = [], orbiters = [];
+const clock = new THREE.Clock();
+let running = false, rafId = 0, zoomZ = CONFIG.camera.z, yaw = 0;
+const pointer = { dragging:false, id:null, x:0, y:0, targetX:0, targetY:0, currentX:0, currentY:0, hoverX:0, hoverY:0 };
+
+function seededRandom(seed){let a=seed>>>0;return()=>{a|=0;a=(a+0x6D2B79F5)|0;let t=Math.imul(a^(a>>>15),1|a);t=(t+Math.imul(t^(t>>>7),61|t))^t;return((t^(t>>>14))>>>0)/4294967296}}
+function range(rnd,a,b){return a+rnd()*(b-a)}
+function mix(a,b,t){return a+(b-a)*t}
+function setQualityProfile(){
+  qualityProfile = innerWidth <= 720 || devicePixelRatio > 2.25 ? CONFIG.quality.compact : CONFIG.quality.full;
+  return qualityProfile;
+}
+function renderSize(){return { width:innerWidth, height:innerHeight }}
+
+function createRenderer(){
+  setQualityProfile();
+  const size=renderSize();
+  const result=new THREE.WebGLRenderer({canvas,antialias:true,alpha:true,powerPreference:'high-performance'});
+  result.setPixelRatio(Math.min(devicePixelRatio||1,qualityProfile.dpr));
+  result.setSize(size.width,size.height,false);result.setClearColor(CONFIG.background,0);
+  result.toneMapping=THREE.ACESFilmicToneMapping;result.toneMappingExposure=CONFIG.exposure;result.outputColorSpace=THREE.SRGBColorSpace;
+  return result;
+}
+function createScene(){
+  scene=new THREE.Scene();scene.background=null;scene.fog=new THREE.FogExp2(CONFIG.background,CONFIG.fogDensity);
+  camera=new THREE.PerspectiveCamera(CONFIG.camera.fov,innerWidth/innerHeight,.1,100);
+  chamberGroup=new THREE.Group();hologramGroup=new THREE.Group();atmosphereGroup=new THREE.Group();scene.add(chamberGroup,hologramGroup,atmosphereGroup);
+  scene.add(new THREE.AmbientLight(0x183756,1.1));
+  const key=new THREE.PointLight(0xc9ffff,5,28);key.position.set(3,6,5);scene.add(key);
+  const rim=new THREE.PointLight(0x35a7ff,6,30);rim.position.set(-6,-1,4);scene.add(rim);
+  const violet=new THREE.PointLight(0x7b67ff,3,25);violet.position.set(5,5,-5);scene.add(violet);
+}
+function glowTexture(size=256){
+  const cv=document.createElement('canvas');cv.width=cv.height=size;const g=cv.getContext('2d');
+  const grad=g.createRadialGradient(size/2,size/2,0,size/2,size/2,size/2);grad.addColorStop(0,'rgba(255,255,255,1)');grad.addColorStop(.18,'rgba(178,255,255,.82)');grad.addColorStop(.52,'rgba(70,218,255,.24)');grad.addColorStop(1,'rgba(0,0,0,0)');g.fillStyle=grad;g.fillRect(0,0,size,size);
+  const tex=new THREE.CanvasTexture(cv);tex.colorSpace=THREE.SRGBColorSpace;return tex;
+}
+function additiveBasic(color,opacity){return new THREE.MeshBasicMaterial({color,transparent:true,opacity,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide})}
+
+function createChamber(){
+  const column=new THREE.Mesh(new THREE.CylinderGeometry(.72,1.12,14,32,1,true),additiveBasic(0x48d8ff,.055));column.position.y=-1.4;chamberGroup.add(column);
+  const spineMat=new THREE.LineBasicMaterial({color:0x78ddff,transparent:true,opacity:.12,blending:THREE.AdditiveBlending,depthWrite:false});
+  for(let i=0;i<4;i++){
+    const x=(i<2?-1:1)*(4.6+(i%2)*2.7);const geo=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(x,-7,-3),new THREE.Vector3(x*.72,7,-4)]);
+    chamberGroup.add(new THREE.Line(geo,spineMat));
+  }
+  for(const def of [{r:6.8,y:4.5,o:.11},{r:5.2,y:4.15,o:.09},{r:7.6,y:-5.7,o:.06}]){
+    const ring=new THREE.Mesh(new THREE.TorusGeometry(def.r,.035,8,160),additiveBasic(0x84eaff,def.o));ring.rotation.x=Math.PI/2;ring.position.y=def.y;chamberGroup.add(ring);
+  }
+}
+
+function createVolumeCore(){
+  const uniforms={
+    uTime:{value:0},uScanY:{value:-1},uColor:{value:new THREE.Color(0x68eaff)},uFresnelPower:{value:2.4},rearOpacity:{value:.18}
+  };
+  try{
+    const mat=new THREE.ShaderMaterial({uniforms,transparent:true,depthWrite:false,side:THREE.DoubleSide,blending:THREE.AdditiveBlending,
+      vertexShader:`varying vec3 vNormal;varying vec3 vViewDir;varying vec3 vLocal;void main(){vNormal=normalize(normalMatrix*normal);vec4 mv=modelViewMatrix*vec4(position,1.0);vViewDir=normalize(-mv.xyz);vLocal=position;gl_Position=projectionMatrix*mv;}`,
+      fragmentShader:`uniform float uTime;uniform float uScanY;uniform vec3 uColor;uniform float uFresnelPower;uniform float rearOpacity;varying vec3 vNormal;varying vec3 vViewDir;varying vec3 vLocal;void main(){float fres=pow(1.0-abs(dot(normalize(vNormal),normalize(vViewDir))),uFresnelPower);float scan=smoothstep(.22,0.0,abs(vLocal.y-uScanY));float lines=.5+.5*sin((vLocal.y+uTime*.08)*88.0);float facing=gl_FrontFacing?1.0:rearOpacity;float alpha=(.035+fres*.17+scan*.16+lines*.012)*facing;gl_FragColor=vec4(uColor,alpha);}`});
+    const mesh=new THREE.Mesh(new THREE.SphereGeometry(CONFIG.globe.radius*.995,64,42),mat);mesh.userData.uniforms=uniforms;return mesh;
+  }catch(error){
+    console.warn('Volume shader fallback.',error);return new THREE.Mesh(new THREE.SphereGeometry(CONFIG.globe.radius*.995,40,28),additiveBasic(0x68eaff,.07));
+  }
+}
+function createGlobeGrid(){
+  const g=CONFIG.globe,pos=[];
+  for(let m=0;m<g.meridians;m++){const lon=m/g.meridians*Math.PI*2;for(let s=0;s<qualityProfile.globeSegments;s++){for(const t of [s/qualityProfile.globeSegments*Math.PI,(s+1)/qualityProfile.globeSegments*Math.PI]){const r=Math.sin(t)*g.radius;pos.push(Math.cos(lon)*r,Math.cos(t)*g.radius,Math.sin(lon)*r)}}}
+  for(let p=1;p<g.parallels;p++){const t=p/g.parallels*Math.PI,y=Math.cos(t)*g.radius,r=Math.sin(t)*g.radius;for(let s=0;s<qualityProfile.globeSegments;s++){for(const a of [s/qualityProfile.globeSegments*Math.PI*2,(s+1)/qualityProfile.globeSegments*Math.PI*2])pos.push(Math.cos(a)*r,y,Math.sin(a)*r)}}
+  const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));
+  return new THREE.LineSegments(geo,new THREE.LineBasicMaterial({color:0x72ecff,transparent:true,opacity:g.lineOpacity,blending:THREE.AdditiveBlending,depthWrite:false}));
+}
+function latLon(lon,lat,r){const phi=(90-lat)*Math.PI/180,theta=(lon+180)*Math.PI/180;return new THREE.Vector3(-r*Math.sin(phi)*Math.cos(theta),r*Math.cos(phi),r*Math.sin(phi)*Math.sin(theta))}
+function inPoly(lon,lat,poly){let inside=false;for(let i=0,j=poly.length-1;i<poly.length;j=i++){const [xi,yi]=poly[i],[xj,yj]=poly[j];if(((yi>lat)!=(yj>lat))&&(lon<(xj-xi)*(lat-yi)/(yj-yi)+xi))inside=!inside}return inside}
+function createContinents(){
+  const polygons=[
+    [[-18,35],[0,39],[30,45],[60,58],[105,54],[142,43],[130,22],[96,11],[71,20],[48,5],[40,-18],[22,-35],[10,-17],[8,5],[-16,16]],
+    [[-166,68],[-120,70],[-88,60],[-65,44],[-82,25],[-98,18],[-124,42],[-152,59]],
+    [[-80,11],[-61,7],[-43,-8],[-40,-21],[-57,-36],[-70,-42],[-76,-16]],
+    [[113,-22],[127,-13],[146,-18],[151,-29],[140,-39],[117,-34]]
+  ];
+  const positions=[];for(let lat=-78;lat<=78;lat+=3.2){const step=3.2/Math.max(.24,Math.cos(lat*Math.PI/180));for(let lon=-180;lon<180;lon+=step){if(polygons.some(p=>inPoly(lon,lat,p))){const v=latLon(lon,lat,CONFIG.globe.radius*1.008);positions.push(v.x,v.y,v.z)}}}
+  const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
+  return new THREE.Points(geo,new THREE.PointsMaterial({color:0xd4ffff,size:.043,transparent:true,opacity:.7,blending:THREE.AdditiveBlending,depthWrite:false,sizeAttenuation:true}));
+}
+function createNetwork(){
+  const rnd=seededRandom(CONFIG.seed+91),nodes=[],group=new THREE.Group(),r=CONFIG.globe.radius*1.012;
+  const np=[];for(let i=0;i<24;i++){const theta=rnd()*Math.PI*2,phi=Math.acos(2*rnd()-1),p=new THREE.Vector3(Math.sin(phi)*Math.cos(theta)*r,Math.cos(phi)*r,Math.sin(phi)*Math.sin(theta)*r);nodes.push(p);np.push(p.x,p.y,p.z)}
+  const ng=new THREE.BufferGeometry();ng.setAttribute('position',new THREE.Float32BufferAttribute(np,3));group.add(new THREE.Points(ng,new THREE.PointsMaterial({color:0xcaffff,size:.09,transparent:true,opacity:.92,blending:THREE.AdditiveBlending,depthWrite:false})));
+  const arcs=[];for(let i=0;i<18;i++){const a=nodes[Math.floor(rnd()*nodes.length)],b=nodes[Math.floor(rnd()*nodes.length)];if(a===b)continue;const mid=a.clone().add(b).multiplyScalar(.5).setLength(r*(1.16+rnd()*.16));const pts=new THREE.QuadraticBezierCurve3(a,mid,b).getPoints(36);for(let j=0;j<pts.length-1;j++)arcs.push(pts[j].x,pts[j].y,pts[j].z,pts[j+1].x,pts[j+1].y,pts[j+1].z)}
+  const ag=new THREE.BufferGeometry();ag.setAttribute('position',new THREE.Float32BufferAttribute(arcs,3));group.add(new THREE.LineSegments(ag,new THREE.LineBasicMaterial({color:0x8fffd1,transparent:true,opacity:.34,blending:THREE.AdditiveBlending,depthWrite:false})));return group;
+}
+function createOrbiters(){
+  for(const def of [{r:3.75,rx:.56,rz:-.18,s:.28},{r:4.12,rx:-.48,rz:.34,s:-.2}]){
+    const group=new THREE.Group();group.rotation.x=def.rx;group.rotation.z=def.rz;group.userData=def;
+    const ring=new THREE.Mesh(new THREE.TorusGeometry(def.r,.008,5,180),additiveBasic(0x8ceeff,.22));group.add(ring);
+    const dot=new THREE.Sprite(new THREE.SpriteMaterial({map:glowTexture(64),color:0xeaffff,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false}));dot.scale.setScalar(.22);group.add(dot);group.userData.dot=dot;hologramGroup.add(group);orbiters.push(group);
+  }
+}
+function createGlobe(){
+  volumeCore=createVolumeCore();globeLines=createGlobeGrid();continentDots=createContinents();networkGroup=createNetwork();
+  hologramGroup.add(volumeCore,globeLines,continentDots,networkGroup);
+  const halo=new THREE.Sprite(new THREE.SpriteMaterial({map:glowTexture(),color:0x55d8ff,transparent:true,opacity:.28,blending:THREE.AdditiveBlending,depthWrite:false}));halo.scale.setScalar(8.2);hologramGroup.add(halo);
+  createOrbiters();
+}
+
+function ribbonCanvas(){
+  const cv=document.createElement('canvas');cv.width=2048;cv.height=160;const g=cv.getContext('2d');g.clearRect(0,0,cv.width,cv.height);g.font='700 50px ui-monospace, Menlo, Consolas, monospace';g.textBaseline='middle';g.fillStyle='#ecffff';g.shadowColor='#68eaff';g.shadowBlur=18;
+  const text='KING · HOLOGRAM CORE · SYSTEM ONLINE · DỮ LIỆU ĐỒNG BỘ · ';let x=0;while(x<cv.width+600){g.fillText(text,x,80);x+=g.measureText(text).width+100}
+  const tex=new THREE.CanvasTexture(cv);tex.wrapS=THREE.RepeatWrapping;tex.wrapT=THREE.ClampToEdgeWrapping;tex.repeat.set(5.2,1);tex.colorSpace=THREE.SRGBColorSpace;return tex;
+}
+function createTextRibbon(){
+  ribbonTexture=ribbonCanvas();const mat=new THREE.MeshBasicMaterial({map:ribbonTexture,transparent:true,opacity:.7,side:THREE.FrontSide,blending:THREE.AdditiveBlending,depthWrite:false});
+  textRibbonMesh=new THREE.Mesh(new THREE.CylinderGeometry(CONFIG.ribbon.radius,CONFIG.ribbon.radius,CONFIG.ribbon.height,128,1,true),mat);textRibbonMesh.rotation.x=-.15;textRibbonMesh.rotation.z=.035;hologramGroup.add(textRibbonMesh);
+  for(const y of [-CONFIG.ribbon.height/2,CONFIG.ribbon.height/2]){const edge=new THREE.Mesh(new THREE.TorusGeometry(CONFIG.ribbon.radius,.012,6,160),additiveBasic(0xcaffff,.68));edge.rotation.x=Math.PI/2;edge.position.y=y;textRibbonMesh.add(edge)}
+}
+function updateTextRibbon(t,dt){if(!textRibbonMesh)return;ribbonTexture.offset.x=(ribbonTexture.offset.x-CONFIG.ribbon.scrollSpeed*dt+1)%1;textRibbonMesh.rotation.y-=dt*.042;textRibbonMesh.material.opacity=.79+.08*Math.sin(t*.9)}
+
+function createEnergyFunnel(){
+  const f=CONFIG.funnel;
+  energyColumn=new THREE.Mesh(new THREE.CylinderGeometry(.13,.7,4.1,32,1,true),additiveBasic(0x73efff,.12));energyColumn.position.y=-3.62;hologramGroup.add(energyColumn);
+  for(let i=0;i<f.layers;i++){const q=i/(f.layers-1),r=mix(f.topRadius,f.bottomRadius,q),y=mix(f.topY,f.bottomY,q);const ring=new THREE.Mesh(new THREE.TorusGeometry(r,.018+i*.001,6,150),additiveBasic(i%2?0x80ffd5:0x68dfff,mix(.6,.16,q)));ring.rotation.x=Math.PI/2;ring.scale.y=.68;ring.position.y=y;ring.userData={phase:i*.91,base:ring.material.opacity,dir:i%2?1:-1};hologramGroup.add(ring);energyRings.push(ring)}
+  const tex=glowTexture(64);for(let i=0;i<6;i++){const pulse=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,color:i%2?0x8fffd4:0xdfffff,transparent:true,opacity:.85,blending:THREE.AdditiveBlending,depthWrite:false}));pulse.scale.setScalar(.14+i*.018);pulse.userData.offset=i/6;hologramGroup.add(pulse);energyPulses.push(pulse)}
+}
+function updateEnergyFunnel(t,dt){
+  for(const ring of energyRings){ring.rotation.z+=dt*.08*ring.userData.dir;ring.material.opacity=ring.userData.base*(.78+.22*Math.sin(t*1.35+ring.userData.phase))}
+  for(const pulse of energyPulses){const q=(t*.18+pulse.userData.offset)%1;pulse.position.set(Math.sin(q*12.5)*.08,mix(CONFIG.funnel.bottomY,CONFIG.funnel.topY+.25,q),Math.cos(q*10)*.06);pulse.material.opacity=Math.sin(q*Math.PI)*.9}
+  if(energyColumn)energyColumn.material.opacity=.09+.04*Math.sin(t*1.8);
+}
+
+function createAtmosphere(){
+  const rnd=seededRandom(CONFIG.seed+27),pos=new Float32Array(qualityProfile.ambientParticles*3);for(let i=0;i<qualityProfile.ambientParticles;i++){pos[i*3]=range(rnd,-9,9);pos[i*3+1]=range(rnd,-7,7);pos[i*3+2]=range(rnd,-7,2)}
+  const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.BufferAttribute(pos,3));ambientPoints=new THREE.Points(geo,new THREE.PointsMaterial({map:glowTexture(64),color:0xa4d8ff,size:.052,transparent:true,opacity:.36,blending:THREE.AdditiveBlending,depthWrite:false,sizeAttenuation:true}));atmosphereGroup.add(ambientPoints);
+  scanSprite=new THREE.Sprite(new THREE.SpriteMaterial({map:glowTexture(64),color:0x9ffff0,transparent:true,opacity:.5,blending:THREE.AdditiveBlending,depthWrite:false}));scanSprite.scale.set(.18,.18,1);atmosphereGroup.add(scanSprite);
+}
+function updateAtmosphere(t,dt){
+  if(ambientPoints){ambientPoints.rotation.y+=dt*.008;ambientPoints.position.y=Math.sin(t*.17)*.08}
+  if(volumeCore?.userData.uniforms){volumeCore.userData.uniforms.uTime.value=t;volumeCore.userData.uniforms.uScanY.value=-CONFIG.globe.radius+(t*.34)%(CONFIG.globe.radius*2)}
+  if(scanSprite){const q=(t*.11)%1;scanSprite.position.set(Math.sin(t*.7)*3.5,mix(-4.7,4.4,q),1.1);scanSprite.material.opacity=Math.sin(q*Math.PI)*.55}
+}
+
+function createPostProcessing(){
+  const size=renderSize();composer=new EffectComposer(renderer);composer.setPixelRatio(Math.min(devicePixelRatio||1,qualityProfile.dpr));composer.setSize(size.width,size.height);composer.addPass(new RenderPass(scene,camera));
+  bloomPass=new UnrealBloomPass(new THREE.Vector2(size.width,size.height),qualityProfile.bloom,CONFIG.bloom.radius,CONFIG.bloom.threshold);composer.addPass(bloomPass);
+}
+function applyResponsiveLayout(){
+  const mobile=innerWidth<=720;camera.fov=mobile?46:CONFIG.camera.fov;camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();
+  hologramGroup.position.set(0,mobile?.45:.35,0);hologramGroup.scale.setScalar(mobile?.82:1);chamberGroup.scale.setScalar(mobile?.9:1);atmosphereGroup.scale.setScalar(mobile?.9:1);
+  camera.lookAt(0,mobile?-.1:.05,0);
+}
+function renderFrame(){if(composer)composer.render();else renderer.render(scene,camera)}
+
+function bindInteractions(){
+  canvas.addEventListener('pointerdown',e=>{pointer.dragging=true;pointer.id=e.pointerId;pointer.x=e.clientX;pointer.y=e.clientY;try{canvas.setPointerCapture(e.pointerId)}catch(_){}});
+  canvas.addEventListener('pointermove',e=>{if(!pointer.dragging||e.pointerId!==pointer.id)return;pointer.targetY+=(e.clientX-pointer.x)*.0055;pointer.targetX=THREE.MathUtils.clamp(pointer.targetX+(e.clientY-pointer.y)*.0055,-.58,.58);pointer.x=e.clientX;pointer.y=e.clientY;if(prefersReduced){pointer.currentX=pointer.targetX;pointer.currentY=pointer.targetY;hologramGroup.rotation.set(pointer.currentX,pointer.currentY,0);renderFrame()}});
+  const release=e=>{if(pointer.id!==null&&e.pointerId!==pointer.id)return;pointer.dragging=false;pointer.id=null};canvas.addEventListener('pointerup',release);canvas.addEventListener('pointercancel',release);
+  window.addEventListener('pointermove',e=>{if(pointer.dragging)return;pointer.hoverY=(e.clientX/innerWidth-.5)*CONFIG.motion.parallax;pointer.hoverX=(e.clientY/innerHeight-.5)*CONFIG.motion.parallax});
+  canvas.addEventListener('wheel',e=>{e.preventDefault();zoomZ=THREE.MathUtils.clamp(zoomZ+e.deltaY*.007,CONFIG.camera.zoomMin,CONFIG.camera.zoomMax);if(prefersReduced){camera.position.z=zoomZ;renderFrame()}},{passive:false});
+  window.addEventListener('resize',onResize);document.addEventListener('visibilitychange',()=>{if(document.hidden)stop();else start()});
+  reducedQuery.addEventListener?.('change',e=>{prefersReduced=e.matches;if(prefersReduced)renderFrame()});
+}
+let resizeId=0;
+function onResize(){cancelAnimationFrame(resizeId);resizeId=requestAnimationFrame(()=>{setQualityProfile();const size=renderSize();renderer.setPixelRatio(Math.min(devicePixelRatio||1,qualityProfile.dpr));renderer.setSize(size.width,size.height,false);if(composer){composer.setPixelRatio(Math.min(devicePixelRatio||1,qualityProfile.dpr));composer.setSize(size.width,size.height);bloomPass.strength=qualityProfile.bloom}applyResponsiveLayout();renderFrame()})}
+
+function animate(){
+  if(!running)return;rafId=requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),.05),t=clock.elapsedTime;
+  if(!prefersReduced){const d=1-Math.exp(-CONFIG.motion.damping*dt);pointer.currentX+=(pointer.targetX-pointer.currentX)*d;pointer.currentY+=(pointer.targetY-pointer.currentY)*d;if(!pointer.dragging)yaw+=CONFIG.motion.autoSpin*dt;hologramGroup.rotation.set(pointer.currentX+pointer.hoverX,yaw+pointer.currentY+pointer.hoverY,0);globeLines.rotation.y+=CONFIG.globe.selfSpin*dt;continentDots.rotation.y+=CONFIG.globe.selfSpin*dt;networkGroup.rotation.y+=CONFIG.globe.selfSpin*dt;for(const o of orbiters){const a=t*o.userData.s;o.userData.dot.position.set(Math.cos(a)*o.userData.r,Math.sin(a)*o.userData.r,0)}updateTextRibbon(t,dt);updateEnergyFunnel(t,dt);updateAtmosphere(t,dt)}
+  const zd=1-Math.exp(-5*dt);camera.position.z+=(zoomZ-camera.position.z)*zd;renderFrame();
+}
+function start(){if(running)return;running=true;clock.getDelta();animate()}
+function stop(){running=false;cancelAnimationFrame(rafId);rafId=0}
+function dispose(){stop();window.removeEventListener('resize',onResize);renderer?.dispose();composer?.dispose?.()}
+window.addEventListener('pagehide',dispose);
+
+function boot(){
+  try{renderer=createRenderer()}catch(error){console.warn('WebGL unavailable; using CSS hologram.',error);document.body.classList.add('webgl-failed');return}
+  try{
+    createScene();createChamber();createGlobe();createTextRibbon();createEnergyFunnel();createAtmosphere();
+    try { createPostProcessing(); } catch(error){console.warn('Post-processing unavailable; using direct render.',error);composer = null}
+    camera.position.set(0,.25,zoomZ);applyResponsiveLayout();bindInteractions();renderFrame();document.body.classList.add('webgl-ready');start();
+  }catch(error){console.error('Scene initialization failed; using CSS hologram.',error);document.body.classList.add('webgl-failed')}
+}
+boot();
+</script>
+</body>
+</html>

@@ -48,13 +48,14 @@ async function openTool(titleRe) {
 }
 
 describe("Trang chủ (\"/\") — landing, không phải chat", () => {
-  it("hiện thesis, CTA và đủ 6 thẻ công cụ", async () => {
+  // Landing giờ là hero "Capability Reactor" (canvas 3D + nav); không còn ô
+  // nhập chat hay bảng 6 công cụ trực tiếp trên "/" — lối vào duy nhất là CTA
+  // "Mở trợ lý" dẫn sang /chat, nơi vẫn còn đủ 6 tool qua ToolDock (xem describe
+  // "điều hướng sang từng tool" bên dưới, đi qua /chat trước).
+  it("hiện headline và CTA vào trợ lý", async () => {
     render(<App />);
     expect(await screen.findByRole("button", { name: /Mở trợ lý/i })).toBeInTheDocument();
-    expect(await screen.findByText(/Một chỗ làm việc/i)).toBeInTheDocument();
-    for (const re of Object.values(TOOL_TITLE)) {
-      expect(screen.getByTitle(re)).toBeInTheDocument();
-    }
+    expect(await screen.findByText(/hội tụ thành trợ lý/i)).toBeInTheDocument();
   });
 
   it("bấm CTA điều hướng sang /chat", async () => {
@@ -63,27 +64,6 @@ describe("Trang chủ (\"/\") — landing, không phải chat", () => {
     await user.click(await screen.findByRole("button", { name: /Mở trợ lý/i }));
     expect(await screen.findByPlaceholderText(/Hỏi KiNg bất cứ điều gì/i)).toBeInTheDocument();
     expect(window.location.pathname).toBe("/chat");
-  });
-
-  it("bấm thẻ Research đi thẳng /research, không qua /chat", async () => {
-    const user = userEvent.setup();
-    render(<App />);
-    await user.click(await screen.findByTitle(TOOL_TITLE.research));
-    expect(await screen.findByPlaceholderText(/Nhập chủ đề nghiên cứu/i)).toBeInTheDocument();
-    expect(window.location.pathname).toBe("/research");
-  });
-
-  it("gõ câu hỏi ở ô nhập trang chủ rồi Enter: sang /chat và gửi luôn câu đó", async () => {
-    const user = userEvent.setup();
-    render(<App />);
-    const input = await screen.findByPlaceholderText(/Hỏi KiNg bất cứ điều gì/i);
-    await user.type(input, "Giải thích transformer{Enter}");
-    expect(window.location.pathname).toBe("/chat");
-    // Cụm này lặp lại 2 lần hợp lệ: bong bóng chat + tiêu đề session mới
-    // trong sidebar (addSession chạy trên tin đầu tiên) — khoanh vùng vào
-    // đúng bong bóng để không vỡ khi có lần lặp thứ hai hợp lệ.
-    const bubble = await screen.findByText("Giải thích transformer", { selector: ".bubble-user" });
-    expect(bubble).toBeInTheDocument();
   });
 });
 
@@ -110,7 +90,7 @@ describe("Trang chat (/chat)", () => {
     const user = userEvent.setup();
     render(<App />);
     await user.click(await screen.findByRole("button", { name: /Trang chủ/i }));
-    expect(await screen.findByText(/Một chỗ làm việc/i)).toBeInTheDocument();
+    expect(await screen.findByText(/hội tụ thành trợ lý/i)).toBeInTheDocument();
     expect(window.location.pathname).toBe("/");
   });
 });
@@ -141,7 +121,7 @@ describe("điều hướng sang từng tool", () => {
   it("quay lại trang chủ từ một tool có route riêng (Research)", async () => {
     const user = await openTool(TOOL_TITLE.research);
     await user.click(await screen.findByRole("button", { name: /Trang chủ/i }));
-    expect(await screen.findByText(/Một chỗ làm việc/i)).toBeInTheDocument();
+    expect(await screen.findByText(/hội tụ thành trợ lý/i)).toBeInTheDocument();
     expect(window.location.pathname).toBe("/");
   });
 
@@ -151,7 +131,7 @@ describe("điều hướng sang từng tool", () => {
   it("quay lại trang chủ từ một tool dùng route chung (/tool/:id)", async () => {
     const user = await openTool(TOOL_TITLE.homework);
     await user.click(await screen.findByRole("button", { name: /Trang chủ/i }));
-    expect(await screen.findByText(/Một chỗ làm việc/i)).toBeInTheDocument();
+    expect(await screen.findByText(/hội tụ thành trợ lý/i)).toBeInTheDocument();
     expect(window.location.pathname).toBe("/");
   });
 });
@@ -183,7 +163,7 @@ describe("routing — mỗi tool có URL riêng nên F5 không rơi về home", 
   it("URL lạ thì đưa về home", async () => {
     window.history.pushState({}, "", "/khong-ton-tai");
     render(<App />);
-    expect(await screen.findByTitle(TOOL_TITLE.research)).toBeInTheDocument();
+    expect(await screen.findByText(/hội tụ thành trợ lý/i)).toBeInTheDocument();
     expect(window.location.pathname).toBe("/");
   });
 });

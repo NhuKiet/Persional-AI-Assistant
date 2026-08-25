@@ -21,6 +21,55 @@ def tokenize(text: str) -> set[str]:
     return {t for t in _TOKEN_RE.findall((text or "").lower()) if len(t) >= 3}
 
 
+# Anchor terms are required to be at least this long so common short words
+# (stopwords in any language, unit-like tokens) can't produce a false match —
+# only substantive terms (names, technical vocabulary) count.
+_ANCHOR_MIN_TOKEN_LEN = 4
+
+
+def anchor_tokens(query: str) -> set[str]:
+    return {t for t in tokenize(query) if len(t) >= _ANCHOR_MIN_TOKEN_LEN}
+
+
+def shares_anchor_token(query: str, *texts: str) -> bool:
+    """True if `texts` shares at least one substantive token with `query`.
+
+    Cheap, language-agnostic sanity check for keyword-driven search APIs
+    (arXiv, HuggingFace, Semantic Scholar…) whose own "relevance" ranking can
+    diverge wildly from actual topical relevance — e.g. arXiv matching two
+    completely unrelated papers because both titles contain the generic
+    boilerplate phrase "A Comparative Study of…". A query too short/generic
+    to have any anchor tokens is never filtered (nothing to check against).
+    """
+    q_tokens = anchor_tokens(query)
+    if not q_tokens:
+        return True
+    doc_tokens = tokenize(" ".join(t for t in texts if t))
+    return bool(q_tokens & doc_tokens)
+
+
+def filter_by_anchor_relevance(
+    query: str, results: list[SearchResult], label: str = "",
+) -> list[SearchResult]:
+    """Drop results that share no substantive term with `query`.
+
+    Meant as a last-resort net against retrieval contamination — apply it
+    to raw search-engine output, anchored to the user's actual (clean)
+    query, never to an LLM-expanded or gap-filling query (those are
+    exactly the noisy text that produces contaminated matches in the
+    first place — filtering against them would just rubber-stamp their
+    own noise).
+    """
+    kept = [r for r in results if shares_anchor_token(query, r.title, r.content)]
+    dropped = len(results) - len(kept)
+    if dropped:
+        logger.info(
+            "[RELEVANCE] dropped %d/%d results with no anchor-token overlap%s",
+            dropped, len(results), f" ({label})" if label else "",
+        )
+    return kept
+
+
 def lexical_support(claim_text: str, source_text: str) -> float:
     a, b = tokenize(claim_text), tokenize(source_text)
     if not a or not b:
@@ -71,15 +120,27 @@ def _numbered_sources(sources: list[SearchResult]) -> str:
     )
 
 
-def extract_claims(query, sources, llm_call, parse_array) -> list[Claim]:
+def extract_claims(query, sources, llm_call, parse_array, structured_call=None) -> list[Claim]:
+    """`structured_call` is an injected callable returning an object with a
+    `.claims` list carrying text/source_id/evidence_type, or None to use the
+    text path. Injected, not imported, so this module stays pure."""
     if not sources:
         return []
-    try:
-        raw = llm_call(claim_extraction_prompt(query, _numbered_sources(sources)))
-        parsed = parse_array(raw)
-    except Exception as e:  # noqa: BLE001
-        logger.warning("extract_claims failed (non-fatal): %s", e)
-        return []
+    parsed = None
+    if structured_call is not None:
+        try:
+            result = structured_call(claim_extraction_prompt(query, _numbered_sources(sources)))
+            if result is not None:
+                parsed = [item.model_dump() for item in result.claims]
+        except Exception as e:  # noqa: BLE001
+            logger.warning("structured claim extraction failed (non-fatal): %s", e)
+    if parsed is None:
+        try:
+            raw = llm_call(claim_extraction_prompt(query, _numbered_sources(sources)))
+            parsed = parse_array(raw)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("extract_claims failed (non-fatal): %s", e)
+            return []
 
     claims: list[Claim] = []
     for item in parsed:

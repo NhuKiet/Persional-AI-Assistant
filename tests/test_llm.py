@@ -121,3 +121,24 @@ def test_invoke_chat_normalizes_list_content(monkeypatch):
     result = _llm.invoke_chat("hi")
     assert result == "Hi there"
     assert isinstance(result, str)
+
+
+def test_get_llm_uses_default_model_for_default_provider(monkeypatch):
+    """DEFAULT_MODEL phải thực sự tới được provider, không chỉ hiển thị ở /api/models."""
+    monkeypatch.setattr(llm_mod.settings, "DEFAULT_PROVIDER", "ollama")
+    monkeypatch.setattr(llm_mod.settings, "DEFAULT_MODEL", "some-tuned-model")
+    assert get_llm().model == "some-tuned-model"
+
+
+def test_explicit_model_beats_default_model(monkeypatch):
+    monkeypatch.setattr(llm_mod.settings, "DEFAULT_PROVIDER", "ollama")
+    monkeypatch.setattr(llm_mod.settings, "DEFAULT_MODEL", "some-tuned-model")
+    assert get_llm(model="llama3").model == "llama3"
+
+
+def test_default_model_not_leaked_to_other_provider(monkeypatch):
+    """DEFAULT_MODEL đi cặp với DEFAULT_PROVIDER — không áp cho provider khác."""
+    monkeypatch.setattr(llm_mod.settings, "DEFAULT_PROVIDER", "openai")
+    monkeypatch.setattr(llm_mod.settings, "DEFAULT_MODEL", "gpt-5.6-luna")
+    assert llm_mod._default_model_for("anthropic") is None
+    assert llm_mod._default_model_for("openai") == "gpt-5.6-luna"

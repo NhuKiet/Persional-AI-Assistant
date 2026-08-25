@@ -7,29 +7,34 @@ import math
 from datetime import datetime, timezone
 
 from backend.app.features.research.models import SearchResult
-from backend.app.features.research.reranker import _bge_reranker, _CREDIBILITY
+from backend.app.features.research.reranker import (
+    _CREDIBILITY, cross_encoder_scores, fuse_scores,
+)
 
 logger = logging.getLogger(__name__)
 
 
 def recency_score(extra: dict, ref_year: int | None = None) -> float:
-    """Pure scoring function for recency using exponential decay.
+    """Exponential-decay recency in [0, 1]: exp(-age/5), 0.0 when unknown.
 
-    Args:
-        extra: dict with optional 'year' or 'published' fields
-        ref_year: reference year for age calculation. Defaults to the
-            current UTC year (`datetime.now(timezone.utc).year`) — a fixed
-            year would drift stale as time passes and eventually penalize
-            genuinely current sources.
-
-    Returns:
-        float in [0.0, 1.0]: exp(-age/5) where age = max(0, ref_year - year).
-        Returns 0.0 if year is missing or unparseable.
+    Accepts three shapes because the pipeline produces three: live academic
+    results carry "year" or "published", while knowledge-store chunks carry
+    "published_at" as an epoch (knowledge_store._rank_candidates). Reading
+    only the first two meant every stored source scored 0.0 no matter how
+    recent it was.
     """
     if ref_year is None:
         ref_year = datetime.now(timezone.utc).year
-    # A falsy-but-present "year" (0 or "") intentionally falls through to "published".
+
+    # A falsy-but-present "year" (0 or "") intentionally falls through.
     year = extra.get("year") or extra.get("published", "")
+    if not year:
+        epoch = extra.get("published_at")
+        if epoch:
+            try:
+                year = datetime.fromtimestamp(float(epoch), timezone.utc).year
+            except (ValueError, TypeError, OSError, OverflowError):
+                return 0.0
     if not year:
         return 0.0
     try:
@@ -52,77 +57,45 @@ def citation_score(extra: dict) -> float:
     return min(1.0, (extra.get("citation_count", 0) or 0) / 200)
 
 
-def _get_reranker():
-    """Delegate về reranker.py (nơi load BGE duy nhất)."""
-    return _bge_reranker()
-
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Query classifier → dynamic k
 # ─────────────────────────────────────────────────────────────────────────────
 
 def rerank_results(
-    query:     str,
-    results:   list[SearchResult],
-    top_k:     int   = 15,
+    query:   str,
+    results: list[SearchResult],
+    top_k:   int = 15,
 ) -> list[SearchResult]:
-    """
-    Rerank results using BGE-Reranker + credibility score.
-    Falls back to credibility-only scoring if reranker unavailable.
-    """
+    """Rerank with the shared cross-encoder ladder plus credibility, recency
+    and citation signals. Falls back to the non-reranked blend when no
+    reranker backend is available."""
     if not results:
         return results
 
-    reranker = _get_reranker()
+    base     = [r.score for r in results]
+    cred     = [_CREDIBILITY.get(r.source, 0.5) for r in results]
+    recency  = [recency_score(r.extra) for r in results]
+    citation = [citation_score(r.extra) for r in results]
 
-    if reranker is not None:
-        try:
-            pairs = [(query, f"{r.title} {r.content[:500]}") for r in results]
-            scores = reranker.compute_score(pairs, normalize=True)
-
-            ranked = []
-            for result, rerank_score in zip(results, scores):
-                cred   = _CREDIBILITY.get(result.source, 0.5)
-                # Weighted combination: reranker 55%, credibility 20%, recency 10%, citation 10%, original score 5%
-                final  = (
-                    rerank_score * 0.55
-                    + cred * 0.20
-                    + recency_score(result.extra) * 0.10
-                    + citation_score(result.extra) * 0.10
-                    + result.score * 0.05
-                )
-                ranked.append((result, final))
-
-            ranked.sort(key=lambda x: x[1], reverse=True)
-            top = [r for r, _ in ranked[:top_k]]
-
-            logger.info(
-                "Reranked %d → top %d results (BGE reranker)",
-                len(results), len(top),
-            )
-            return top
-
-        except Exception as e:
-            logger.warning("BGE reranker failed, falling back to credibility scoring: %s", e)
-
-    # Fallback: credibility + citation + recency scoring
-    ranked = []
-    for r in results:
-        cred = _CREDIBILITY.get(r.source, 0.5)
-        final = (
-            r.score * 0.40
-            + cred * 0.35
-            + citation_score(r.extra) * 0.15
-            + recency_score(r.extra) * 0.10
+    try:
+        rerank = cross_encoder_scores(
+            query, [f"{r.title} {r.content[:500]}" for r in results]
         )
-        ranked.append((r, final))
+    except Exception as e:  # noqa: BLE001
+        logger.warning("cross_encoder_scores failed (non-fatal): %s", e)
+        rerank = None
+    if rerank is not None and len(rerank) != len(results):
+        logger.warning("Rerank length mismatch (%d vs %d) — ignoring rerank scores",
+                       len(rerank), len(results))
+        rerank = None
 
-    ranked.sort(key=lambda x: x[1], reverse=True)
-    top = [r for r, _ in ranked[:top_k]]
-
+    final  = fuse_scores(rerank, base, cred, recency=recency, citation=citation)
+    ranked = sorted(zip(results, final), key=lambda x: x[1], reverse=True)
+    top    = [r for r, _ in ranked[:top_k]]
     logger.info(
-        "Reranked %d → top %d results (credibility fallback)",
+        "Reranked %d → top %d results (%s)",
         len(results), len(top),
+        "cross-encoder" if rerank is not None else "credibility fallback",
     )
     return top
 

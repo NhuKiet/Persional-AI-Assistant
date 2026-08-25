@@ -1,0 +1,881 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>KiNg — Hologram Core</title>
+<style>
+  :root{
+    --bg:#020714;
+    --fg:#eaf6ff;
+    --muted:#6f93ab;
+    --line:rgba(120,190,255,.14);
+    --cyan:#57b8ff;
+    --mint:#8dffc2;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    background:var(--bg);color:var(--fg);overflow:hidden;
+    font-family:"Helvetica Neue","Inter",Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .mono{font-family:ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;}
+
+  #stage{position:fixed;inset:0}
+
+  /* Trụ kiến trúc mờ + quầng sáng hậu cảnh — thuần CSS, gợi không khí "trung
+     tâm dữ liệu" như ảnh mẫu mà không cần dựng thêm hình học 3D. */
+  .architecture{position:absolute;inset:0;pointer-events:none;z-index:1}
+  .pillar{position:absolute;top:0;bottom:0;width:9%;
+    background:linear-gradient(180deg, transparent, rgba(120,220,255,.05) 30%, rgba(120,220,255,.09) 50%, rgba(120,220,255,.05) 70%, transparent);
+    filter:blur(1px)}
+  .pillar.p1{left:6%} .pillar.p2{left:20%} .pillar.p3{right:20%} .pillar.p4{right:6%}
+  .beam{position:absolute;top:0;bottom:0;left:50%;width:220px;transform:translateX(-50%);
+    background:radial-gradient(closest-side, rgba(140,235,255,.16), transparent 70%)}
+
+  #scene-canvas{position:absolute;inset:0;width:100%;height:100%;display:block;opacity:0;transition:opacity .9s ease;z-index:2}
+  #scene-canvas.ready{opacity:1}
+
+  .vignette{position:absolute;inset:0;pointer-events:none;z-index:3;
+    background:
+      radial-gradient(62% 58% at 60% 46%, rgba(40,130,255,.16), transparent 64%),
+      radial-gradient(128% 128% at 50% 50%, transparent 48%, rgba(0,2,8,.86));
+    mix-blend-mode:screen;}
+  .vignette.dark{mix-blend-mode:normal;
+    background:radial-gradient(130% 130% at 50% 50%, transparent 52%, rgba(0,1,6,.4));}
+
+  .nav{position:absolute;top:0;left:0;right:0;z-index:6;
+    display:flex;justify-content:space-between;align-items:center;
+    padding:18px 32px;font-size:8.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted)}
+  .nav .brand{display:flex;align-items:center;gap:10px;color:var(--fg);letter-spacing:.24em}
+  .nav .brand .dot{width:7px;height:7px;border-radius:50%;background:var(--cyan);
+    box-shadow:0 0 10px 2px rgba(127,242,255,.6)}
+  .nav .center{display:flex;gap:26px}
+  .nav .right{display:flex;align-items:center;gap:9px}
+  .nav .right .led{width:6px;height:6px;border-radius:50%;background:var(--mint);
+    box-shadow:0 0 8px 2px rgba(141,255,194,.6)}
+  .nav a{color:inherit;text-decoration:none;opacity:.8}
+
+  .content{position:absolute;left:36px;bottom:64px;width:min(46vw,560px);z-index:6}
+  .eyebrow{font-size:8px;letter-spacing:.24em;color:var(--muted);text-transform:uppercase;
+    margin-bottom:18px;display:flex;align-items:center;gap:12px}
+  .eyebrow::before{content:"";width:26px;height:1px;background:var(--muted)}
+  .content h1{font-weight:400;font-size:clamp(30px,4.4vw,52px);line-height:1.02;
+    letter-spacing:-.02em;margin-bottom:14px;text-transform:uppercase}
+  .content h1 em{font-style:normal;color:var(--cyan)}
+  .content p{font-size:11px;line-height:1.58;color:#a9c3d3;max-width:380px;margin-bottom:22px}
+
+  .metrics{display:grid;grid-template-columns:1fr 1fr;gap:10px 20px;max-width:340px}
+  .metric{border-left:1px solid var(--line);padding:2px 0 2px 10px}
+  .metric .k{font-size:7px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted)}
+  .metric .v{font-size:11px;letter-spacing:.02em;margin-top:4px}
+
+  .corner{position:absolute;font-size:8px;letter-spacing:.16em;color:var(--muted);
+    text-transform:uppercase;z-index:6;line-height:1.7;opacity:.72}
+  .corner.tr{right:34px;top:118px;text-align:right}
+  .corner.br{right:34px;bottom:26px;text-align:right}
+  .hint{position:absolute;left:50%;bottom:22px;transform:translateX(-50%);
+    font-size:8px;letter-spacing:.2em;color:var(--muted);text-transform:uppercase;
+    z-index:6;opacity:.6}
+
+  #fallback{position:absolute;inset:0;display:none;align-items:center;justify-content:center;
+    z-index:4;background:radial-gradient(60% 60% at 64% 46%,rgba(80,200,255,.16),transparent 70%)}
+  #fallback .orb{width:min(46vmin,360px);aspect-ratio:1;border-radius:50%;
+    background:radial-gradient(circle at 50% 45%,#dffcff,#7fd7f2 32%,#123246 60%,transparent 72%);
+    box-shadow:0 0 90px 20px rgba(127,242,255,.2);opacity:.85}
+  body.webgl-failed #fallback{display:flex}
+  body.webgl-failed #scene-canvas{display:none}
+
+  @media (max-width:899px){
+    .nav .center{display:none}
+    .content{width:min(60vw,420px)}
+    .corner.tr{display:none}
+  }
+  @media (max-width:720px){
+    body{overflow-y:auto}
+    #stage{position:relative;min-height:100svh}
+    .nav{padding:18px 20px}
+    .content{position:relative;left:0;bottom:0;width:auto;padding:0 22px 24px}
+    .content h1{font-size:clamp(28px,8vw,40px)}
+    #scene-canvas{position:fixed;inset:auto 0 0 0;height:64svh;top:auto}
+    .architecture,.vignette{position:fixed;top:auto;bottom:0;height:64svh}
+    .hint{bottom:14px}
+    .corner.br{bottom:14px;right:16px}
+  }
+  @media (prefers-reduced-motion: reduce){
+    #scene-canvas{transition:none}
+  }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="architecture" aria-hidden="true">
+    <div class="pillar p1"></div><div class="pillar p2"></div>
+    <div class="pillar p3"></div><div class="pillar p4"></div>
+    <div class="beam"></div>
+  </div>
+  <canvas id="scene-canvas" aria-hidden="true"></canvas>
+  <div class="vignette" aria-hidden="true"></div>
+  <div class="vignette dark" aria-hidden="true"></div>
+  <div id="fallback" aria-hidden="true"><div class="orb"></div></div>
+
+  <nav class="nav mono">
+    <div class="brand"><span class="dot"></span>KING</div>
+    <div class="center"><a href="#">Core</a><a href="#">Network</a><a href="#">Archive</a></div>
+    <div class="right"><span class="led"></span>Hologram online</div>
+  </nav>
+
+  <header class="content">
+    <div class="eyebrow mono">05 / Hologram</div>
+    <h1>Dữ liệu dựng<br/>thành <em>một lõi cầu.</em></h1>
+    <p>Mọi truy vấn được chiếu lên một mặt cầu lưới ánh sáng, quấn quanh bởi
+      dải trạng thái sống — vành năng lượng bên dưới tiếp liệu liên tục cho lõi.</p>
+    <div class="metrics mono">
+      <div class="metric"><div class="k">Kinh/vĩ tuyến</div><div class="v">18 × 10</div></div>
+      <div class="metric"><div class="k">Vành năng lượng</div><div class="v">6 lớp</div></div>
+      <div class="metric"><div class="k">Hạt sáng</div><div class="v">~420</div></div>
+      <div class="metric"><div class="k">Trạng thái</div><div class="v">Đồng bộ</div></div>
+    </div>
+  </header>
+
+  <div class="corner tr mono">Node 05 — hologram<br>continuous · live</div>
+  <div class="corner br mono">Hologram core<br>render · webgl</div>
+  <div class="hint mono">kéo để xoay · cuộn để phóng</div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+
+/* =====================================================================
+   CONFIG
+   ===================================================================== */
+const CONFIG = {
+  seed: 20260731,
+  background: 0x020714,
+  exposure: 1.22,
+  fogDensity: 0.03,
+
+  camera: { fov: 42, z: 12.5, zoomMin: 7, zoomMax: 20 },
+
+  globe: {
+    radius: 2.3,
+    meridians: 30,
+    parallels: 15,
+    segments: 128,
+    colorA: 0x4fb2ff,   // meridian — xanh dương đậm
+    colorB: 0x57b8ff,   // parallel — cùng tông, nhạt hơn chút
+    fillOpacity: 0.06,
+    selfSpin: 0.045,
+  },
+
+  continents: {
+    // Toạ độ [lon,lat] xấp xỉ theo độ, phác hoạ thô các lục địa — không cần
+    // chính xác địa lý, chỉ cần đọc ra "hình quả địa cầu" ở khoảng cách xa.
+    dotStep: 2.4,
+    dotSize: 0.024,
+    coastDotSize: 0.05,
+    color: 0xbfe6ff,
+    polygons: [
+      // Châu Phi + Âu-Á (một khối liền)
+      [[-18,35],[0,37],[20,42],[45,42],[60,55],[80,50],[100,55],[130,55],[140,45],
+       [135,30],[105,20],[95,10],[80,8],[70,20],[55,15],[45,5],[38,-2],[42,-15],
+       [35,-28],[20,-34],[12,-18],[8,4],[-10,10],[-16,15],[-18,35]],
+      // Bắc Mỹ
+      [[-165,68],[-140,68],[-110,68],[-90,60],[-80,48],[-70,44],[-60,48],[-80,25],
+       [-97,18],[-110,22],[-124,40],[-130,52],[-152,58],[-165,68]],
+      // Nam Mỹ
+      [[-80,10],[-62,6],[-52,-5],[-40,-8],[-38,-20],[-48,-30],[-58,-35],[-68,-40],
+       [-72,-20],[-78,-5],[-80,10]],
+      // Úc
+      [[113,-22],[125,-14],[137,-12],[145,-17],[150,-27],[142,-38],[130,-32],
+       [117,-33],[113,-22]],
+    ],
+  },
+
+  network: {
+    nodeCount: 26,
+    linkCount: 22,
+    color: 0x9fe0ff,
+    arcHeight: 0.42,
+    segments: 48,
+    pulseSpeed: 0.35,
+  },
+
+  orbitTrails: [
+    { radius: 2.95, tiltX: 0.5,  tiltZ: -0.18, segments: 220, trailFraction: 0.3, speed: 0.5,  color: 0xd8f4ff, satelliteSize: 0.16, coreSize: 0.07 },
+    { radius: 3.22, tiltX: -0.62, tiltZ: 0.3,  segments: 220, trailFraction: 0.22, speed: -0.33, color: 0xa4e6ff, satelliteSize: 0.14, coreSize: 0.06 },
+  ],
+
+  textRing: {
+    radius: 2.62,
+    height: 0.62,
+    tiltX: -0.34,
+    tiltZ: 0.05,
+    text: 'KING · HOLOGRAM CORE · SYSTEM ONLINE · DỮ LIỆU ĐỒNG BỘ · ',
+    color: '#eafcff',
+    glow: '#57b8ff',
+  },
+
+  funnel: {
+    layers: 7,
+    topRadius: 2.5,
+    bottomRadius: 0.55,
+    topY: -0.15,
+    bottomY: -3.6,
+    tube: 0.012,
+    squash: 0.38,   // độ dẹt elip (phối cảnh nhìn nghiêng)
+    color: 0x4fb2ff,
+  },
+
+  sparkle: {
+    onSphere: 220,
+    ambient: 420,
+    color: 0xbfe6ff,
+  },
+
+  motion: { globalY: 0.07, dragDamping: 6, parallaxMax: 0.07, parallaxDamping: 3 },
+
+  bloom: { strength: 0.68, radius: 0.42, threshold: 0.3 },
+  glowScale: 6.2,
+
+  lights: {
+    key:  { color: 0xcfe8ff, intensity: 2.0, pos: [6, 8, 10] },
+    rim:  { color: 0x3f9fff, intensity: 2.8, pos: [-8, -3, 5] },
+    warm: { color: 0x5fc8ff, intensity: 1.2, pos: [-2, -6, -4] },
+    ambient: { color: 0x0e2a44, intensity: 1.3 },
+  },
+};
+
+function createSeededRandom(seed){
+  let a = seed >>> 0;
+  return function(){
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const range = (rnd, a, b) => a + rnd() * (b - a);
+const lerp = (a, b, t) => a + (b - a) * t;
+
+function detectDpr(){
+  return Math.min(devicePixelRatio || 1, innerWidth < 720 ? 1.5 : 1.85);
+}
+
+/* =====================================================================
+   App
+   ===================================================================== */
+const canvas = document.getElementById('scene-canvas');
+const prefersReduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+let renderer, scene, camera, composer, bloomPass, environmentTarget;
+let rig, globeLines, globeFill, textRingMesh, sparkleOnSphere, sparkleAmbient, glowSprite;
+let continentDots, networkLinks;
+const funnelRings = [];
+const orbitTrailLines = [];
+
+const clock = new THREE.Clock();
+let rafId = null, running = false;
+
+let yawBase = 0;
+const rot = { targetX: 0, targetY: 0, curX: 0, curY: 0, prevY: 0 };
+const parallax = { targetX: 0, targetY: 0, curX: 0, curY: 0 };
+let dragging = false, lastPX = 0, lastPY = 0, activePointer = null;
+let zoomZ = CONFIG.camera.z;
+
+function getRenderSize(){
+  return { width: innerWidth, height: innerWidth <= 720 ? Math.round(innerHeight * 0.64) : innerHeight };
+}
+function createRenderer(){
+  const size = getRenderSize();
+  const r = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
+  r.setClearColor(0x000000, 0);
+  r.setPixelRatio(detectDpr());
+  r.setSize(size.width, size.height, false);
+  r.toneMapping = THREE.ACESFilmicToneMapping;
+  r.toneMappingExposure = CONFIG.exposure;
+  r.outputColorSpace = THREE.SRGBColorSpace;
+  return r;
+}
+
+function createScene(){
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(CONFIG.background);
+  scene.fog = new THREE.FogExp2(CONFIG.background, CONFIG.fogDensity);
+  camera = new THREE.PerspectiveCamera(CONFIG.camera.fov, innerWidth / innerHeight, 0.1, 100);
+
+  const L = CONFIG.lights;
+  scene.add(new THREE.AmbientLight(L.ambient.color, L.ambient.intensity));
+  const dir = d => { const l = new THREE.DirectionalLight(d.color, d.intensity); l.position.set(...d.pos); return l; };
+  scene.add(dir(L.key), dir(L.rim), dir(L.warm));
+
+  rig = new THREE.Group();
+  scene.add(rig);
+}
+
+/* ---------- quả cầu lưới (kinh/vĩ tuyến) ---------- */
+function createGlobe(){
+  const g = CONFIG.globe;
+  const positions = [];
+  const colors = [];
+  const colA = new THREE.Color(g.colorA);
+  const colB = new THREE.Color(g.colorB);
+
+  // Meridians (kinh tuyến) — vòng tròn lớn qua 2 cực, xoay quanh trục Y.
+  for (let m = 0; m < g.meridians; m++){
+    const lon = (m / g.meridians) * Math.PI * 2;
+    for (let s = 0; s < g.segments; s++){
+      const t0 = (s / g.segments) * Math.PI;
+      const t1 = ((s + 1) / g.segments) * Math.PI;
+      for (const t of [t0, t1]){
+        const y = Math.cos(t) * g.radius;
+        const r = Math.sin(t) * g.radius;
+        positions.push(Math.cos(lon) * r, y, Math.sin(lon) * r);
+        colors.push(colA.r, colA.g, colA.b);
+      }
+    }
+  }
+  // Parallels (vĩ tuyến) — vòng tròn ngang song song xích đạo.
+  for (let p = 1; p < g.parallels; p++){
+    const t = (p / g.parallels) * Math.PI;
+    const y = Math.cos(t) * g.radius;
+    const r = Math.sin(t) * g.radius;
+    for (let s = 0; s < g.segments; s++){
+      const a0 = (s / g.segments) * Math.PI * 2;
+      const a1 = ((s + 1) / g.segments) * Math.PI * 2;
+      for (const a of [a0, a1]){
+        positions.push(Math.cos(a) * r, y, Math.sin(a) * r);
+        colors.push(colB.r, colB.g, colB.b);
+      }
+    }
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  const mat = new THREE.LineBasicMaterial({
+    vertexColors: true, transparent: true, opacity: 0.55,
+    blending: THREE.AdditiveBlending, depthWrite: false,
+  });
+  globeLines = new THREE.LineSegments(geo, mat);
+  rig.add(globeLines);
+
+  // Khối cầu mờ bên trong — tạo cảm giác "đặc" nhẹ thay vì lưới rỗng hoàn toàn.
+  const fillGeo = new THREE.SphereGeometry(g.radius * 0.985, 48, 32);
+  const fillMat = new THREE.MeshBasicMaterial({
+    color: g.colorA, transparent: true, opacity: g.fillOpacity,
+    blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.FrontSide,
+  });
+  globeFill = new THREE.Mesh(fillGeo, fillMat);
+  rig.add(globeFill);
+}
+
+function latLonToVec3(lon, lat, radius){
+  const phi = (90 - lat) * (Math.PI / 180);
+  const theta = (lon + 180) * (Math.PI / 180);
+  return new THREE.Vector3(
+    -radius * Math.sin(phi) * Math.cos(theta),
+    radius * Math.cos(phi),
+    radius * Math.sin(phi) * Math.sin(theta),
+  );
+}
+function pointInPolygon(lon, lat, poly){
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++){
+    const [xi, yi] = poly[i], [xj, yj] = poly[j];
+    const hit = ((yi > lat) !== (yj > lat))
+      && (lon < (xj - xi) * (lat - yi) / (yj - yi) + xi);
+    if (hit) inside = !inside;
+  }
+  return inside;
+}
+
+/* ---------- bản đồ lục địa dạng chấm — phủ lên bề mặt quả cầu ---------- */
+// Hai lớp chấm: nội địa (nhỏ, mờ) và viền bờ biển (lớn, sáng hơn) — viền phát
+// hiện bằng cách dò 4 điểm lân cận, nếu bất kỳ điểm nào rơi ra ngoài lục địa
+// thì chấm hiện tại nằm sát biên. Tạo cảm giác "đường viền lục địa" rõ nét
+// hơn hẳn so với một khối chấm đồng đều.
+function createContinents(){
+  const c = CONFIG.continents;
+  const g = CONFIG.globe;
+  const inland = [];
+  const coast = [];
+  const onLandAt = (lon, lat) => c.polygons.some(poly => pointInPolygon(lon, lat, poly));
+
+  for (let lat = -84; lat <= 84; lat += c.dotStep){
+    // Bước kinh độ giãn theo vĩ độ để mật độ chấm đều trên mặt cầu (co lại
+    // gần cực thay vì dày đặc bất thường).
+    const lonStep = c.dotStep / Math.max(0.18, Math.cos(lat * Math.PI / 180));
+    for (let lon = -180; lon < 180; lon += lonStep){
+      if (!onLandAt(lon, lat)) continue;
+      const nearEdge = !onLandAt(lon + lonStep, lat) || !onLandAt(lon - lonStep, lat)
+        || !onLandAt(lon, lat + c.dotStep) || !onLandAt(lon, lat - c.dotStep);
+      const v = latLonToVec3(lon, lat, g.radius * 1.006);
+      (nearEdge ? coast : inland).push(v.x, v.y, v.z);
+    }
+  }
+
+  const makePoints = (positions, size, opacity) => {
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    return new THREE.Points(geo, new THREE.PointsMaterial({
+      color: c.color, size, transparent: true, opacity,
+      blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true,
+    }));
+  };
+  continentDots = new THREE.Group();
+  continentDots.add(makePoints(inland, c.dotSize, 0.55));
+  continentDots.add(makePoints(coast, c.coastDotSize, 0.95));
+  rig.add(continentDots);
+}
+
+/* ---------- điểm nút mạng lưới + đường cung nối ---------- */
+function createNetwork(){
+  const n = CONFIG.network;
+  const g = CONFIG.globe;
+  const rnd = createSeededRandom(CONFIG.seed + 707);
+  const nodeR = g.radius * 1.008;
+
+  const nodes = [];
+  const nodePositions = new Float32Array(n.nodeCount * 3);
+  for (let i = 0; i < n.nodeCount; i++){
+    const u = rnd(), v = rnd();
+    const theta = u * Math.PI * 2, phi = Math.acos(2 * v - 1);
+    const p = new THREE.Vector3(
+      Math.sin(phi) * Math.cos(theta) * nodeR,
+      Math.cos(phi) * nodeR,
+      Math.sin(phi) * Math.sin(theta) * nodeR,
+    );
+    nodes.push(p);
+    nodePositions[i * 3] = p.x; nodePositions[i * 3 + 1] = p.y; nodePositions[i * 3 + 2] = p.z;
+  }
+  const nodeGeo = new THREE.BufferGeometry();
+  nodeGeo.setAttribute('position', new THREE.BufferAttribute(nodePositions, 3));
+  const nodePoints = new THREE.Points(nodeGeo, new THREE.PointsMaterial({
+    color: n.color, size: 0.07, transparent: true, opacity: 0.95,
+    blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true,
+  }));
+  rig.add(nodePoints);
+
+  // Đường cung nối 2 điểm nút, phồng ra khỏi bề mặt cầu theo trung điểm cầu
+  // hoá — giống các đường bay/kết nối dữ liệu vòng quanh địa cầu.
+  const arcPositions = [];
+  for (let k = 0; k < n.linkCount; k++){
+    const a = nodes[Math.floor(rnd() * nodes.length)];
+    let b = nodes[Math.floor(rnd() * nodes.length)];
+    if (b === a) b = nodes[(nodes.indexOf(a) + 1) % nodes.length];
+    const mid = a.clone().add(b).multiplyScalar(0.5);
+    const bulge = 1 + n.arcHeight * (0.6 + rnd() * 0.6);
+    mid.setLength(nodeR * bulge);
+    const curve = new THREE.QuadraticBezierCurve3(a, mid, b);
+    const pts = curve.getPoints(n.segments);
+    for (let s = 0; s < pts.length - 1; s++){
+      arcPositions.push(pts[s].x, pts[s].y, pts[s].z, pts[s + 1].x, pts[s + 1].y, pts[s + 1].z);
+    }
+  }
+  const arcGeo = new THREE.BufferGeometry();
+  arcGeo.setAttribute('position', new THREE.Float32BufferAttribute(arcPositions, 3));
+  const arcMat = new THREE.LineBasicMaterial({
+    color: n.color, transparent: true, opacity: 0.55,
+    blending: THREE.AdditiveBlending, depthWrite: false,
+  });
+  networkLinks = new THREE.LineSegments(arcGeo, arcMat);
+  rig.add(networkLinks);
+}
+
+/* ---------- vòng quỹ đạo với vệ tinh phát sáng chạy quanh ---------- */
+// Hình học đứng yên (một vòng tròn đủ điểm), "vệt sao chổi" tạo bằng cách ghi
+// lại màu từng đỉnh mỗi frame — sáng dần trong khung trailFraction ngay sau
+// đầu vệt, tắt hẳn (đen, cộng blend = vô hình) ở phần còn lại của vòng. Đầu
+// vệt gắn một "vệ tinh" — lõi trắng sáng rực + quầng glow mềm bao quanh —
+// thay vì chỉ là điểm sáng trừu tượng trên đường line.
+// Nhiều vòng cùng lúc (CONFIG.orbitTrails) — mỗi vòng nghiêng/tốc độ riêng.
+function createOrbitTrail(def){
+  const group = new THREE.Group();
+  group.rotation.x = def.tiltX;
+  group.rotation.z = def.tiltZ;
+  group.userData.def = def;
+
+  const geo = new THREE.BufferGeometry();
+  const positions = new Float32Array((def.segments + 1) * 3);
+  const colors = new Float32Array((def.segments + 1) * 3);
+  for (let i = 0; i <= def.segments; i++){
+    const a = (i / def.segments) * Math.PI * 2;
+    positions[i * 3] = Math.cos(a) * def.radius;
+    positions[i * 3 + 1] = 0;
+    positions[i * 3 + 2] = Math.sin(a) * def.radius;
+  }
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  const mat = new THREE.LineBasicMaterial({
+    vertexColors: true, transparent: true, opacity: 0.9,
+    blending: THREE.AdditiveBlending, depthWrite: false,
+  });
+  const line = new THREE.Line(geo, mat);
+  group.add(line);
+
+  const glowTex = makeGlowTexture();
+  const glow = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: glowTex, color: def.color, transparent: true, opacity: 0.85,
+    blending: THREE.AdditiveBlending, depthWrite: false,
+  }));
+  glow.scale.setScalar(def.satelliteSize);
+  group.add(glow);
+
+  const core = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: glowTex, color: 0xffffff, transparent: true, opacity: 1,
+    blending: THREE.AdditiveBlending, depthWrite: false,
+  }));
+  core.scale.setScalar(def.coreSize);
+  group.add(core);
+
+  group.userData.line = line;
+  group.userData.glow = glow;
+  group.userData.core = core;
+  rig.add(group);
+  orbitTrailLines.push(group);
+}
+function createOrbitTrails(){
+  for (const def of CONFIG.orbitTrails) createOrbitTrail(def);
+}
+function updateOrbitTrails(t){
+  for (const group of orbitTrailLines){
+    const o = group.userData.def;
+    const line = group.userData.line;
+    const colors = line.geometry.attributes.color.array;
+    const col = new THREE.Color(o.color);
+    const head = ((t * o.speed) % 1 + 1) % 1;
+    const n = o.segments + 1;
+    for (let i = 0; i < n; i++){
+      const f = i / o.segments;
+      let behind = head - f;
+      if (behind < 0) behind += 1;
+      const lit = behind <= o.trailFraction ? 1 - behind / o.trailFraction : 0;
+      const bright = lit * lit;
+      colors[i * 3] = col.r * bright;
+      colors[i * 3 + 1] = col.g * bright;
+      colors[i * 3 + 2] = col.b * bright;
+    }
+    line.geometry.attributes.color.needsUpdate = true;
+
+    const headAngle = head * Math.PI * 2;
+    const hx = Math.cos(headAngle) * o.radius, hz = Math.sin(headAngle) * o.radius;
+    group.userData.glow.position.set(hx, 0, hz);
+    group.userData.core.position.set(hx, 0, hz);
+    const twinkle = 0.85 + 0.15 * Math.sin(t * 5 + o.radius);
+    group.userData.glow.scale.setScalar(o.satelliteSize * twinkle);
+  }
+}
+
+/* ---------- vành chữ hologram quanh xích đạo ---------- */
+function createTextRingTexture(){
+  const cv = document.createElement('canvas');
+  cv.width = 2048; cv.height = 128;
+  const g = cv.getContext('2d');
+  g.clearRect(0, 0, cv.width, cv.height);
+  g.font = '600 52px ui-monospace, Menlo, Consolas, monospace';
+  g.textBaseline = 'middle';
+  g.fillStyle = CONFIG.textRing.color;
+  g.shadowColor = CONFIG.textRing.glow;
+  g.shadowBlur = 22;
+  const label = CONFIG.textRing.text;
+  const metrics = g.measureText(label);
+  const step = metrics.width + 90;
+  let x = 0;
+  while (x < cv.width + step){
+    g.fillText(label, x, cv.height / 2);
+    x += step;
+  }
+  const tex = new THREE.CanvasTexture(cv);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.ClampToEdgeWrapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+function createTextRing(){
+  const tr = CONFIG.textRing;
+  const geo = new THREE.CylinderGeometry(tr.radius, tr.radius, tr.height, 128, 1, true);
+  const tex = createTextRingTexture();
+  tex.repeat.set(6, 1);
+  const mat = new THREE.MeshBasicMaterial({
+    map: tex, transparent: true, opacity: 0.92, side: THREE.DoubleSide,
+    blending: THREE.AdditiveBlending, depthWrite: false,
+  });
+  textRingMesh = new THREE.Mesh(geo, mat);
+  textRingMesh.rotation.x = tr.tiltX;
+  textRingMesh.rotation.z = tr.tiltZ;
+  rig.add(textRingMesh);
+}
+
+/* ---------- vành năng lượng dạng phễu bên dưới lõi ---------- */
+function makeRingGlowTexture(){
+  const cv = document.createElement('canvas'); cv.width = cv.height = 256;
+  const g = cv.getContext('2d');
+  const grd = g.createRadialGradient(128, 128, 90, 128, 128, 128);
+  grd.addColorStop(0, 'rgba(0,0,0,0)');
+  grd.addColorStop(0.7, 'rgba(127,242,255,.05)');
+  grd.addColorStop(0.92, 'rgba(190,250,255,.9)');
+  grd.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = grd; g.fillRect(0, 0, 256, 256);
+  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; return tex;
+}
+function createFunnelRings(){
+  const f = CONFIG.funnel;
+  const glowTex = makeRingGlowTexture();
+  for (let i = 0; i < f.layers; i++){
+    const t = i / (f.layers - 1);
+    const radius = lerp(f.topRadius, f.bottomRadius, t);
+    const y = lerp(f.topY, f.bottomY, t);
+    const geo = new THREE.RingGeometry(radius * 0.9, radius * 1.06, 96);
+    const opacity = lerp(0.5, 0.06, t);
+    const mat = new THREE.MeshBasicMaterial({
+      map: glowTex, color: f.color, transparent: true, opacity,
+      blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
+    });
+    const ring = new THREE.Mesh(geo, mat);
+    ring.rotation.x = Math.PI / 2;
+    ring.scale.z = f.squash;
+    ring.position.y = y;
+    ring.userData.baseOpacity = opacity;
+    ring.userData.phase = t * Math.PI * 2;
+    rig.add(ring);
+    funnelRings.push(ring);
+  }
+}
+
+/* ---------- hạt sparkle ---------- */
+function makeSparkleTexture(){
+  const cv = document.createElement('canvas'); cv.width = cv.height = 64;
+  const g = cv.getContext('2d');
+  const grd = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  grd.addColorStop(0, 'rgba(255,255,255,1)');
+  grd.addColorStop(0.35, 'rgba(200,250,255,.7)');
+  grd.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = grd; g.fillRect(0, 0, 64, 64);
+  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; return tex;
+}
+function createSparkles(){
+  const s = CONFIG.sparkle;
+  const rnd = createSeededRandom(CONFIG.seed + 41);
+  const sprite = makeSparkleTexture();
+
+  const onSphere = new Float32Array(s.onSphere * 3);
+  for (let i = 0; i < s.onSphere; i++){
+    const u = rnd(), v = rnd();
+    const theta = u * Math.PI * 2, phi = Math.acos(2 * v - 1);
+    const r = CONFIG.globe.radius * 1.01;
+    onSphere[i * 3] = Math.sin(phi) * Math.cos(theta) * r;
+    onSphere[i * 3 + 1] = Math.cos(phi) * r;
+    onSphere[i * 3 + 2] = Math.sin(phi) * Math.sin(theta) * r;
+  }
+  const geoA = new THREE.BufferGeometry();
+  geoA.setAttribute('position', new THREE.BufferAttribute(onSphere, 3));
+  sparkleOnSphere = new THREE.Points(geoA, new THREE.PointsMaterial({
+    color: s.color, size: 0.05, map: sprite, transparent: true,
+    opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true,
+  }));
+  rig.add(sparkleOnSphere);
+
+  const ambient = new Float32Array(s.ambient * 3);
+  for (let i = 0; i < s.ambient; i++){
+    ambient[i * 3] = range(rnd, -9, 9);
+    ambient[i * 3 + 1] = range(rnd, -7, 6);
+    ambient[i * 3 + 2] = range(rnd, -8, 4);
+  }
+  const geoB = new THREE.BufferGeometry();
+  geoB.setAttribute('position', new THREE.BufferAttribute(ambient, 3));
+  sparkleAmbient = new THREE.Points(geoB, new THREE.PointsMaterial({
+    color: 0x8fb8cc, size: 0.03, map: sprite, transparent: true,
+    opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true,
+  }));
+  scene.add(sparkleAmbient);
+}
+
+function makeGlowTexture(){
+  const cv = document.createElement('canvas'); cv.width = cv.height = 256;
+  const g = cv.getContext('2d');
+  const grd = g.createRadialGradient(128, 128, 0, 128, 128, 128);
+  grd.addColorStop(0, 'rgba(200,250,255,.85)');
+  grd.addColorStop(0.3, 'rgba(127,242,255,.4)');
+  grd.addColorStop(0.6, 'rgba(80,180,255,.12)');
+  grd.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = grd; g.fillRect(0, 0, 256, 256);
+  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; return tex;
+}
+function createGlow(){
+  glowSprite = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: makeGlowTexture(), blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.5,
+  }));
+  glowSprite.scale.setScalar(CONFIG.glowScale);
+  rig.add(glowSprite);
+}
+
+/* ---------- post processing ---------- */
+function createPostProcessing(){
+  composer = new EffectComposer(renderer);
+  const size = getRenderSize();
+  composer.setPixelRatio(detectDpr());
+  composer.setSize(size.width, size.height);
+  const renderPass = new RenderPass(scene, camera);
+  bloomPass = new UnrealBloomPass(new THREE.Vector2(size.width, size.height),
+    CONFIG.bloom.strength, CONFIG.bloom.radius, CONFIG.bloom.threshold);
+  composer.addPass(renderPass);
+  composer.addPass(bloomPass);
+}
+
+function applyLayout(){
+  const size = getRenderSize();
+  zoomZ = THREE.MathUtils.clamp(zoomZ, CONFIG.camera.zoomMin, CONFIG.camera.zoomMax);
+  camera.aspect = size.width / size.height;
+  camera.updateProjectionMatrix();
+}
+
+/* ---------- interactions ---------- */
+function bindInteractions(){
+  canvas.style.touchAction = 'pan-y';
+  canvas.addEventListener('pointerdown', onDown);
+  canvas.addEventListener('pointermove', onMove);
+  window.addEventListener('pointermove', onHover);
+  canvas.addEventListener('pointerup', onUp);
+  canvas.addEventListener('pointercancel', onUp);
+  canvas.addEventListener('wheel', onWheel, { passive: false });
+  window.addEventListener('resize', onResize);
+  document.addEventListener('visibilitychange', onVisibility);
+}
+function onDown(e){ dragging = true; activePointer = e.pointerId; lastPX = e.clientX; lastPY = e.clientY; try { canvas.setPointerCapture(e.pointerId); } catch(_){} }
+function onMove(e){
+  if (!dragging || e.pointerId !== activePointer) return;
+  rot.targetY += (e.clientX - lastPX) * 0.006;
+  rot.targetX += (e.clientY - lastPY) * 0.006;
+  rot.targetX = THREE.MathUtils.clamp(rot.targetX, -0.8, 0.8);
+  lastPX = e.clientX; lastPY = e.clientY;
+}
+function onHover(e){
+  if (dragging) return;
+  parallax.targetX = (e.clientY / innerHeight - 0.5) * CONFIG.motion.parallaxMax;
+  parallax.targetY = (e.clientX / innerWidth  - 0.5) * CONFIG.motion.parallaxMax;
+}
+function onUp(e){ if (e.pointerId !== activePointer && activePointer !== null) return; dragging = false; activePointer = null; try { canvas.releasePointerCapture(e.pointerId); } catch(_){} }
+function onWheel(e){
+  const r = canvas.getBoundingClientRect();
+  const inside = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+  if (!inside) return;
+  e.preventDefault();
+  zoomZ = THREE.MathUtils.clamp(zoomZ + e.deltaY * 0.01, CONFIG.camera.zoomMin, CONFIG.camera.zoomMax);
+}
+let resizeRaf = null;
+function onResize(){
+  if (resizeRaf) cancelAnimationFrame(resizeRaf);
+  resizeRaf = requestAnimationFrame(() => {
+    const size = getRenderSize();
+    renderer.setPixelRatio(detectDpr());
+    renderer.setSize(size.width, size.height, false);
+    if (composer){ composer.setPixelRatio(detectDpr()); composer.setSize(size.width, size.height); }
+    applyLayout();
+  });
+}
+function onVisibility(){ if (document.hidden){ stop(); } else if (!running){ clock.getDelta(); start(); } }
+
+/* ---------- animation ---------- */
+function animate(){
+  rafId = requestAnimationFrame(animate);
+  let dt = clock.getDelta();
+  if (dt > 0.05) dt = 0.05;
+  const t = clock.elapsedTime;
+
+  if (!prefersReduced){
+    const ad = 1 - Math.exp(-CONFIG.motion.dragDamping * dt);
+    rot.curX += (rot.targetX - rot.curX) * ad;
+    rot.curY += (rot.targetY - rot.curY) * ad;
+    const pd = 1 - Math.exp(-CONFIG.motion.parallaxDamping * dt);
+    parallax.curX += (parallax.targetX - parallax.curX) * pd;
+    parallax.curY += (parallax.targetY - parallax.curY) * pd;
+
+    const autoY = dragging ? 0 : CONFIG.motion.globalY * dt;
+    const dragDeltaY = rot.curY - rot.prevY;
+    rot.prevY = rot.curY;
+    yawBase += autoY + dragDeltaY;
+    rig.rotation.set(rot.curX + parallax.curX, yawBase + parallax.curY, 0);
+
+    if (globeLines) globeLines.rotation.y += CONFIG.globe.selfSpin * dt * 0.4;
+    if (continentDots) continentDots.rotation.y += CONFIG.globe.selfSpin * dt * 0.4;
+    if (networkLinks) networkLinks.rotation.y += CONFIG.globe.selfSpin * dt * 0.4;
+    if (textRingMesh) textRingMesh.rotation.y -= CONFIG.globe.selfSpin * dt * 0.9;
+    updateOrbitTrails(t);
+    for (const ring of funnelRings){
+      const pulse = 0.75 + 0.25 * Math.sin(t * 1.4 + ring.userData.phase);
+      ring.material.opacity = ring.userData.baseOpacity * pulse;
+      ring.rotation.z += 0.02 * dt * (ring.userData.phase % 2 === 0 ? 1 : -1);
+    }
+    if (sparkleOnSphere) sparkleOnSphere.material.opacity = 0.65 + 0.25 * Math.sin(t * 2.1);
+    if (sparkleAmbient) sparkleAmbient.rotation.y += 0.01 * dt;
+  }
+
+  const zd = 1 - Math.exp(-4 * dt);
+  camera.position.z += (zoomZ - camera.position.z) * zd;
+  camera.lookAt(0, -0.6, 0);
+
+  if (composer) composer.render(); else renderer.render(scene, camera);
+}
+function start(){ if (running) return; running = true; animate(); }
+function stop(){ running = false; if (rafId) cancelAnimationFrame(rafId); rafId = null; }
+
+function dispose(){
+  stop();
+  window.removeEventListener('resize', onResize);
+  window.removeEventListener('pointermove', onHover);
+  document.removeEventListener('visibilitychange', onVisibility);
+  if (renderer) renderer.dispose();
+}
+window.addEventListener('pagehide', dispose);
+
+function boot(){
+  try {
+    renderer = createRenderer();
+  } catch (err){
+    console.warn('WebGL unavailable — showing static fallback.', err);
+    document.body.classList.add('webgl-failed');
+    return;
+  }
+  try {
+    createScene();
+    createGlobe();
+    createContinents();
+    createNetwork();
+    createOrbitTrails();
+    createTextRing();
+    createFunnelRings();
+    createSparkles();
+    createGlow();
+    createPostProcessing();
+    applyLayout();
+    bindInteractions();
+    camera.position.set(0, 0.4, zoomZ);
+    if (composer) composer.render(); else renderer.render(scene, camera);
+  } catch (err){
+    console.error('Scene init failed — showing static fallback.', err);
+    document.body.classList.add('webgl-failed');
+    return;
+  }
+  requestAnimationFrame(() => { canvas.classList.add('ready'); });
+
+  clock.getDelta();
+  start();
+}
+boot();
+</script>
+</body>
+</html>

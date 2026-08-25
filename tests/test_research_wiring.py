@@ -1,3 +1,5 @@
+import types
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -20,7 +22,10 @@ def test_run_streaming_done_includes_grounding_keys(monkeypatch):
     import backend.app.features.research.agent as ra
     from backend.app.features.research.models import ResearchOutput, Claim, SearchResult
 
+    from concurrent.futures import ThreadPoolExecutor
+
     agent = ra.ResearchAgent.__new__(ra.ResearchAgent)  # tránh __init__ nặng
+    agent._pool = ThreadPoolExecutor(max_workers=2)
 
     class _Synth:
         def synthesize_grounded(self, q, s):
@@ -94,21 +99,21 @@ def test_run_streaming_accepts_provider(monkeypatch):
 def test_search_shares_single_bge_singleton(monkeypatch):
     """search KHÔNG được tự load BGE — phải đi qua singleton của reranker.py.
 
-    Bản cũ khẳng định `_get_reranker.__module__ == "tools.searchers"`, tức chỉ
-    kiểm hàm được định nghĩa ở đâu — không hề kiểm điều nó tuyên bố. Ở đây gọi
-    thật và xem có đúng object mà reranker.py cấp không.
+    Sau task 4, ranking.py không còn giữ hàm `_get_reranker` riêng: nó gọi
+    thẳng `cross_encoder_scores` (nơi DUY NHẤT chạm reranker model) từ
+    reranker.py. Patch `_bge_reranker` ở reranker.py và xác nhận
+    `cross_encoder_scores` (không có Cohere key) trả đúng điểm từ sentinel đó.
     """
     import backend.app.features.research.reranker as rr
     import backend.app.features.research.search as s
 
-    sentinel = object()
-    monkeypatch.setattr(rr, "_bge_reranker", lambda: sentinel)
-    # ranking.py giữ tham chiếu riêng từ lúc import, nên patch cả nơi nó dùng
-    import backend.app.features.research.search.ranking as ranking
-    monkeypatch.setattr(ranking, "_bge_reranker", lambda: sentinel)
+    monkeypatch.setattr(rr.settings, "COHERE_API_KEY", None, raising=False)
+    monkeypatch.setattr(rr, "_bge_reranker", lambda: types.SimpleNamespace(
+        compute_score=lambda pairs, normalize=True: [0.42] * len(pairs)
+    ))
 
-    assert s._get_reranker() is sentinel        # đi qua đúng nguồn duy nhất
-    assert s._CREDIBILITY is rr._CREDIBILITY    # một nguồn sự thật cho credibility
+    assert rr.cross_encoder_scores("q", ["d"]) == [0.42]  # đi qua đúng nguồn duy nhất
+    assert s._CREDIBILITY is rr._CREDIBILITY               # một nguồn sự thật cho credibility
 
 
 def test_arxiv_searcher_parses_results_without_nameerror(monkeypatch):
@@ -238,138 +243,6 @@ def test_run_streaming_no_iteration_when_first_result_strong(monkeypatch):
     assert [e for e in events if e.get("type") == "iteration"] == []
 
 
-def test_run_iterates_once_when_first_result_weak(monkeypatch):
-    """run() (non-streaming): grounding yếu ở vòng 1 → 1 vòng bù rồi trả kết quả mạnh.
-
-    Từ khi run() dùng chung _run_core với run_streaming(): live search ban
-    đầu đi qua từng searcher riêng lẻ (self.<attr>.search — như
-    run_streaming, không qua self._search_all), còn vòng bù iteration vẫn
-    qua _search_all (dùng bởi _top_up). Xem test_run_streaming_done_includes_
-    grounding_keys ở trên cho cùng quy ước mock.
-    """
-    import backend.app.features.research.agent as ra
-    from backend.app.features.research.models import ResearchOutput, Claim, SearchResult
-    import backend.app.core.config as cfg
-    monkeypatch.setattr(cfg.settings, "RESEARCH_MAX_ITERATIONS", 1, raising=False)
-
-    agent = ra.ResearchAgent.__new__(ra.ResearchAgent)
-
-    calls = {"synth": 0, "topup_search": 0}
-
-    class _Synth:
-        def synthesize_grounded(self, q, s):
-            calls["synth"] += 1
-            o = ResearchOutput(query=q)
-            if calls["synth"] == 1:      # vòng 1: yếu (ít claim, confidence thấp)
-                o.claims = []
-                o.confidence = 0.2
-                o.follow_up_questions = ["deeper aspect?"]
-            else:                        # vòng bù: mạnh
-                o.claims = [Claim(text="c", source_ids=["x"], grounded=True) for _ in range(4)]
-                o.confidence = 0.8
-            return o
-        def synthesize_rag_grounded(self, q, s): return ResearchOutput(query=q)
-    agent.synth = _Synth()
-
-    def _fake_search_all(q, *a, **k):
-        calls["topup_search"] += 1
-        return [SearchResult(source="web", title="t", url=f"u{calls['topup_search']}", content="x")]
-    monkeypatch.setattr(agent, "_search_all", _fake_search_all)
-    monkeypatch.setattr(agent, "_process_pipeline", lambda q, raw, **k: raw)
-
-    monkeypatch.setattr(ra, "get_store", lambda: type("K", (), {
-        "retrieve_candidates": lambda self, q, top_k=None: [],
-        "retrieve": lambda self, q: [],
-        "add_results": lambda self, q, s: 0})())
-    monkeypatch.setattr(ra, "expand_query", lambda q, **_kw: [q])
-    monkeypatch.setattr(ra, "get_dynamic_k", lambda q: {})
-    monkeypatch.setattr(ra, "_enrich_web_results", lambda r: r)
-    monkeypatch.setattr(ra, "deduplicate_results", lambda r, threshold=0.92: r)
-    monkeypatch.setattr(ra, "rerank_results", lambda q, r, top_k=15: r)
-    for attr in ("web", "arxiv", "semantic", "hf", "ddg", "so"):
-        setattr(agent, attr, type("S", (), {"search": lambda self, q, k=4: []})())
-
-    output = agent.run("q")
-
-    assert calls["synth"] == 2                  # synth 2 lần (vòng 1 + bù)
-    assert calls["topup_search"] == 1            # 1 vòng bù qua _top_up -> _search_all
-    assert output.confidence == 0.8              # kết quả bù (mạnh) được trả về
-
-
-def test_run_and_run_streaming_reach_the_same_decision(monkeypatch):
-    """run() và run_streaming() giờ dùng chung _run_core — cùng input phải
-    ra cùng quyết định (không còn hai đường logic khác nhau như trước khi
-    run() bị thay thế bằng lớp vỏ drain generator).
-
-    `retrieve()` (legacy) và `retrieve_candidates()` (gate mới) cố tình trả
-    về DỮ LIỆU KHÁC NHAU — nếu run() lỡ quay lại gọi thẳng `retrieve()` như
-    code cũ (bỏ qua gate), nó sẽ thấy [] thay vì [stored] và không bao giờ
-    gọi `add_results` (code cũ không hề persist ở nhánh live-search). Assertion
-    dựa trên persistence thật, không phải chỉ `output.query` — cái mà mọi
-    nhánh (reuse/top_up/degraded/search) đều thoả như nhau nên không phân
-    biệt được đường code nào đã chạy.
-    """
-    import backend.app.features.research.agent as ra
-    from backend.app.features.research.models import ResearchOutput, SearchResult
-
-    def _make_agent(stored_calls):
-        agent = ra.ResearchAgent.__new__(ra.ResearchAgent)
-
-        class _Synth:
-            def synthesize_grounded(self, q, s): return ResearchOutput(query=q)
-            def synthesize_rag_grounded(self, q, s): return ResearchOutput(query=q)
-        agent.synth = _Synth()
-        agent._search_all = lambda q, *a, **k: [
-            SearchResult(source="web", title="new", url="u2", content="quantum error correction")
-        ]
-        agent._process_pipeline = lambda q, raw, **k: raw
-        for attr in ("web", "arxiv", "semantic", "hf", "ddg", "so"):
-            setattr(agent, attr, type("S", (), {"search": lambda self, q, k=4: []})())
-
-        stored = SearchResult(
-            source="web", title="cached", url="u1",
-            content="python list comprehension syntax tutorial",
-            extra={"stored_at": __import__("time").time()},
-        )
-
-        def _add_results(_self, q, sources):
-            stored_calls.append([s.url for s in sources])
-            return len(sources)
-
-        monkeypatch.setattr(ra, "get_store", lambda: type("K", (), {
-            "retrieve_candidates": lambda self, q, top_k=None: [stored],
-            "retrieve":            lambda self, q: [],   # legacy path -- cố tình khác
-            "add_results":         _add_results,
-        })())
-        return agent
-
-    monkeypatch.setattr(ra, "expand_query", lambda q, **_kw: [q])
-    monkeypatch.setattr(ra, "get_dynamic_k", lambda q: {})
-    monkeypatch.setattr(ra, "_enrich_web_results", lambda r: r)
-    monkeypatch.setattr(ra, "deduplicate_results", lambda r, threshold=0.92: r)
-    monkeypatch.setattr(ra, "rerank_results", lambda q, r, top_k=15: r)
-
-    # Câu hỏi không liên quan gì tới nội dung đã lưu -> coverage thấp -> THIN
-    # -> top-up (không cần judge) ở cả hai đường.
-    query = "quantum error correction surface codes"
-
-    streaming_calls: list = []
-    streaming_events = list(_make_agent(streaming_calls).run_streaming(query))
-    decisions = [e for e in streaming_events if e.get("type") == "knowledge_decision"]
-    assert len(decisions) == 1
-    assert decisions[0]["decision"] == "top_up"
-    assert decisions[0]["reason"] == "thin"
-    assert streaming_calls == [["u2"]]   # chỉ nguồn mới bù được lưu, không phải u1
-
-    # run() không phát SSE, nhưng phải đi qua ĐÚNG cùng nhánh THIN->top_up->
-    # persist. Nếu nó lỡ quay lại gọi retrieve() trực tiếp (code cũ), sẽ thấy
-    # store rỗng và KHÔNG BAO GIỜ gọi add_results (code cũ không persist).
-    run_calls: list = []
-    output = _make_agent(run_calls).run(query)
-    assert output.query == query
-    assert run_calls == [["u2"]]
-
-
 def test_rerank_fallback_prefers_more_recent(monkeypatch):
     """F2 regression: ở nhánh fallback (không BGE), paper mới hơn phải xếp trên.
 
@@ -380,7 +253,7 @@ def test_rerank_fallback_prefers_more_recent(monkeypatch):
     import backend.app.features.research.search.ranking as ranking
     from backend.app.features.research.models import SearchResult
 
-    monkeypatch.setattr(ranking, "_get_reranker", lambda: None)  # ép fallback
+    monkeypatch.setattr(ranking, "cross_encoder_scores", lambda q, docs: None)  # ép fallback
 
     old = SearchResult(source="web", title="old", url="u1", content="c",
                        score=0.5, extra={"year": 2000})

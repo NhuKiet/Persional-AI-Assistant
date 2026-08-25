@@ -1,52 +1,102 @@
-/* Trang chủ (LandingPage.tsx) — nav, hero, bảng công cụ, ánh sáng bám con trỏ. */
+/* Trang chủ (LandingPage.tsx) — "Capability Reactor": lõi + 3 vành quỹ đạo 3D
+   (three.js, xem src/three/atomReactor.ts) làm hero, phủ nav + headline lên
+   trên. --atom-bg CỐ Ý khác --bg chuẩn của app (gần đen / trắng tinh) — kim
+   loại ivory của lõi cần nền có sắc độ vừa phải mới còn tương phản; khớp với
+   ATOM_BG trong LandingPage.tsx (đổi một bên thì phải đổi bên kia). */
 
-.landing {
-  height: 100vh;
-  height: 100dvh;
-  overflow-y: auto;
-  position: relative;
-}
+:root { --atom-bg: #080b14; }
+:root[data-theme="light"] { --atom-bg: #f4f1ea; }
 
-/* Nguồn sáng bám con trỏ — lớp nền cố định, đứng dưới nội dung.
-   LandingPage.tsx cập nhật --mx/--my qua rAF; giá trị mặc định (50%, 22%)
-   giữ quầng sáng ở vùng hero trước khi chuột di chuyển lần đầu. */
-.ld-light {
+.atom-landing {
   position: fixed;
   inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  background: radial-gradient(560px circle at var(--mx, 50%) var(--my, 22%),
-    color-mix(in srgb, var(--accent) 12%, transparent) 0%,
-    color-mix(in srgb, var(--accent-research) 7%, transparent) 38%,
-    transparent 68%);
+  overflow: hidden;
+  background: var(--atom-bg);
+  color: var(--text);
+  font-family: var(--sans);
 }
 
-.landing-wrap {
-  position: relative;
-  z-index: 1;
-  max-width: 1080px;
-  margin: 0 auto;
-  padding: 0 var(--page-padding-x) 64px;
+.atom-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  opacity: 0;
+  transition: opacity 0.9s ease;
+}
+.atom-canvas.ready { opacity: 1; }
+
+.atom-vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(58% 52% at 64% 48%, rgba(120, 72, 58, 0.22), transparent 62%),
+    radial-gradient(125% 125% at 50% 50%, transparent 54%, rgba(0, 0, 0, 0.7));
+  mix-blend-mode: screen;
+}
+.atom-vignette-dark {
+  mix-blend-mode: normal;
+  background: radial-gradient(130% 130% at 50% 50%, transparent 58%, rgba(0, 0, 0, 0.3));
+}
+:root[data-theme="light"] .atom-vignette-dark {
+  background: radial-gradient(130% 130% at 50% 50%, transparent 58%, rgba(0, 0, 0, 0.16));
+}
+
+.atom-fallback {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 4;
+  background: radial-gradient(60% 60% at 64% 50%, rgba(90, 80, 140, 0.18), transparent 70%);
+}
+.atom-fallback .atom-orb {
+  width: min(46vmin, 360px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 45%, #e9e9f4, #a9a6d6 32%, #3a3752 60%, transparent 72%);
+  box-shadow: 0 0 90px 20px rgba(150, 140, 255, 0.18);
+  opacity: 0.85;
 }
 
 /* ── Nav ─────────────────────────────────────────────────── */
 
-.ld-nav {
+.atom-nav {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  z-index: 6;
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  padding: 16px 22px;
-  margin-top: 20px;
+  align-items: center;
+  padding: 20px 28px;
+}
+.atom-brand { display: flex; align-items: center; gap: 8px; }
+.atom-brand-logo { width: 20px; height: 20px; object-fit: contain; }
+.atom-nav-right { display: flex; align-items: center; gap: 10px; }
+
+.atom-theme-toggle {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
   background: var(--glass);
   backdrop-filter: var(--blur);
   -webkit-backdrop-filter: var(--blur);
-  border: 1px solid var(--border);
-  border-radius: var(--r);
+  color: var(--text2);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease),
+              border-color var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
 }
-.ld-brand { display: flex; align-items: center; gap: 8px; }
-.ld-brand-logo { width: 20px; height: 20px; object-fit: contain; }
+.atom-theme-toggle:hover { color: var(--text); background: var(--glass-hi); border-color: var(--border2); transform: translateY(-1px); }
+.atom-theme-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 
-.ld-cta {
+.atom-cta {
   font-family: var(--sans);
   font-size: 14px;
   font-weight: 500;
@@ -58,34 +108,60 @@
   cursor: pointer;
   transition: transform var(--dur) var(--ease-out), box-shadow var(--dur) var(--ease-out);
 }
-.ld-cta:hover { transform: translateY(-2px); box-shadow: var(--shadow-2); }
-.ld-cta:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.atom-cta:hover { transform: translateY(-2px); box-shadow: var(--shadow-2); }
+.atom-cta:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 
 /* ── Hero ────────────────────────────────────────────────── */
 
-.ld-hero { padding: 88px 0 56px; text-align: center; }
-
-.ld-eyebrow {
-  font-family: var(--mono);
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--text3);
-  margin-bottom: 22px;
+.atom-hero {
+  position: absolute;
+  left: 36px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: min(43vw, 540px);
+  z-index: 6;
 }
 
-.ld-headline {
+.atom-eyebrow {
+  font-family: var(--brand-serif);
+  font-style: italic;
+  font-weight: 700;
+  font-size: clamp(22px, 2.4vw, 30px);
+  letter-spacing: 0.01em;
+  text-transform: none;
+  color: var(--text2);
+  margin-bottom: 18px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.atom-eyebrow::before { content: ""; width: 26px; height: 1px; background: var(--text3); flex-shrink: 0; }
+
+.atom-eyebrow-name {
+  background: linear-gradient(90deg, #ff3b3b, #ff9a3b, #f4e13b, #3bd45a, #3bb8ff, #8a3bff, #ff3bbd, #ff3b3b);
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: atom-eyebrow-rgb 7s linear infinite;
+}
+@keyframes atom-eyebrow-rgb {
+  to { background-position: -300% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .atom-eyebrow-name { animation: none; }
+}
+
+.atom-headline {
   font-family: var(--display);
-  font-size: clamp(38px, 6vw, 72px);
   font-weight: 700;
   font-variation-settings: 'opsz' 72;
-  letter-spacing: -0.035em;
-  line-height: 1.02;
-  text-wrap: balance;
-  margin-bottom: 18px;
+  font-size: clamp(30px, 3.6vw, 46px);
+  line-height: 1.08;
+  letter-spacing: -0.03em;
+  margin-bottom: 16px;
 }
-.ld-headline em {
+.atom-headline em {
   font-style: normal;
   background: linear-gradient(96deg, var(--accent), var(--accent-research));
   -webkit-background-clip: text;
@@ -93,173 +169,85 @@
   -webkit-text-fill-color: transparent;
 }
 
-.ld-sub {
-  font-size: 16px;
+.atom-sub {
+  font-size: 14px;
+  line-height: 1.6;
   color: var(--text2);
-  max-width: 46ch;
-  margin: 0 auto 36px;
-  text-wrap: balance;
+  max-width: 380px;
+  margin-bottom: 26px;
 }
 
-.ld-input-wrap { display: flex; justify-content: center; }
-
-.ld-input-glass {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  max-width: 600px;
-  background: var(--glass);
-  backdrop-filter: var(--blur);
-  -webkit-backdrop-filter: var(--blur);
-  border: 1px solid var(--border2);
-  border-radius: 16px;
-  padding: 10px 10px 10px 20px;
-  transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+.atom-metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 20px;
+  max-width: 340px;
 }
-.ld-input-glass:focus-within {
-  border-color: color-mix(in srgb, var(--accent) 50%, transparent);
-  box-shadow: var(--shadow-1);
-}
-.ld-input-glass input {
-  flex: 1;
-  background: none;
-  border: none;
-  outline: none;
-  color: var(--text);
-  font-family: var(--sans);
-  font-size: 16px;
-}
-.ld-input-glass input::placeholder { color: var(--text3); }
-
-.ld-send {
-  width: 38px;
-  height: 38px;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  border-radius: 11px;
-  cursor: pointer;
-  background: var(--accent);
-  color: var(--bg);
-  transition: transform var(--dur) var(--ease-out), filter var(--dur) var(--ease-out);
-}
-.ld-send:hover { transform: scale(1.07); filter: brightness(1.1); }
-.ld-send:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-
-/* ── Bảng công cụ ────────────────────────────────────────── */
-
-.ld-rack-label {
+.atom-metric { border-left: 1px solid var(--border); padding: 2px 0 2px 10px; }
+.atom-metric .k { font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text3); }
+.atom-metric .v { font-size: 13px; letter-spacing: 0.01em; margin-top: 4px; color: var(--text); }
+.atom-metrics-note {
+  grid-column: 1 / -1;
   font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 0.16em;
   color: var(--text3);
-  text-align: center;
-  margin: 68px 0 18px;
+  text-transform: uppercase;
+  margin-top: 4px;
+  opacity: 0.8;
 }
 
-.ld-rack {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-}
+/* ── Nhãn góc + gợi ý thao tác ───────────────────────────── */
 
-.ld-tool {
-  --tint: var(--accent);
-  position: relative;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-  text-align: left;
-  background: var(--glass);
-  backdrop-filter: var(--blur);
-  -webkit-backdrop-filter: var(--blur);
-  border: 1px solid var(--border);
-  border-radius: 18px;
-  padding: 20px 18px 18px;
-  cursor: pointer;
-  font-family: inherit;
-  color: inherit;
-  transition: transform var(--dur-slow) var(--ease-out), background var(--dur-slow) var(--ease-out),
-              border-color var(--dur-slow) var(--ease-out), box-shadow var(--dur-slow) var(--ease-out);
-}
-/* Cạnh trên bắt sáng khi hover — dấu hiệu thị giác của một bề mặt kính,
-   không phải trang trí. Dùng mask để chỉ vẽ viền, không tô cả nền. */
-.ld-tool::before {
-  content: '';
+.atom-corner {
   position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  padding: 1px;
-  pointer-events: none;
-  background: linear-gradient(180deg, var(--glass-lit), transparent 40%);
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  opacity: 0;
-  transition: opacity var(--dur-slow) var(--ease-out);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: var(--text3);
+  text-transform: uppercase;
+  z-index: 6;
+  line-height: 1.7;
+  opacity: 0.75;
 }
-.ld-tool::after {
-  content: '';
+.atom-corner-tr { right: 32px; top: 96px; text-align: right; }
+.atom-corner-br { right: 32px; bottom: 24px; text-align: right; }
+
+.atom-hint {
   position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: radial-gradient(280px circle at 50% 0%, color-mix(in srgb, var(--tint) 16%, transparent), transparent 70%);
-  opacity: 0;
-  transition: opacity var(--dur-slow) var(--ease-out);
+  left: 50%;
+  bottom: 20px;
+  transform: translateX(-50%);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  color: var(--text3);
+  text-transform: uppercase;
+  z-index: 6;
+  opacity: 0.65;
 }
-.ld-tool:hover {
-  transform: translateY(-5px);
-  background: var(--glass-hi);
-  border-color: color-mix(in srgb, var(--tint) 42%, transparent);
-  box-shadow: var(--shadow-2);
-}
-.ld-tool:hover::before,
-.ld-tool:hover::after { opacity: 1; }
-.ld-tool:focus-visible { outline: 2px solid var(--tint); outline-offset: 3px; }
 
-.ld-tool-top { display: flex; align-items: center; gap: 10px; position: relative; z-index: 1; }
-.ld-tool-icon {
-  width: 32px;
-  height: 32px;
-  flex-shrink: 0;
-  display: grid;
-  place-items: center;
-  border-radius: 10px;
-  font-size: 15px;
-  background: color-mix(in srgb, var(--tint) 14%, transparent);
-  border: 1px solid color-mix(in srgb, var(--tint) 26%, transparent);
-}
-.ld-tool-name {
-  font-family: var(--display);
-  font-size: 16px;
-  font-weight: 600;
-  font-variation-settings: 'opsz' 18;
-  letter-spacing: -0.015em;
-}
-.ld-tool-desc { font-size: 13px; color: var(--text2); line-height: 1.5; position: relative; z-index: 1; }
+/* ── Responsive: split → tablet → dọc ───────────────────── */
 
-/* ── Vào sân — cùng cơ chế với trang chat (base.css: @keyframes rise) ──
-   Mỗi phần tử tự khai --rd (delay) qua inline style trong LandingPage.tsx
-   thay vì nth-child, vì bảng 6 công cụ lặp trong .map() — nth-child sẽ đúng
-   nhưng phải đếm cả các phần tử đứng trước nó trong DOM, dễ lệch khi thêm
-   bớt gì phía trên. Tự khai delay tại chỗ tạo ra thì rõ ràng hơn. */
-.ld-rise {
-  animation: rise var(--dur-slow) var(--ease-out) backwards;
-  animation-delay: var(--rd, 0ms);
+@media (max-width: 899px) {
+  .atom-hero { width: min(52vw, 420px); }
+  .atom-sub { max-width: 320px; }
+  .atom-corner-tr { display: none; }
+}
+
+@media (max-width: 720px) {
+  .atom-landing { position: relative; min-height: 100svh; overflow-y: auto; }
+  .atom-nav { padding: 18px 20px; }
+  .atom-hero { position: relative; left: 0; top: 0; transform: none; width: auto; padding: 96px 22px 24px; }
+  .atom-headline { font-size: clamp(28px, 8vw, 38px); }
+  .atom-sub { max-width: none; }
+  .atom-canvas { position: fixed; inset: auto 0 0 0; height: 56svh; top: auto; }
+  .atom-vignette { position: fixed; top: auto; bottom: 0; height: 56svh; }
+  .atom-metrics { grid-template-columns: 1fr 1fr; gap: 10px 18px; }
+  .atom-hint { bottom: 14px; }
+  .atom-corner-br { bottom: 14px; right: 16px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ld-rise { animation-delay: 0ms; }
-}
-
-@media (max-width: 860px) {
-  .ld-rack { grid-template-columns: 1fr; }
-  .ld-hero { padding: 56px 0 40px; }
-  .ld-rack-label { margin-top: 48px; }
+  .atom-canvas { transition: none; }
 }

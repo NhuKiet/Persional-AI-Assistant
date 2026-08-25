@@ -32,6 +32,40 @@
   background: var(--bg2);
   box-shadow: var(--shadow-1);
   overflow: hidden;
+  flex-shrink: 0;
+}
+
+/* Drag handle for resizing .pdf-assistant-panel — sits in the column-gap
+   between the viewer and assistant panel (see PdfWorkspace.tsx for why this
+   is absolutely positioned rather than a grid item). Widened hit target
+   (10px) around a thin visible line so it's easy to grab without feeling
+   like a stray decorative sliver. */
+.pdf-assistant-resize-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 10px;
+  margin-right: -5px;
+  cursor: col-resize;
+  z-index: 5;
+  touch-action: none;
+}
+.pdf-assistant-resize-handle::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-50%);
+  background: var(--border2);
+  border-radius: 2px;
+  transition: background var(--dur) var(--ease), opacity var(--dur) var(--ease);
+  opacity: 0.6;
+}
+.pdf-assistant-resize-handle:hover::after {
+  background: var(--accent-pdf, var(--accent));
+  opacity: 1;
 }
 .pdf-viewer { height: 100%; overflow: auto; padding: 24px; }
 .pdf-page-wrap { width: max-content; max-width: 100%; margin: 0 auto 20px; box-shadow: var(--shadow-2); }
@@ -193,6 +227,17 @@
 
 /* ── Assistant panel content ───────────────────────────────────── */
 .pdf-assistant-content { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+/* .pdf-assistant-panel clips overflow to keep its rounded corners, and
+   .input-wrap has no horizontal margin of its own — the composer's focus
+   glow (box-shadow, extends past its own box) had zero room and got
+   chopped flush against the panel edges. Match .pdf-info-bar's own 14px
+   horizontal padding so the glow has somewhere to fade into. */
+.pdf-assistant-content .input-wrap { padding-left: 14px; padding-right: 14px; }
+/* Same zero-horizontal-padding issue as .input-wrap above — the "Thử hỏi
+   ngay" suggestion pills (.tool-suggestions, chat.css) sit flush against
+   the panel's rounded edges instead of aligning with .pdf-info-bar's own
+   14px inset. */
+.pdf-assistant-content .tool-suggestions { padding-left: 14px; padding-right: 14px; }
 .pdf-info-bar {
   display: flex;
   align-items: center;

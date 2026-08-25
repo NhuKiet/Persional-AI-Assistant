@@ -51,7 +51,7 @@ def test_synthesize_rag_grounded_attaches_claims(monkeypatch):
     monkeypatch.setattr(synth, "_call", lambda p: "Câu trả lời tự nhiên về transformer.")
     monkeypatch.setattr(
         synth_mod, "extract_claims",
-        lambda q, s, c, p: [Claim(text="transformer attention scales", source_ids=[src.id])],
+        lambda q, s, c, p, structured_call=None: [Claim(text="transformer attention scales", source_ids=[src.id])],
     )
 
     out = synth.synthesize_rag_grounded("transformer", [src])
