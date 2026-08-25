@@ -76,7 +76,13 @@ def test_batch_fallback_fires_when_quotes_are_unusable():
 
 def test_batch_fallback_does_not_fire_when_quotes_work():
     """Four claims so the min-claims guard is satisfied and this can only pass
-    on the 30% threshold logic — two grounded out of four is 0.5."""
+    on the 30% threshold logic — two grounded out of four is 0.5.
+
+    The injected scorer serves two purposes now, so "was it called" no longer
+    identifies the batch fallback. The fallback scores every claim; the
+    relatedness check scores only the ones that passed their quote. Assert on
+    the batch size instead.
+    """
     s = _source()
     claims = [
         _claim("ok1", "Diffusion models are increasingly replacing GANs", s.id),
@@ -84,11 +90,15 @@ def test_batch_fallback_does_not_fire_when_quotes_work():
         _claim("bad1", "invented sentence absent from the source text here", s.id),
         _claim("bad2", "another fabricated sentence nowhere in the source", s.id),
     ]
-    called = []
+    batch_sizes = []
 
-    out = ClaimAuditor(fallback_scorer=lambda p: called.append(p) or []).verify(claims, [s])
+    def scorer(pairs):
+        batch_sizes.append(len(pairs))
+        return [0.9] * len(pairs)      # relatedness passes; fallback would too
+
+    out = ClaimAuditor(fallback_scorer=scorer).verify(claims, [s])
     assert sum(1 for c in out if c.grounded) == 2
-    assert called == []
+    assert batch_sizes == [2], "only the two quote-verified claims should be scored"
 
 
 def test_batch_fallback_needs_at_least_three_claims():
@@ -150,3 +160,47 @@ def test_anchor_filter_still_drops_a_lone_off_topic_result():
 
 def test_anchor_filter_on_empty_input():
     assert filter_by_anchor_relevance("anything", []) == []
+
+
+# ── a real quote is not automatically the right quote ────────────────────────
+
+def test_claim_with_a_real_but_irrelevant_quote_is_rejected():
+    """Verified gap before this check existed: quoting a genuine sentence that
+    says nothing about the claim used to pass."""
+    src = _source(
+        "Diffusion models are increasingly replacing GANs for image synthesis. "
+        "The dataset was collected in 2019 from public repositories."
+    )
+    c = _claim("Mô hình khuếch tán nhanh hơn GAN gấp 12 lần khi huấn luyện",
+               "The dataset was collected in 2019 from public repositories.", src.id)
+
+    # Scorer stands in for embeddings: mismatched pairs measured -0.03 / 0.03.
+    out = ClaimAuditor(fallback_scorer=lambda pairs: [0.02]).verify([c], [src])
+    assert out[0].grounded is False
+
+
+def test_claim_with_a_supporting_quote_survives_the_relatedness_check():
+    src = _source()
+    c = _claim("Mô hình khuếch tán đang thay thế GAN",
+               "Diffusion models are increasingly replacing GANs", src.id)
+
+    out = ClaimAuditor(fallback_scorer=lambda pairs: [0.71]).verify([c], [src])
+    assert out[0].grounded is True
+
+
+def test_relatedness_check_is_skipped_without_a_scorer():
+    """Keeps grounding.py usable — and unit-testable — with no network."""
+    src = _source()
+    c = _claim("bất kỳ", "Diffusion models are increasingly replacing GANs", src.id)
+    assert ClaimAuditor().verify([c], [src])[0].grounded is True
+
+
+def test_relatedness_scorer_failure_keeps_the_quote_verdict():
+    src = _source()
+    c = _claim("Mô hình khuếch tán đang thay thế GAN",
+               "Diffusion models are increasingly replacing GANs", src.id)
+
+    def boom(pairs):
+        raise RuntimeError("embedding service down")
+
+    assert ClaimAuditor(fallback_scorer=boom).verify([c], [src])[0].grounded is True

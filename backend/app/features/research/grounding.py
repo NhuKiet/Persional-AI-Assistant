@@ -260,6 +260,11 @@ def extract_claims(query, sources, llm_call, parse_array, structured_call=None) 
 # unrelated control 0.02.
 FALLBACK_THRESHOLD = 0.2
 
+# Claim-to-quote relatedness. Measured: 16 real pairs spanned 0.33-0.86 and
+# deliberately mismatched pairs scored -0.03 and 0.03, so 0.2 sits in a gap an
+# order of magnitude wide on both sides.
+QUOTE_RELATEDNESS_THRESHOLD = 0.2
+
 _FALLBACK_MIN_CLAIMS = 3
 _FALLBACK_MAX_GROUNDED_FRAC = 0.3
 
@@ -304,6 +309,8 @@ class ClaimAuditor:
             else:
                 c.grounded = is_grounded(c.text, cited, self._threshold)
 
+        self._check_quote_relatedness(claims)
+
         if self._should_fall_back(claims):
             self._apply_fallback(claims, cited_map)
 
@@ -311,6 +318,46 @@ class ClaimAuditor:
             if not c.grounded and c.evidence_type == "direct":
                 c.evidence_type = "uncertain"   # gán bảo thủ
         return claims
+
+    def _check_quote_relatedness(self, claims: list[Claim]) -> None:
+        """A real quote is not automatically the *right* quote.
+
+        Checking only that the quote occurs in the source leaves one hole: a
+        claim paired with a genuine but irrelevant sentence passes. Verified
+        directly — a fabricated "12x faster" claim carrying a real sentence
+        about dataset collection was accepted before this check existed.
+
+        Lexical comparison cannot close it, because a quarter of real pairs
+        are a Vietnamese claim beside an English quote and score ~0 by
+        construction. Measured with embeddings instead, the two populations
+        separate by an order of magnitude: 16 real pairs spanned 0.33-0.86,
+        deliberately mismatched pairs scored -0.03 and 0.03.
+
+        Skipped entirely when no scorer is injected, which keeps this module
+        pure and unit-testable without a network.
+        """
+        if self._fallback_scorer is None:
+            return
+        quoted = [c for c in claims if c.grounded and c.quote]
+        if not quoted:
+            return
+        try:
+            scores = self._fallback_scorer([(c.text, c.quote) for c in quoted])
+        except Exception as e:  # noqa: BLE001 — keep the quote verdicts
+            logger.warning("[GROUNDING] relatedness scorer failed (non-fatal): %s", e)
+            return
+        if not scores or len(scores) != len(quoted):
+            return
+        dropped = 0
+        for c, score in zip(quoted, scores):
+            if score < QUOTE_RELATEDNESS_THRESHOLD:
+                c.grounded = False
+                dropped += 1
+        if dropped:
+            logger.info(
+                "[GROUNDING] %d claim(s) cited a real quote that does not support them",
+                dropped,
+            )
 
     def _should_fall_back(self, claims: list[Claim]) -> bool:
         if self._fallback_scorer is None or len(claims) < _FALLBACK_MIN_CLAIMS:
