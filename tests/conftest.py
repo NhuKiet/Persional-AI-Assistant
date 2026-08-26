@@ -39,3 +39,15 @@ def pytest_collection_modifyitems(config, items):
     for item in items:
         if "supabase_integration" in item.keywords:
             item.add_marker(skip)
+
+
+@pytest.fixture(autouse=True)
+def _reset_capability_registry():
+    """The capability registry is module-global. Without this, a test that
+    reports a failure changes what a later test observes, and which later test
+    depends on collection order."""
+    from backend.app.core import capabilities
+
+    capabilities.reset()
+    yield
+    capabilities.reset()
