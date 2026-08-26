@@ -131,3 +131,27 @@ def test_recency_score_published_at_does_not_override_explicit_year():
 
 def test_recency_score_still_zero_without_any_date():
     assert recency_score({}) == 0.0
+
+
+def test_rerank_results_honours_the_disable_flag(monkeypatch):
+    """The flag has to gate both rerank paths. When it gated only the
+    knowledge-store path, a `disabled` report from there could overwrite a
+    real `degraded` observed on this path and hide a dead reranker."""
+    import backend.app.core.capabilities as cap
+    import backend.app.features.research.search.ranking as ranking
+    from backend.app.features.research.models import SearchResult
+
+    called = []
+    monkeypatch.setattr(ranking, "cross_encoder_scores",
+                        lambda q, d: called.append(d) or [0.9] * len(d))
+    monkeypatch.setattr(ranking.settings, "RERANK_ENABLED", False)
+
+    results = [
+        SearchResult(source="web", title="a", url="http://a", content="x", score=0.4),
+        SearchResult(source="arxiv", title="b", url="http://b", content="y", score=0.6),
+    ]
+    out = ranking.rerank_results("q", results, top_k=2)
+
+    assert called == [], "the reranker must not be called when the flag is off"
+    assert len(out) == 2
+    assert cap.snapshot()["capabilities"][cap.RERANKER]["status"] == cap.DISABLED

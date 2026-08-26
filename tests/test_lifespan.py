@@ -1,4 +1,20 @@
+import pytest
 from fastapi.testclient import TestClient
+
+
+@pytest.fixture(autouse=True)
+def _no_capability_probe(monkeypatch):
+    """The real lifespan starts a daemon thread that probes embeddings and
+    Weaviate. Under TestClient that means unit tests make billed API calls and
+    a live network connection, and the thread outlives the test to write into
+    the module-global capability registry — poisoning whichever test happens to
+    sort after this file."""
+    import backend.app.core.lifespan as lifespan_mod
+
+    monkeypatch.setattr(
+        lifespan_mod.threading, "Thread",
+        lambda *args, **kwargs: type("_NoThread", (), {"start": lambda self: None})(),
+    )
 
 
 def test_lifespan_closes_store_on_shutdown(monkeypatch):

@@ -6,6 +6,8 @@ import logging
 import math
 from datetime import datetime, timezone
 
+from backend.app.core import capabilities
+from backend.app.core.config import settings
 from backend.app.features.research.models import SearchResult
 from backend.app.features.research.reranker import (
     _CREDIBILITY, cross_encoder_scores, fuse_scores,
@@ -78,9 +80,17 @@ def rerank_results(
     citation = [citation_score(r.extra) for r in results]
 
     try:
-        rerank = cross_encoder_scores(
-            query, [f"{r.title} {r.content[:500]}" for r in results]
-        )
+        if settings.RERANK_ENABLED:
+            rerank = cross_encoder_scores(
+                query, [f"{r.title} {r.content[:500]}" for r in results]
+            )
+        else:
+            # The flag has to gate BOTH rerank paths or it gates neither in
+            # practice: knowledge_store._rerank honoured it while this path
+            # ignored it, so a "disabled" report from there could overwrite a
+            # real "degraded" observed here and hide a dead reranker.
+            capabilities.disabled(capabilities.RERANKER)
+            rerank = None
     except Exception as e:  # noqa: BLE001
         logger.warning("cross_encoder_scores failed (non-fatal): %s", e)
         rerank = None
