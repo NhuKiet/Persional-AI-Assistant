@@ -633,16 +633,41 @@ def test_cross_encoder_empty_docs_reports_nothing(monkeypatch):
 
 # ── knowledge store: handlers swallow ────────────────────────────────────────
 
-def test_knowledge_store_reports_degraded_and_still_returns_empty(monkeypatch):
+def test_get_weaviate_reports_and_reraises_on_connection_failure(monkeypatch):
+    """Reporting lives at the boundary, so the test measures it at the
+    boundary. Patching _get_weaviate out would patch out the reporting too."""
+    import weaviate
+
+    import backend.app.features.research.knowledge_store as ks
+
+    monkeypatch.setattr(ks, "_client", None)
+    monkeypatch.setattr(ks.settings, "WEAVIATE_URL", "https://x.example", raising=False)
+    monkeypatch.setattr(ks.settings, "WEAVIATE_API_KEY", "k", raising=False)
+
+    def _boom(**kwargs):
+        raise RuntimeError("Meta endpoint! Unexpected status code: 503")
+
+    monkeypatch.setattr(weaviate, "connect_to_weaviate_cloud", _boom)
+
+    with pytest.raises(RuntimeError, match="503"):
+        ks._get_weaviate()
+
+    state = cap.snapshot()["capabilities"][cap.KNOWLEDGE_STORE]
+    assert state["status"] == cap.DEGRADED
+    assert "503" in state["last_error"]
+
+
+def test_retrieve_candidates_still_returns_empty_when_connection_fails(monkeypatch):
+    """Behavior preservation only. This handler deliberately reports nothing —
+    it catches _get_weaviate and embed_query together and cannot attribute a
+    failure to either, so both report from their own boundary instead."""
     import backend.app.features.research.knowledge_store as ks
 
     def _boom():
         raise RuntimeError("Meta endpoint! Unexpected status code: 503")
 
     monkeypatch.setattr(ks, "_get_weaviate", _boom)
-
     assert ks.KnowledgeStore().retrieve_candidates("q") == []
-    assert cap.snapshot()["capabilities"][cap.KNOWLEDGE_STORE]["status"] == cap.DEGRADED
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -791,7 +816,7 @@ In `_rerank`, report the configuration state:
 
 Run: `.venv/Scripts/python.exe -m pytest tests/test_capability_reporting.py -q`
 
-Expected: PASS, 12 tests.
+Expected: PASS, 13 tests.
 
 Then the full suite: `.venv/Scripts/python.exe -m pytest tests -q`
 
