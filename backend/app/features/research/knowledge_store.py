@@ -484,14 +484,22 @@ class KnowledgeStore:
     def size(self) -> int:
         try:
             client = _get_weaviate()
+        except Exception as e:
+            # Not attributed here: _get_weaviate already reports from its own
+            # boundary. Reporting again would count one failure twice and blur
+            # the dead-versus-flaky distinction the counters exist to draw.
+            logger.warning("KnowledgeStore.size() failed: %s", e)
+            return 0
+
+        try:
             col = client.collections.get(_COLLECTION)
             total = col.aggregate.over_all(total_count=True).total_count or 0
         except Exception as e:
-            # Unlike retrieve/retrieve_candidates, every call in this method is
-            # a Weaviate call, so a failure here is unambiguously the store's.
+            # Unambiguously the store: the connection already succeeded.
             capabilities.failed(capabilities.KNOWLEDGE_STORE, f"{type(e).__name__}: {e}")
             logger.warning("KnowledgeStore.size() failed: %s", e)
             return 0
+
         capabilities.ok(capabilities.KNOWLEDGE_STORE)
         return total
 

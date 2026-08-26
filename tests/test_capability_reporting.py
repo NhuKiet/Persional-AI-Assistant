@@ -235,9 +235,12 @@ def test_size_reports_ok_on_a_successful_count(monkeypatch):
     class _Col:
         aggregate = _Agg()
 
+    class _Collections:
+        def get(self, name):
+            return _Col()
+
     class _Client:
-        def __getattr__(self, name):
-            return type("C", (), {"get": lambda self, n: _Col()})()
+        collections = _Collections()
 
     monkeypatch.setattr(ks, "_get_weaviate", lambda: _Client())
 
@@ -245,7 +248,9 @@ def test_size_reports_ok_on_a_successful_count(monkeypatch):
     assert cap.snapshot()["capabilities"][cap.KNOWLEDGE_STORE]["status"] == cap.OK
 
 
-def test_size_reports_degraded_and_still_returns_zero(monkeypatch):
+def test_size_does_not_double_report_a_connection_failure(monkeypatch):
+    """_get_weaviate reports from its own boundary. Counting it again here
+    would inflate total_failed and blur dead-versus-flaky."""
     import backend.app.features.research.knowledge_store as ks
 
     def _boom():
@@ -254,6 +259,30 @@ def test_size_reports_degraded_and_still_returns_zero(monkeypatch):
     monkeypatch.setattr(ks, "_get_weaviate", _boom)
 
     assert ks.KnowledgeStore().size() == 0
+    assert cap.snapshot()["capabilities"][cap.KNOWLEDGE_STORE]["total_failed"] == 0
+
+
+def test_size_reports_a_query_failure_after_a_good_connection(monkeypatch):
+    """The connection succeeded, so a failure past that point is the store's
+    and nobody else has reported it."""
+    import backend.app.features.research.knowledge_store as ks
+
+    class _Col:
+        @property
+        def aggregate(self):
+            raise RuntimeError("aggregate timed out")
+
+    class _Collections:
+        def get(self, name):
+            return _Col()
+
+    class _Client:
+        collections = _Collections()
+
+    monkeypatch.setattr(ks, "_get_weaviate", lambda: _Client())
+
+    assert ks.KnowledgeStore().size() == 0
     state = cap.snapshot()["capabilities"][cap.KNOWLEDGE_STORE]
     assert state["status"] == cap.DEGRADED
-    assert "503" in state["last_error"]
+    assert state["total_failed"] == 1
+    assert "aggregate timed out" in state["last_error"]
