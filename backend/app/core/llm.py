@@ -62,6 +62,16 @@ MODEL_CAPABILITIES: dict[str, ModelCapabilities] = {
 }
 
 
+class MissingProviderKey(ValueError):
+    """A provider's API key is not configured.
+
+    Subclasses ValueError so every existing caller that catches ValueError
+    keeps working unchanged. It exists so callers can tell "this provider
+    cannot be used at all" apart from "you asked for a provider that does not
+    exist" without matching on the text of a translated message.
+    """
+
+
 def _content_text(content) -> str:
     """Normalize LangChain message content into a plain string.
 
@@ -152,7 +162,7 @@ def get_llm(
 
     if provider == "anthropic":
         if not settings.ANTHROPIC_API_KEY:
-            raise ValueError("ANTHROPIC_API_KEY chưa cấu hình — không dùng được Claude.")
+            raise MissingProviderKey("ANTHROPIC_API_KEY chưa cấu hình — không dùng được Claude.")
         from langchain_anthropic import ChatAnthropic
         return ChatAnthropic(
             model=model,
@@ -161,7 +171,7 @@ def get_llm(
         )
 
     if not settings.OPENAI_API_KEY:
-        raise ValueError("OPENAI_API_KEY chưa cấu hình — không dùng được OpenAI.")
+        raise MissingProviderKey("OPENAI_API_KEY chưa cấu hình — không dùng được OpenAI.")
     from langchain_openai import ChatOpenAI
     return ChatOpenAI(
         model=model,
@@ -247,9 +257,11 @@ def invoke_chat(
     # provider outage would blunt the one signal this registry exists to give.
     try:
         llm = get_llm(provider, model, temperature)
-    except ValueError as e:
-        if "chưa cấu hình" in str(e):
-            capabilities.failed(capabilities.LLM, f"{type(e).__name__}: {e}")
+    except MissingProviderKey as e:
+        # An unusable provider belongs in the registry. An unrecognized
+        # provider string does not — that is a caller error, and recording it
+        # would blunt the one signal this registry exists to give.
+        capabilities.failed(capabilities.LLM, f"{type(e).__name__}: {e}")
         raise
 
     try:

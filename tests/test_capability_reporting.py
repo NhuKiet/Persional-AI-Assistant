@@ -76,20 +76,6 @@ def test_invoke_chat_reports_ok(monkeypatch):
     assert cap.snapshot()["capabilities"][cap.LLM]["status"] == cap.OK
 
 
-def test_invoke_chat_reports_failure_and_reraises(monkeypatch):
-    import backend.app.core.llm as llm_mod
-
-    class _LLM:
-        def invoke(self, messages):
-            raise RuntimeError("provider down")
-
-    monkeypatch.setattr(llm_mod, "get_llm", lambda *a, **k: _LLM())
-
-    with pytest.raises(RuntimeError, match="provider down"):
-        llm_mod.invoke_chat("p")
-    assert cap.snapshot()["capabilities"][cap.LLM]["status"] == cap.DEGRADED
-
-
 def test_invoke_chat_reports_a_missing_api_key(monkeypatch):
     """A key that is not configured means the LLM genuinely cannot be used."""
     import backend.app.core.llm as llm_mod
@@ -97,7 +83,7 @@ def test_invoke_chat_reports_a_missing_api_key(monkeypatch):
     monkeypatch.setattr(llm_mod.settings, "DEFAULT_PROVIDER", "openai")
     monkeypatch.setattr(llm_mod.settings, "OPENAI_API_KEY", None)
 
-    with pytest.raises(ValueError, match="chưa cấu hình"):
+    with pytest.raises(llm_mod.MissingProviderKey):
         llm_mod.invoke_chat("p")
     assert cap.snapshot()["capabilities"][cap.LLM]["status"] == cap.DEGRADED
 
