@@ -1,0 +1,101 @@
+{
+ "summary": {
+  "queries": 6,
+  "errors": 0,
+  "queries_that_iterated": 2,
+  "rounds_fired": 2,
+  "rounds_completed": 2,
+  "rounds_that_improved_anything": 1,
+  "mean_claims_delta": 0.0,
+  "mean_confidence_delta": 0.5,
+  "gap_from_follow_up": 2
+ },
+ "rows": [
+  {
+   "query": "Kiến trúc Mamba-2 khác Mamba-1 ở chỗ nào về cơ chế SSD",
+   "error": null,
+   "wall_seconds": 74.7,
+   "iterations": [],
+   "final_claims": 3,
+   "final_confidence": 1.0,
+   "sources": 9
+  },
+  {
+   "query": "YaRN RoPE scaling dùng hệ số alpha và beta bao nhiêu cho ngữ cảnh 128k",
+   "error": null,
+   "wall_seconds": 116.5,
+   "iterations": [
+    {
+     "round": 1,
+     "trigger_few_claims": true,
+     "trigger_low_confidence": false,
+     "claims_before": 2,
+     "confidence_before": 1.0,
+     "gap_query": "Đối với mô hình cụ thể và ngữ cảnh mục tiêu 128k, nên chọn hệ số alpha và beta của YaRN RoPE scaling dựa trên tiêu chí hoặc công thức nào?",
+     "gap_came_from_follow_up": true,
+     "outcome": "completed",
+     "claims_after": 1,
+     "confidence_after": 1.0,
+     "new_sources_fetched": 1,
+     "claims_delta": -1,
+     "confidence_delta": 0.0
+    }
+   ],
+   "final_claims": 1,
+   "final_confidence": 1.0,
+   "sources": 15
+  },
+  {
+   "query": "PhoGPT-4B đạt bao nhiêu điểm trên benchmark VMLU tiếng Việt",
+   "error": null,
+   "wall_seconds": 86.0,
+   "iterations": [
+    {
+     "round": 1,
+     "trigger_few_claims": true,
+     "trigger_low_confidence": true,
+     "claims_before": 0,
+     "confidence_before": 0.0,
+     "gap_query": "PhoGPT-4B đạt bao nhiêu điểm trên từng hạng mục của benchmark VMLU tiếng Việt?",
+     "gap_came_from_follow_up": true,
+     "outcome": "completed",
+     "claims_after": 1,
+     "confidence_after": 1.0,
+     "new_sources_fetched": 6,
+     "claims_delta": 1,
+     "confidence_delta": 1.0
+    }
+   ],
+   "final_claims": 1,
+   "final_confidence": 1.0,
+   "sources": 15
+  },
+  {
+   "query": "Nên đặt ef_construction bao nhiêu cho HNSW của Weaviate trên máy 8GB RAM",
+   "error": null,
+   "wall_seconds": 48.0,
+   "iterations": [],
+   "final_claims": 5,
+   "final_confidence": 0.833,
+   "sources": 10
+  },
+  {
+   "query": "So sánh tốc độ inference Qwen3-0.6B và Gemma3-270M trên CPU ARM",
+   "error": null,
+   "wall_seconds": 43.3,
+   "iterations": [],
+   "final_claims": 3,
+   "final_confidence": 1.0,
+   "sources": 10
+  },
+  {
+   "query": "Cơ chế speculative decoding trong vLLM phiên bản 0.9 hoạt động thế nào",
+   "error": null,
+   "wall_seconds": 63.9,
+   "iterations": [],
+   "final_claims": 6,
+   "final_confidence": 1.0,
+   "sources": 11
+  }
+ ]
+}
