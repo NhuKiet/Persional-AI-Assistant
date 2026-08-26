@@ -10,6 +10,7 @@ from typing import AsyncIterator, Iterator
 
 from langchain_core.language_models.chat_models import BaseChatModel
 
+from backend.app.core import capabilities
 from backend.app.core.config import settings
 
 # provider -> list[(model_id, label)]
@@ -240,5 +241,13 @@ def invoke_chat(
     model: str | None = None,
     temperature: float = 0.1,
 ) -> str:
-    llm = get_llm(provider, model, temperature)
-    return _content_text(llm.invoke(_to_lc_messages([{"role": "user", "content": prompt}], system)).content)
+    try:
+        llm = get_llm(provider, model, temperature)
+        result = _content_text(
+            llm.invoke(_to_lc_messages([{"role": "user", "content": prompt}], system)).content
+        )
+    except Exception as e:
+        capabilities.failed(capabilities.LLM, f"{type(e).__name__}: {e}")
+        raise
+    capabilities.ok(capabilities.LLM)
+    return result

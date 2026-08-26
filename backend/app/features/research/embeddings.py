@@ -7,6 +7,7 @@ from __future__ import annotations
 import logging
 import threading
 
+from backend.app.core import capabilities
 from backend.app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -38,8 +39,20 @@ def _get_backend():
 def embed_texts(texts: list[str]) -> list[list[float]]:
     if not texts:
         return []
-    return _get_backend().embed_documents(texts)
+    try:
+        vectors = _get_backend().embed_documents(texts)
+    except Exception as e:
+        capabilities.failed(capabilities.EMBEDDINGS, f"{type(e).__name__}: {e}")
+        raise
+    capabilities.ok(capabilities.EMBEDDINGS)
+    return vectors
 
 
 def embed_query(text: str) -> list[float]:
-    return _get_backend().embed_query(text)
+    try:
+        vector = _get_backend().embed_query(text)
+    except Exception as e:
+        capabilities.failed(capabilities.EMBEDDINGS, f"{type(e).__name__}: {e}")
+        raise
+    capabilities.ok(capabilities.EMBEDDINGS)
+    return vector
