@@ -314,3 +314,93 @@ skipped. Frontend build passes; 5 pre-existing landing-page smoke failures
 unrelated to this branch.
 
 BRANCH COMPLETE — awaiting user decision on merge.
+
+---
+
+Plan: `docs/superpowers/plans/2026-08-25-capability-observability.md`
+
+Execution: subagent-driven, directly on `main` (user confirmed; plan's Global
+Constraints say work on main, do not push).
+
+Pre-flight: one plan defect fixed before dispatch — Task 3's knowledge-store
+test patched out `_get_weaviate` and then asserted the reporting that lives
+inside it had happened, which the plan's own boundary rule makes impossible.
+Split into a boundary test and a behavior-preservation test (user approved:
+"Tách làm hai, plan nhượng").
+
+Baseline before execution: 529 passed, 17 skipped, 0 failed.
+
+Task 1: complete (commits 3c944bb..8aa7e96, review clean — spec OK, quality
+approved). Registry + 11 tests. Suite 540 passed, 17 skipped, 0 failed.
+
+Task 1 minor carried to final review:
+- test_concurrent_reports_lose_no_counts passes with the lock removed. The
+  reviewer ran the same 8x200 workload unlocked five times and never lost a
+  count — CPython's GIL switch interval is coarse relative to the workload.
+  The test is mine, from the plan; it does not demonstrate what it claims.
+
+Task 2: complete (commits 8aa7e96..65e529a, review approved after two fixes).
+Reporting at the raising boundaries: embed_texts, embed_query, invoke_chat.
+
+Two review findings, both fixed:
+- Important, plan-mandated: invoke_chat's try spanned get_llm, so a bad
+  provider string would be recorded as an LLM outage. User chose to split the
+  cases rather than narrow wholesale (missing key still reports, caller error
+  does not).
+- Important, introduced by that first fix: the split used substring matching
+  on a Vietnamese message. Replaced with MissingProviderKey(ValueError) — a
+  subclass, so every existing ValueError caller is unaffected, verified by
+  test_get_llm_anthropic_without_key_raises passing unchanged.
+- Minor fixed in the same pass: deleted a test made redundant by the new one.
+
+Suite 548 passed, 17 skipped, 0 failed (one test deleted as redundant).
+
+Task 3: complete (commits 65e529a..4cd78ed, review clean — spec OK, quality
+approved). Reporting at the swallowing boundaries: Synthesizer._call,
+cross_encoder_scores, _get_weaviate, the two hybrid-query handlers, and
+_rerank's disabled report. Suite 555 passed, 17 skipped, 0 failed.
+
+Reviewer verified the double-checked lock in _get_weaviate is intact, that
+capabilities.ok(KNOWLEDGE_STORE) sits before the no-hits early return so no
+path skips it, and that the brief's stale test-count prediction was reconciled
+honestly (8 pre-existing + 7 new = 15 in file; 548 + 7 = 555 suite).
+
+Task 3 minor carried to final review:
+- _call's logger.info/debug now sit outside the try, so an exception during
+  logging would propagate rather than be swallowed. Not practically reachable
+  (logging catches formatting errors internally) and mandated by the brief.
+
+Task 4: complete (commits 4cd78ed..9758dae, review clean after two fixes).
+Boot probe seeds reranker, embeddings and knowledge_store; llm stays unknown
+by design. Suite 558 passed, 17 skipped, 0 failed.
+
+Two findings, both fixed:
+- The probe did not do its job: size() reported nothing on success, so
+  knowledge_store stayed unknown after a healthy boot. Found by the
+  implementer, not the reviewer.
+- Important: the fix for that made size() double-report a connection failure
+  (total_failed 2 for one event), because _get_weaviate already reports at its
+  own boundary. Split the try blocks. Controller verified through the real
+  code path, not a stub: one failure now counts once.
+
+Reviewer confirmed size() was the only double-reporter; add_results and clear
+under-report, which is pre-existing and out of scope.
+
+Task 4 minor carried to final review:
+- reranker_selfcheck() is not wrapped in try/except like the other two probes.
+  Currently unreachable (both _bge_reranker and predict catch internally), so
+  wrapping it would add a handler that can never fire.
+
+Task 5: complete (commits 9758dae..e70c9d9, review clean — spec OK, quality
+approved). Both health endpoints. Suite 563 passed, 17 skipped, 0 failed.
+
+Reviewer confirmed the degraded path is genuinely exercised over real HTTP
+(not merely assumed), and that test_health_stays_ok_for_unknown_and_disabled
+would fail under either wrong aggregate rule.
+
+Task 5 minor carried to final review:
+- /health/capabilities is unauthenticated and exposes last_error text from
+  live dependency exceptions (capped at 200 chars). Inherited from the spec,
+  not introduced here.
+
+ALL TASKS COMPLETE — final whole-branch review next.
