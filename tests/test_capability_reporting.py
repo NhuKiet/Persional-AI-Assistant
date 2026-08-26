@@ -221,3 +221,39 @@ def test_retrieve_candidates_still_returns_empty_when_connection_fails(monkeypat
 
     monkeypatch.setattr(ks, "_get_weaviate", _boom)
     assert ks.KnowledgeStore().retrieve_candidates("q") == []
+
+
+def test_size_reports_ok_on_a_successful_count(monkeypatch):
+    """The boot probe calls size(); if it reports nothing, the probe leaves
+    knowledge_store 'unknown' and does not do its job."""
+    import backend.app.features.research.knowledge_store as ks
+
+    class _Agg:
+        def over_all(self, total_count=True):
+            return type("R", (), {"total_count": 42})()
+
+    class _Col:
+        aggregate = _Agg()
+
+    class _Client:
+        def __getattr__(self, name):
+            return type("C", (), {"get": lambda self, n: _Col()})()
+
+    monkeypatch.setattr(ks, "_get_weaviate", lambda: _Client())
+
+    assert ks.KnowledgeStore().size() == 42
+    assert cap.snapshot()["capabilities"][cap.KNOWLEDGE_STORE]["status"] == cap.OK
+
+
+def test_size_reports_degraded_and_still_returns_zero(monkeypatch):
+    import backend.app.features.research.knowledge_store as ks
+
+    def _boom():
+        raise RuntimeError("503 no healthy upstream")
+
+    monkeypatch.setattr(ks, "_get_weaviate", _boom)
+
+    assert ks.KnowledgeStore().size() == 0
+    state = cap.snapshot()["capabilities"][cap.KNOWLEDGE_STORE]
+    assert state["status"] == cap.DEGRADED
+    assert "503" in state["last_error"]
