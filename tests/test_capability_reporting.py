@@ -79,11 +79,51 @@ def test_invoke_chat_reports_ok(monkeypatch):
 def test_invoke_chat_reports_failure_and_reraises(monkeypatch):
     import backend.app.core.llm as llm_mod
 
-    def _boom(*a, **k):
-        raise RuntimeError("provider down")
+    class _LLM:
+        def invoke(self, messages):
+            raise RuntimeError("provider down")
 
-    monkeypatch.setattr(llm_mod, "get_llm", _boom)
+    monkeypatch.setattr(llm_mod, "get_llm", lambda *a, **k: _LLM())
 
     with pytest.raises(RuntimeError, match="provider down"):
+        llm_mod.invoke_chat("p")
+    assert cap.snapshot()["capabilities"][cap.LLM]["status"] == cap.DEGRADED
+
+
+def test_invoke_chat_reports_a_missing_api_key(monkeypatch):
+    """A key that is not configured means the LLM genuinely cannot be used."""
+    import backend.app.core.llm as llm_mod
+
+    monkeypatch.setattr(llm_mod.settings, "DEFAULT_PROVIDER", "openai")
+    monkeypatch.setattr(llm_mod.settings, "OPENAI_API_KEY", None)
+
+    with pytest.raises(ValueError, match="chưa cấu hình"):
+        llm_mod.invoke_chat("p")
+    assert cap.snapshot()["capabilities"][cap.LLM]["status"] == cap.DEGRADED
+
+
+def test_invoke_chat_does_not_blame_the_provider_for_a_caller_error():
+    """An unrecognized provider string is a caller error, not an outage."""
+    import backend.app.core.llm as llm_mod
+
+    with pytest.raises(ValueError, match="Provider không hỗ trợ"):
+        llm_mod.invoke_chat("p", provider="not-a-real-provider")
+
+    state = cap.snapshot()["capabilities"][cap.LLM]
+    assert state["status"] == cap.UNKNOWN
+    assert state["total_failed"] == 0
+
+
+def test_invoke_chat_still_reports_a_real_provider_failure(monkeypatch):
+    """Narrowing the try must not stop real outages being recorded."""
+    import backend.app.core.llm as llm_mod
+
+    class _LLM:
+        def invoke(self, messages):
+            raise RuntimeError("connection reset by peer")
+
+    monkeypatch.setattr(llm_mod, "get_llm", lambda *a, **k: _LLM())
+
+    with pytest.raises(RuntimeError, match="connection reset"):
         llm_mod.invoke_chat("p")
     assert cap.snapshot()["capabilities"][cap.LLM]["status"] == cap.DEGRADED

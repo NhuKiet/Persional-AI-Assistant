@@ -241,13 +241,24 @@ def invoke_chat(
     model: str | None = None,
     temperature: float = 0.1,
 ) -> str:
+    # get_llm raises for two unrelated reasons. A missing API key means the
+    # LLM genuinely cannot be used, so it belongs in the registry. An
+    # unrecognized provider string is a caller error, and recording it as a
+    # provider outage would blunt the one signal this registry exists to give.
     try:
         llm = get_llm(provider, model, temperature)
+    except ValueError as e:
+        if "chưa cấu hình" in str(e):
+            capabilities.failed(capabilities.LLM, f"{type(e).__name__}: {e}")
+        raise
+
+    try:
         result = _content_text(
             llm.invoke(_to_lc_messages([{"role": "user", "content": prompt}], system)).content
         )
     except Exception as e:
         capabilities.failed(capabilities.LLM, f"{type(e).__name__}: {e}")
         raise
+
     capabilities.ok(capabilities.LLM)
     return result
