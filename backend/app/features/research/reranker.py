@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 import threading
 
+from backend.app.core import capabilities
 from backend.app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -136,8 +137,15 @@ def _bge_scores(query: str, docs: list[str]) -> list[float] | None:
 def cross_encoder_scores(query: str, docs: list[str]) -> list[float] | None:
     """Điểm liên quan [0,1] cho từng doc, hoặc None nếu không có backend nào."""
     if not docs:
+        # Nothing to score is not a failure — reporting here would inflate
+        # total_failed with calls that had no work to do.
         return None
-    return _cohere_scores(query, docs) or _bge_scores(query, docs)
+    scores = _cohere_scores(query, docs) or _bge_scores(query, docs)
+    if scores is None:
+        capabilities.failed(capabilities.RERANKER, "no reranker backend produced scores")
+    else:
+        capabilities.ok(capabilities.RERANKER)
+    return scores
 
 
 # ── Score fusion (pure) ──────────────────────────────────────────────────────

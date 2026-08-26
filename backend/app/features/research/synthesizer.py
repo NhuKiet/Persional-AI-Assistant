@@ -15,6 +15,7 @@ import re
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 
+from backend.app.core import capabilities
 from backend.app.core.config import settings
 from backend.app.core.llm import get_llm
 from backend.app.features.research.grounding import (
@@ -210,12 +211,14 @@ class Synthesizer:
     def _call(self, prompt: str, effort: str | None = None) -> str:
         try:
             result = _content_or_str(self._bound(effort).invoke(prompt).content)
-            logger.info("LLM response: %d chars", len(result))
-            logger.debug("LLM (%d chars): %s…", len(result), result[:80])
-            return result
         except Exception as e:
+            capabilities.failed(capabilities.LLM, f"{type(e).__name__}: {e}")
             logger.error("LLM call failed: %s", e)
             return ""
+        capabilities.ok(capabilities.LLM)
+        logger.info("LLM response: %d chars", len(result))
+        logger.debug("LLM (%d chars): %s…", len(result), result[:80])
+        return result
 
     def _call_structured(self, prompt: str, schema, effort: str | None = None):
         """Return a validated schema instance, or None meaning "use the text

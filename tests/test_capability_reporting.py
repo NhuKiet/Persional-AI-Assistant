@@ -113,3 +113,111 @@ def test_invoke_chat_still_reports_a_real_provider_failure(monkeypatch):
     with pytest.raises(RuntimeError, match="connection reset"):
         llm_mod.invoke_chat("p")
     assert cap.snapshot()["capabilities"][cap.LLM]["status"] == cap.DEGRADED
+
+
+# ── llm: Synthesizer._call swallows ──────────────────────────────────────────
+
+def _synth():
+    from backend.app.core.llm import ModelCapabilities
+    from backend.app.features.research.synthesizer import Synthesizer
+
+    class _LLM:
+        def invoke(self, prompt):
+            raise RuntimeError("provider down")
+
+    return Synthesizer(llm=_LLM(), capabilities=ModelCapabilities(8192, False, True))
+
+
+def test_call_still_returns_empty_string_on_failure():
+    s = _synth()
+    assert s._call("p") == ""
+    assert cap.snapshot()["capabilities"][cap.LLM]["status"] == cap.DEGRADED
+
+
+def test_call_reports_ok_on_success():
+    from backend.app.core.llm import ModelCapabilities
+    from backend.app.features.research.synthesizer import Synthesizer
+
+    class _R:
+        content = "text"
+
+    class _LLM:
+        def invoke(self, prompt):
+            return _R()
+
+    s = Synthesizer(llm=_LLM(), capabilities=ModelCapabilities(8192, False, True))
+    assert s._call("p") == "text"
+    assert cap.snapshot()["capabilities"][cap.LLM]["status"] == cap.OK
+
+
+# ── reranker: cross_encoder_scores swallows ──────────────────────────────────
+
+def test_cross_encoder_reports_ok_when_it_scores(monkeypatch):
+    import backend.app.features.research.reranker as rr
+
+    monkeypatch.setattr(rr.settings, "COHERE_API_KEY", None, raising=False)
+    monkeypatch.setattr(rr, "_bge_reranker", lambda: type(
+        "M", (), {"predict": lambda self, pairs: [0.5] * len(pairs)}
+    )())
+
+    assert rr.cross_encoder_scores("q", ["d"]) == [0.5]
+    assert cap.snapshot()["capabilities"][cap.RERANKER]["status"] == cap.OK
+
+
+def test_cross_encoder_reports_degraded_and_still_returns_none(monkeypatch):
+    import backend.app.features.research.reranker as rr
+
+    monkeypatch.setattr(rr.settings, "COHERE_API_KEY", None, raising=False)
+    monkeypatch.setattr(rr, "_bge_reranker", lambda: None)
+
+    assert rr.cross_encoder_scores("q", ["d"]) is None
+    assert cap.snapshot()["capabilities"][cap.RERANKER]["status"] == cap.DEGRADED
+
+
+def test_cross_encoder_empty_docs_reports_nothing(monkeypatch):
+    """Returns None because there was nothing to do — not a failure."""
+    import backend.app.features.research.reranker as rr
+
+    assert rr.cross_encoder_scores("q", []) is None
+    state = cap.snapshot()["capabilities"][cap.RERANKER]
+    assert state["status"] == cap.UNKNOWN
+    assert state["total_failed"] == 0
+
+
+# ── knowledge store: handlers swallow ────────────────────────────────────────
+
+def test_get_weaviate_reports_and_reraises_on_connection_failure(monkeypatch):
+    """Reporting lives at the boundary, so the test measures it at the
+    boundary. Patching _get_weaviate out would patch out the reporting too."""
+    import weaviate
+
+    import backend.app.features.research.knowledge_store as ks
+
+    monkeypatch.setattr(ks, "_client", None)
+    monkeypatch.setattr(ks.settings, "WEAVIATE_URL", "https://x.example", raising=False)
+    monkeypatch.setattr(ks.settings, "WEAVIATE_API_KEY", "k", raising=False)
+
+    def _boom(**kwargs):
+        raise RuntimeError("Meta endpoint! Unexpected status code: 503")
+
+    monkeypatch.setattr(weaviate, "connect_to_weaviate_cloud", _boom)
+
+    with pytest.raises(RuntimeError, match="503"):
+        ks._get_weaviate()
+
+    state = cap.snapshot()["capabilities"][cap.KNOWLEDGE_STORE]
+    assert state["status"] == cap.DEGRADED
+    assert "503" in state["last_error"]
+
+
+def test_retrieve_candidates_still_returns_empty_when_connection_fails(monkeypatch):
+    """Behavior preservation only. This handler deliberately reports nothing —
+    it catches _get_weaviate and embed_query together and cannot attribute a
+    failure to either, so both report from their own boundary instead."""
+    import backend.app.features.research.knowledge_store as ks
+
+    def _boom():
+        raise RuntimeError("Meta endpoint! Unexpected status code: 503")
+
+    monkeypatch.setattr(ks, "_get_weaviate", _boom)
+    assert ks.KnowledgeStore().retrieve_candidates("q") == []

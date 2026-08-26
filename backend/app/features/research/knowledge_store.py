@@ -12,6 +12,7 @@ import threading
 import time
 from dataclasses import dataclass
 
+from backend.app.core import capabilities
 from backend.app.core.config import settings
 from backend.app.features.research.models import SearchResult
 from backend.app.features.research.chunking import build_parent_child, category_for
@@ -199,10 +200,11 @@ def _rerank(query: str, results: list[SearchResult]) -> list[SearchResult]:
     base = [r.score for r in candidates]
     cred = [credibility_for(r.source) for r in candidates]
     try:
-        rerank = (
-            cross_encoder_scores(query, [r.content[:1000] for r in candidates])
-            if _RERANK_ENABLED else None
-        )
+        if _RERANK_ENABLED:
+            rerank = cross_encoder_scores(query, [r.content[:1000] for r in candidates])
+        else:
+            capabilities.disabled(capabilities.RERANKER)
+            rerank = None
     except Exception as e:
         logger.warning("cross_encoder_scores failed (non-fatal): %s", e)
         rerank = None
@@ -234,11 +236,15 @@ def _get_weaviate():
             raise RuntimeError("WEAVIATE_URL / WEAVIATE_API_KEY chưa cấu hình.")
         import weaviate
         from weaviate.classes.init import Auth
-        client = weaviate.connect_to_weaviate_cloud(
-            cluster_url=settings.WEAVIATE_URL,
-            auth_credentials=Auth.api_key(settings.WEAVIATE_API_KEY),
-        )
-        _ensure_schema(client)
+        try:
+            client = weaviate.connect_to_weaviate_cloud(
+                cluster_url=settings.WEAVIATE_URL,
+                auth_credentials=Auth.api_key(settings.WEAVIATE_API_KEY),
+            )
+            _ensure_schema(client)
+        except Exception as e:
+            capabilities.failed(capabilities.KNOWLEDGE_STORE, f"{type(e).__name__}: {e}")
+            raise
         _client = client
         logger.info("Weaviate connected: %s", settings.WEAVIATE_URL)
     return _client
@@ -344,6 +350,8 @@ class KnowledgeStore:
         try:
             client = _get_weaviate()
         except Exception as e:
+            # Not attributed here: _get_weaviate already reports from its
+            # own boundary, where the cause is unambiguous.
             logger.warning("KnowledgeStore add skipped (Weaviate unavailable): %s", e)
             return 0
 
@@ -401,6 +409,8 @@ class KnowledgeStore:
             client = _get_weaviate()
             q_vec = embed_query(query)
         except Exception as e:
+            # Not attributed here: _get_weaviate and embed_query each report
+            # from their own boundary, where the cause is unambiguous.
             logger.warning("KnowledgeStore retrieve skipped: %s", e)
             return []
 
@@ -417,8 +427,10 @@ class KnowledgeStore:
                 return_metadata=MetadataQuery(score=True),
             )
         except Exception as e:
+            capabilities.failed(capabilities.KNOWLEDGE_STORE, f"{type(e).__name__}: {e}")
             logger.warning("Weaviate hybrid query failed (non-fatal): %s", e)
             return []
+        capabilities.ok(capabilities.KNOWLEDGE_STORE)
 
         now = time.time()
         hits = _objects_to_hits(resp.objects, now)
@@ -443,6 +455,8 @@ class KnowledgeStore:
             client = _get_weaviate()
             q_vec  = embed_query(query)
         except Exception as e:
+            # Not attributed here: _get_weaviate and embed_query each report
+            # from their own boundary, where the cause is unambiguous.
             logger.warning("retrieve_candidates skipped: %s", e)
             return []
 
@@ -456,8 +470,10 @@ class KnowledgeStore:
                 return_metadata=MetadataQuery(score=True),
             )
         except Exception as e:
+            capabilities.failed(capabilities.KNOWLEDGE_STORE, f"{type(e).__name__}: {e}")
             logger.warning("Weaviate hybrid query failed (non-fatal): %s", e)
             return []
+        capabilities.ok(capabilities.KNOWLEDGE_STORE)
 
         now  = time.time()
         hits = _objects_to_hits(resp.objects, now)
