@@ -27,6 +27,7 @@ PUBLIC_ROUTES = {
     ("GET", "/redoc"),
     ("HEAD", "/redoc"),
     ("GET", "/health"),
+    ("GET", "/health/capabilities"),
     ("GET", "/api/models"),
     ("POST", "/api/chat/stream"),
     ("DELETE", "/api/chat/session/{session_id}"),
@@ -85,6 +86,12 @@ def test_public_routes_keep_methods_and_paths():
 
 
 def test_health_contract_is_stable():
+    """Asserts the contract shape, not a particular capability state — hence
+    the explicit reset. Without it this test passes or fails depending on
+    collection order."""
+    from backend.app.core import capabilities
+
+    capabilities.reset()
     response = TestClient(app).get("/health")
 
     assert response.status_code == 200

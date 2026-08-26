@@ -10,6 +10,7 @@ from backend.app.features.news.router import router as news_router
 from backend.app.features.pdf.router import router as pdf_router
 from backend.app.features.research.router import router as research_router
 from backend.app.core.lifespan import lifespan
+from backend.app.core import capabilities
 
 
 logging.basicConfig(
@@ -49,4 +50,15 @@ app.include_router(news_router)
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "version": "3.0.0"}
+    """Liveness plus one honest field.
+
+    Deliberately always 200: a load balancer probing this must not kill a
+    process because an optional capability is degraded. The body says what is
+    actually working; /health/capabilities says why.
+    """
+    return {"status": capabilities.snapshot()["status"], "version": "3.0.0"}
+
+
+@app.get("/health/capabilities")
+async def health_capabilities():
+    return capabilities.snapshot()
