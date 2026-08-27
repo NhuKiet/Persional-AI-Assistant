@@ -73,7 +73,12 @@ def _instrument(rounds_log: list):
         gq = orig_gap(query, output)
         if state["pending"] is not None:
             state["pending"]["gap_query"] = gq
-            state["pending"]["gap_came_from_follow_up"] = bool(output.follow_up_questions)
+            # Derived from the returned value, not recomputed: gap_query falls
+            # back to evidence framing when the first follow-up is blank, and a
+            # second independent computation here could disagree with the
+            # decision it claims to be recording.
+            first = (output.follow_up_questions or [""])[0].strip()[:200]
+            state["pending"]["gap_came_from_follow_up"] = bool(gq and first and gq == first)
         return gq
 
     def _iteration_step(self, query, sources, output, synth):

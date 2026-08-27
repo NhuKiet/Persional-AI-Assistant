@@ -80,3 +80,13 @@ def test_does_not_iterate_on_the_shape_that_measurably_hurt():
     """The YaRN shape from the probe: 2 claims, confidence 1.0. Under the old
     rule this fired and made the answer worse."""
     assert needs_iteration(_out(n_claims=2, confidence=1.0), rounds_done=0, max_rounds=1) is False
+
+
+def test_zero_claims_iterates_even_when_confidence_is_high():
+    """Pins the `not output.claims` branch specifically.
+
+    The probe-shaped case above (0 claims, confidence 0.0) is caught by the
+    confidence branch too, so deleting the claims branch leaves the whole suite
+    green. This input can only pass through the claims branch, and fails if it
+    is removed."""
+    assert needs_iteration(_out(n_claims=0, confidence=0.9), rounds_done=0, max_rounds=1) is True
