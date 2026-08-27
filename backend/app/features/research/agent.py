@@ -1,4 +1,3 @@
-import hashlib
 import logging
 import threading
 import time
@@ -58,51 +57,6 @@ _SSE_STATUS = {
     "duckduckgo":    "Searching DuckDuckGo…",
     "stackoverflow": "Searching Stack Overflow…",
 }
-
-# ─────────────────────────────────────────────────────────────────────────────
-# TTL cache
-# ─────────────────────────────────────────────────────────────────────────────
-
-_CACHE_TTL_SECONDS = 3600
-
-
-class _QueryCache:
-    def __init__(self, ttl: int = _CACHE_TTL_SECONDS, maxsize: int = 50):
-        self._ttl    = ttl
-        self._max    = maxsize
-        self._store: dict[str, tuple[float, list[SearchResult]]] = {}
-        self._lock   = threading.Lock()
-
-    def _key(self, query: str) -> str:
-        return hashlib.md5(query.strip().lower().encode()).hexdigest()
-
-    def get(self, query: str) -> list[SearchResult] | None:
-        key = self._key(query)
-        with self._lock:
-            entry = self._store.get(key)
-            if entry is None:
-                return None
-            ts, results = entry
-            if time.time() - ts > self._ttl:
-                del self._store[key]
-                return None
-            logger.info("Cache HIT for query: %s…", query[:60])
-            return results
-
-    def set(self, query: str, results: list[SearchResult]) -> None:
-        key = self._key(query)
-        with self._lock:
-            if len(self._store) >= self._max:
-                oldest = min(self._store, key=lambda k: self._store[k][0])
-                del self._store[oldest]
-            self._store[key] = (time.time(), results)
-
-    def clear(self) -> None:
-        with self._lock:
-            self._store.clear()
-
-
-_cache = _QueryCache()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -172,10 +126,6 @@ class ResearchAgent:
         Search all sources in parallel using dynamic k.
         If expansions provided, run extra searches and merge.
         """
-        cached = _cache.get(query)
-        if cached is not None:
-            return cached
-
         k_map = dynamic_k or {name: k for name, _, k in _SOURCES}
         queries = expansions or [query]
 
@@ -220,7 +170,6 @@ class ResearchAgent:
             # call blocked for minutes. Let them die on their own instead.
             ex.shutdown(wait=False, cancel_futures=True)
 
-        _cache.set(query, all_results)
         return all_results
 
     def _process_pipeline(
@@ -538,7 +487,6 @@ class ResearchAgent:
                     return
 
                 logger.info("[SEARCH] Raw: %d results (%.1fs)", len(raw_results), time.time() - t0)
-                _cache.set(query, raw_results)
 
                 # ── Post-processing pipeline ──────────────────────────────────
                 # Anchored to `query` (the clean, contextualized user query) —

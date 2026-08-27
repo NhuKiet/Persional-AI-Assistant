@@ -153,7 +153,6 @@ def _run_integration(monkeypatch, stored_candidates, stub_web_results,
     monkeypatch.setattr(crawl_mod, "_crawl_url", lambda url, timeout=8: None)
     monkeypatch.setattr(ranking_mod, "cross_encoder_scores", lambda q, docs: None)
 
-    agent_mod._cache.clear()
     store = _FakeStore(stored_candidates)
     monkeypatch.setattr(agent_mod, "get_store", lambda: store)
 
