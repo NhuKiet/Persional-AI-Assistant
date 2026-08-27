@@ -113,6 +113,19 @@ def embedding_pair_scores(pairs: list[tuple[str, str]]) -> list[float]:
         return []
 
 
+_LABEL_RE = re.compile(r"^\s*(SUMMARY|OVERVIEW)\s*:\s*", re.IGNORECASE)
+
+
+def _strip_label(text: str) -> str:
+    """Remove a leading SUMMARY:/OVERVIEW: from a structured field.
+
+    Defence in depth. The structured prompt no longer asks for the label, but
+    a model may prefix one anyway, and it must never reach the reader — it did,
+    on three of four measured answers, when the prompt still asked for it.
+    """
+    return _LABEL_RE.sub("", (text or "").strip()).strip()
+
+
 def _content_or_str(content) -> str:
     """Anthropic returns content blocks rather than a plain string."""
     if isinstance(content, str):
@@ -370,10 +383,10 @@ class Synthesizer:
             raw2   = f_detailed.result()
 
         if parsed is not None:
-            out.summary_short  = parsed.short.strip()
-            out.summary_medium = parsed.medium.strip()
+            out.summary_short  = _strip_label(parsed.short)
+            out.summary_medium = _strip_label(parsed.medium)
         else:
-            raw1 = self._call(prompts.summary_short_medium_prompt(query, ctx), "medium")
+            raw1 = self._call(prompts.summary_short_medium_text_prompt(query, ctx), "medium")
             m = re.search(r"SUMMARY:\s*(.+?)(?=OVERVIEW:|$)", raw1, re.DOTALL | re.IGNORECASE)
             out.summary_short = m.group(1).strip() if m else ""
             m = re.search(r"OVERVIEW:\s*(.+)", raw1, re.DOTALL | re.IGNORECASE)
@@ -566,18 +579,26 @@ class Synthesizer:
         midpoint = len(raw) // 2
         out.summary_medium = raw[:midpoint].strip() if raw else out.summary_short
 
-        # key_points — tự detect bullet points nếu LLM tự viết
+        # key_points — tự detect bullet points nếu LLM tự viết.
+        #
+        # Tagged and capped like the structured path's own fallback. Measured
+        # on four real answers before this: 0 of 8, 0 of 40, 0 of 49 and 0 of
+        # 90 key points carried a tag, so ResearchResult.tsx — which requires
+        # one and shows the panel only at three or more — discarded every
+        # single one. The bullet branch also had no cap, which is where 40, 49
+        # and 90 came from.
         out.key_points = []
         for line in raw.splitlines():
             line = line.strip()
             if re.match(r"^[-•*]\s+", line) and len(line) > 20:
-                out.key_points.append(re.sub(r"^[-•*]\s+", "", line))
+                out.key_points.append(f"[FINDING] {re.sub(r'^[-•*]\s+', '', line)}")
         # Nếu LLM không dùng bullets thì tạo từ các câu quan trọng
         if not out.key_points:
             out.key_points = [
-                s.strip() for s in sentences
+                f"[FINDING] {s.strip()}" for s in sentences
                 if len(s.strip()) > 40
-            ][:8]
+            ]
+        out.key_points = out.key_points[:8]
 
         # follow_up_questions — detect câu hỏi trong response nếu có
         out.follow_up_questions = [

@@ -52,6 +52,29 @@ DEEP_DIVE_SYSTEM = (
 # ── Synthesizer ──────────────────────────────────────────────────────────────
 
 def summary_short_medium_prompt(query: str, ctx: str) -> str:
+    """For the structured path, where the schema already names the two fields.
+
+    Deliberately carries no "start with SUMMARY:" instruction. When it did, the
+    model obeyed it *inside* the structured field and readers saw
+    `summary_short` beginning with the literal string "SUMMARY: " — measured on
+    three of four answers. The text path keeps that instruction in
+    `summary_short_medium_text_prompt`, because its parser needs the labels.
+    """
+    return (
+        f"You are a research assistant. Based on these sources, answer: {query}\n\n"
+        f"Sources:\n{ctx}\n\n"
+        f"Write TWO things:\n"
+        f"1. A 2-3 sentence summary — cover the main topic and key insight\n"
+        f"2. A 2-paragraph overview — explain context, methods, and findings\n"
+        f"Give each as plain prose. Do not prefix either with a label.\n\n"
+        f"{_footer(GROUNDING_RULE, LANGUAGE_RULE)}"
+    )
+
+
+def summary_short_medium_text_prompt(query: str, ctx: str) -> str:
+    """For the text fallback, whose parser locates the two parts by their
+    labels. Only a model without structured output — Ollama today — gets here.
+    """
     return (
         f"You are a research assistant. Based on these sources, answer: {query}\n\n"
         f"Sources:\n{ctx}\n\n"
