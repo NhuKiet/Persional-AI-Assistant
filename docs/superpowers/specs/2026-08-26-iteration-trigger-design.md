@@ -122,3 +122,30 @@ Stated plainly: this removes the observed instance of harm, not the mechanism th
 ## 5. Sample size
 
 Two firings across six queries. Enough to establish that both outcomes occur and to identify the mechanism, and not enough to support a rate. No rate is claimed anywhere in this document.
+
+## 6. Result (2026-08-26)
+
+The probe was re-run over the same six queries and compared against the baseline recorded in §1.1.
+
+| Query | Rounds before | Rounds after |
+|---|---|---|
+| Mamba-2 vs Mamba-1 SSD | 0 | 0 |
+| **YaRN alpha/beta at 128k** | **1** | **0** |
+| **PhoGPT-4B on VMLU** | **1** | **1** |
+| Weaviate HNSW `ef_construction` | 0 | 0 |
+| Qwen3-0.6B vs Gemma3-270M on ARM | 0 | 0 |
+| vLLM 0.9 speculative decoding | 0 | 0 |
+
+`queries_that_iterated` fell from 2 to 1, which is the criterion §3.4 fixed in advance. The YaRN case — the firing that measurably made an answer worse — no longer triggers. The PhoGPT case still does, and still earns it: 0 claims became 1, confidence 0.0 became 1.0, from 5 newly fetched sources. No query that previously did not iterate began iterating.
+
+### 6.1 A summary figure that must not be misread
+
+`mean_claims_delta` moved 0.0 → 1.0 and `mean_confidence_delta` moved 0.5 → 1.0.
+
+Neither is an improvement in how the loop performs. Both means are computed over the rounds that fired, and the harmful round — which contributed −1 claim and no confidence gain — was removed from that set. What remains is one sample. **A mean over a single observation says nothing**, and the movement is an artifact of dropping the bad case rather than evidence that the surviving case got better.
+
+This is the same trap as the baseline's `mean_claims_delta: 0.0`, which was the average of −1 and +1 and concealed the entire finding. The per-round records are the only readable evidence here; the summary line is not.
+
+### 6.2 Unchanged, as designed
+
+`gap_from_follow_up` is 1 of 1. The surviving round is still steered by `follow_up_questions[0]` — a question generated without the model having seen any source — and still succeeds because that invented question happens to restate the original query. Section 4 predicted exactly this, and it remains true: the observed instance of harm is gone, the mechanism that produced it is not.
