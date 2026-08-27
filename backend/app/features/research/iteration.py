@@ -9,11 +9,20 @@ def needs_iteration(
     output: ResearchOutput,
     rounds_done: int,
     max_rounds: int,
-    min_grounded: int = 3,
 ) -> bool:
+    """Whether a supplementary research round is worth its cost.
+
+    Deliberately does NOT count claims. Measured on six hard queries: a result
+    with 2 claims at confidence 1.0 tripped the old `len(claims) < 3` rule, and
+    the extra round returned fewer claims than it started with. Few claims at
+    high confidence means the question was narrow, not that the evidence was
+    thin — and compute_confidence already accounts for thinness through its
+    source factor, so a single-source answer still scores 0.4 and still
+    triggers a round here.
+    """
     if rounds_done >= max_rounds:
         return False
-    if len(output.claims) < min_grounded:
+    if not output.claims:
         return True
     if output.confidence is None or output.confidence < 0.5:  # deliberate: missing confidence counts as weak, iterate up to cap
         return True
