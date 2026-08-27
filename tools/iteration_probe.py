@@ -52,13 +52,15 @@ def _instrument(rounds_log: list):
 
     state = {"pending": None}
 
-    def needs_iteration(output, rounds_done, max_rounds, min_grounded=3):
-        verdict = orig_needs(output, rounds_done, max_rounds, min_grounded)
+    def needs_iteration(output, rounds_done, max_rounds):
+        verdict = orig_needs(output, rounds_done, max_rounds)
         if verdict:
-            # Record which condition fired. Both can be true at once.
+            # Which condition fired. Claim count is no longer a trigger — the
+            # probe recorded a firing at 2 claims and confidence 1.0 that made
+            # the answer worse, and that rule is gone.
             state["pending"] = {
                 "round": rounds_done + 1,
-                "trigger_few_claims": len(output.claims) < min_grounded,
+                "trigger_no_claims": not output.claims,
                 "trigger_low_confidence": (
                     output.confidence is None or output.confidence < 0.5
                 ),
