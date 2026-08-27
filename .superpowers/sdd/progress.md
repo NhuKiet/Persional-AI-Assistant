@@ -404,3 +404,120 @@ Task 5 minor carried to final review:
   not introduced here.
 
 ALL TASKS COMPLETE — final whole-branch review next.
+
+Final whole-branch review (opus, 3c944bb..e70c9d9): no Critical, two Important.
+
+1. disabled(RERANKER) masked a genuinely broken reranker: RERANK_ENABLED gated
+   only knowledge_store._rerank while ranking.rerank_results ignored it, so a
+   real degraded observation could be overwritten by a disabled report and the
+   aggregate returned to ok — the exact silent degradation this work exists to
+   end, reintroduced by the work itself. User chose to make the flag mean what
+   it says: it now gates both paths. Controller verified the production
+   scenario directly — flag ON with a broken backend stays degraded through
+   both paths; flag OFF reports disabled on both and nothing calls the
+   reranker, so the two states are now mutually exclusive.
+2. The boot probe leaked into the test suite: test_lifespan.py runs the real
+   lifespan, so the daemon thread made billed OpenAI calls and a live Weaviate
+   connection from the unit suite and outlived the test to write into the
+   module-global registry.
+
+Finding 2's first fix was itself broken and its report was wrong. It patched
+lifespan.threading.Thread — which is the threading module, not an alias — so
+Thread was replaced process-wide and every ThreadPoolExecutor blocked on
+workers that never started. The suite hung at ~44%; test_lifespan.py failed
+all three tests in isolation while the report claimed 564 passed. Controller
+caught it from the hang, diagnosed it, and fixed it directly: _seed_capabilities
+lifted to module level (as the plan's interface block specified all along) and
+the fixture patches that name.
+
+Final state: 564 passed, 17 skipped, 0 failed, 20s.
+
+Final-review minors, not fixed:
+- test_concurrent_reports_lose_no_counts does not demonstrate what it claims;
+  reviewer could not lose counts unlocked even at switchinterval 1e-9. The lock
+  is still load-bearing for snapshot()'s multi-field read and failed()'s
+  read-modify-write.
+- add_results and clear under-report write-path failures (pre-existing shape).
+- stream_chat / chat_stream report nothing, so a streaming-only outage leaves
+  llm unknown or stale-ok.
+- /health/capabilities is unauthenticated; reviewer judged it not worth fixing
+  since every route is already unauthenticated and last_error carries provider
+  and cluster URLs, not secrets.
+
+BRANCH COMPLETE.
+
+---
+
+Plan: `docs/superpowers/plans/2026-08-26-iteration-trigger.md`
+
+Execution: subagent-driven on `main` (plan's Global Constraints; user approved
+the plan). Pre-flight scan clean.
+
+Baseline before execution: 564 passed, 17 skipped, 0 failed. HEAD 99fb50f.
+
+Note: unrelated uncommitted frontend work (LandingPage.tsx, landing.css,
+atomReactor.ts, landing-bg.webp) predates this session and must not be
+committed by any task here.
+
+Task 1: complete (commits 99fb50f..634a2b1, review approved after one fix).
+needs_iteration keys on evidence quality, not claim count; min_grounded gone
+from the signature. Suite 566 passed, 17 skipped, 0 failed.
+
+Review finding, fixed: tools/iteration_probe.py held a wrapper calling
+needs_iteration with four positional args and would have raised TypeError on
+the first query — and that probe is both the source of this change's evidence
+and the tool Task 2 runs to verify it. The plan's claim that nothing passes
+min_grounded came from searching tests/ and agent.py and missed tools/.
+Controller confirmed the breakage live before dispatching the fix.
+
+Task 2 is run by the controller directly, not a subagent: an earlier subagent
+in this repository backgrounded a probe and the process died when its turn
+ended.
+
+Task 2: complete (commit ee88ed9). Verification probe run by the controller
+directly. Criterion fixed in advance was met exactly: queries_that_iterated
+2 -> 1, YaRN stops firing, PhoGPT still fires and still earns it (0 claims ->
+1, confidence 0.0 -> 1.0, 5 new sources), no previously-quiet query started
+iterating.
+
+Recorded in spec section 6.1 so it is not misread later: mean_claims_delta
+moved 0.0 -> 1.0 only because the harmful round left the set the mean is
+computed over. One sample remains; a mean over one observation says nothing.
+
+gap_from_follow_up is 1 of 1 — the steering is untouched, as section 4 said.
+
+ALL TASKS COMPLETE.
+
+Final whole-branch review (opus, 99fb50f..ee88ed9): no Critical, two Important,
+both fixed in 14f190e.
+
+1. test_iterates_when_nothing_was_found pinned nothing. The reviewer deleted
+   the `if not output.claims: return True` branch entirely and the full suite
+   stayed green at 566/0 — the test's input (0 claims, confidence 0.0) is
+   caught by the confidence branch on its own. The controller had explicitly
+   defended that test as a legitimate regression guard when dispatching Task 1;
+   mutation testing proved otherwise. Fixed by adding a case that can only pass
+   through the claims branch (0 claims, confidence 0.9), plus a docstring
+   paragraph saying the branch is defence in depth rather than extra coverage.
+   Controller re-ran the mutation independently: branch removed -> the new test
+   fails; branch restored -> green.
+2. tools/iteration_probe.py recomputed gap_came_from_follow_up as
+   bool(output.follow_up_questions), which can disagree with what gap_query
+   actually returned — gap_query falls back to evidence framing on a blank
+   follow-up. Now derived from the returned value.
+
+Final state: 567 passed, 17 skipped, 0 failed. Working tree clean under
+backend/, tests/, tools/. Unrelated frontend work untouched throughout.
+
+Final-review minors, not fixed:
+- The zero-claims branch is unreachable in practice: synthesizer filters claims
+  to grounded ones and compute_confidence returns 0.0 for an empty list, so
+  every reachable empty-claims state also has a confidence the next branch
+  catches. Kept as defence in depth; now documented as such.
+- With RESEARCH_GROUNDING_ENABLED=False, _attach_grounding returns early
+  leaving claims=[] and confidence=None, so every search-path query pays one
+  unconditional extra round. Unchanged by this work — the old `0 < 3` rule
+  fired identically — but the new comment frames the trigger as evidence-driven,
+  which reads oddly in that configuration.
+
+BRANCH COMPLETE.

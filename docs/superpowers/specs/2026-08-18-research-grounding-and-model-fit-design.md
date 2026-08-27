@@ -609,3 +609,48 @@ The one part now known to be insufficient on its own is the lexical path retaine
 **Sample size:** 22 claims, 3 queries, one corpus. Large enough to establish that the failure exists and is systematic — 11 of 11, no exceptions, two independent mechanisms identified and separately demonstrated — and not large enough to quantify a rate. No rate is claimed.
 
 **Not implemented.** Reinstating withdrawn work is a scope decision for the user, not a conclusion this audit gets to act on by itself.
+
+## 16. Is a stored answer actually worse? (2026-08-26)
+
+Sections 14.4 and 15.5 both ended on this question, and no metric could answer it: the tier-2 judge answered "insufficient" on 15 of 16 evaluations, and whether that strictness is right or wasteful depends on whether answers built from stored chunks are actually worse. `tools/gate_compare.py` produces both answers for the same query so a person can read them side by side. It deliberately does not score them — scoring would need a metric, and the absence of a usable metric is why this stayed open.
+
+Store held 3,840 chunks; all eight standard queries reached `maybe`, so the judge decided every one.
+
+### 16.1 What the reading found
+
+| Query | Stored sources | The reuse answer | Verdict |
+|---|---|---|---|
+| RAG hoạt động thế nào | **1** | Retold a single blog post; explained *why* RAG exists and never *how it works* — the question asked | inadequate |
+| Mixture of Experts là gì | 2 | judge said **sufficient**; both paths identical | — |
+| So sánh DPO và PPO | 3 | correct and substantive, but general | less specific |
+| Cách đánh giá chất lượng RAG | 5 | named the failure modes; light on the actual metric list | less specific |
+
+The searched answers were consistently more specific: they named Policy / Reward / Reference / Value models for the RLHF comparison, and listed Context Precision, Context Recall, Faithfulness, Answer Relevance for the evaluation question. The stored answers were correct but stopped at the conceptual level.
+
+**The judge's strictness is directionally justified.** Its cost buys something real. But "insufficient" is not the same as "useless": at 3–5 stored sources the reuse answers were accurate and would satisfy a casual question. What they lacked was the specificity that makes a research answer worth reading.
+
+**The MoE case is the one to note.** The judge said sufficient — the second reuse ever observed — at 2 candidates. So the judge is not a rubber stamp for "no"; it does say yes when the stored material genuinely covers the question.
+
+### 16.2 The finding that makes this actionable
+
+The quality gap tracks **candidate count**, and candidate count is artificially suppressed by the units mismatch recorded in 14.2: an absolute threshold of 0.65 applied to `HybridFusion.RELATIVE_SCORE`, which normalises within the returned batch. At 1 candidate the reuse answer was inadequate; at 5 it was decent.
+
+That turns a dead end into a testable hypothesis: if the threshold were corrected so retrieval surfaced the 10–24 candidates measured as available at lower cutoffs, the reuse answer might close the gap, and the judge might start saying yes. Section 14.2 measured that lowering the threshold to 0.40 moved reuse only from 0/8 to 1/8 — but that was measured with the *judge* as the outcome, not with the answer quality a person reads. The two are different questions and only the second one matters here.
+
+**Not changed.** This section records a reading, not a decision. Retuning the threshold on this evidence would be changing behaviour to chase a hypothesis that has not itself been tested.
+
+### 16.3 Confounder, stated
+
+The "normal" arm is the `top_up` path, which merges the stored sources with freshly searched ones. So the comparison is *store alone* versus *store plus search*, not *store* versus *search*. That is the right comparison for the decision at hand — whether the judge should let the system skip the search — but it means none of this says anything about how a search-only answer would compare.
+
+### 16.4 Sample size
+
+Four queries. Enough to show a consistent direction and to identify what the gap tracks. Not enough to support a rate, and no rate is claimed.
+
+### 16.5 Two unrelated defects surfaced by the same run
+
+Neither concerns the gate; both were visible in the recorded output and are recorded here so they are not lost.
+
+1. **`SUMMARY:` and `OVERVIEW:` labels reach the user.** Three of the four normal-path answers have `summary_short` beginning with the literal string `"SUMMARY: "` and `summary_medium` with `"OVERVIEW: "`. `prompts.summary_short_medium_prompt` still instructs the model to start its output with those labels — a text-format instruction the structured schema made redundant — and under structured output the model puts the label inside the field value instead of before it. The one exception is the MoE query, which took the reuse path and never made that call.
+
+2. **The reuse path's key points are all discarded by the UI.** `synthesize_rag` derives key points by splitting sentences or collecting bullet lines, so none carry the `[FINDING]` / `[METHOD]` / … tag that `ResearchResult.tsx` requires. Measured: 0 of 8, 0 of 40, 0 of 49, and 0 of 90 tagged. Every reuse answer therefore shows no Key Points panel while shipping up to 90 unusable entries over the wire. The bullet-line branch also has no cap, which is where 40, 49 and 90 come from — the sentence-splitting fallback below it is capped at 8.
