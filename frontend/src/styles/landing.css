@@ -114,17 +114,17 @@
 
 .atom-cta {
   position: absolute;
-  right: 56px;
-  bottom: 44px;
+  right: 96px;
+  bottom: 84px;
   z-index: 6;
   font-family: var(--sans);
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   color: #11660f;
   background: #ffffff;
   border: none;
   border-radius: 999px;
-  padding: 13px 26px;
+  padding: 13px 28px;
   cursor: pointer;
   box-shadow: 0 4px 18px rgba(0, 0, 0, 0.16), 0 2px 6px rgba(0, 0, 0, 0.08);
   display: inline-flex;
@@ -142,25 +142,27 @@
   transition: text-shadow 0.3s ease;
 }
 
-/* Hiệu ứng tia chớp / luồng điện chạy quanh viền */
+/* Hiệu ứng dòng điện chạy màu RGB quanh viền */
 .atom-cta::before {
   content: "";
   position: absolute;
-  inset: -2px;
+  inset: -3px;
   border-radius: 999px;
   background: conic-gradient(
     from 0deg,
-    transparent 0%,
-    transparent 40%,
-    #86efac 60%,
-    #ffffff 75%,
-    #38ef7d 90%,
-    transparent 100%
+    #ff3b3b 0%,
+    #ff9a3b 14%,
+    #f4e13b 28%,
+    #3bd45a 42%,
+    #3bb8ff 57%,
+    #8a3bff 71%,
+    #ff3bbd 85%,
+    #ff3b3b 100%
   );
   opacity: 0;
   z-index: 1;
   transition: opacity 0.35s ease;
-  animation: atom-cta-electric-spin 1.8s linear infinite;
+  animation: atom-cta-electric-spin 1.4s linear infinite;
   pointer-events: none;
 }
 
@@ -168,22 +170,23 @@
 .atom-cta::after {
   content: "";
   position: absolute;
-  inset: 2px;
+  inset: 2.5px;
   border-radius: 999px;
   background: #ffffff;
   z-index: 2;
   transition: background-color var(--dur) var(--ease-out);
 }
 
-/* Khi hover: phát sáng hào quang điện (electric pulse & neon aura) */
+/* Khi hover: phát sáng hào quang RGB (RGB pulse & neon aura) */
 .atom-cta:hover {
-  transform: translateY(-2px) scale(1.03);
+  transform: translateY(-2px) scale(1.04);
   background: #ffffff;
   box-shadow:
-    0 0 16px rgba(134, 239, 172, 0.85),
-    0 0 32px rgba(56, 239, 125, 0.55),
-    0 0 54px rgba(255, 255, 255, 0.4),
-    0 8px 24px rgba(0, 0, 0, 0.22);
+    0 0 16px rgba(255, 59, 59, 0.4),
+    0 0 28px rgba(59, 212, 90, 0.45),
+    0 0 42px rgba(59, 184, 255, 0.45),
+    0 0 60px rgba(255, 59, 189, 0.35),
+    0 8px 26px rgba(0, 0, 0, 0.25);
 }
 
 .atom-cta:hover::before {
@@ -191,11 +194,11 @@
 }
 
 .atom-cta:hover::after {
-  background: #f7fdf9;
+  background: #fbfefc;
 }
 
 .atom-cta:hover .atom-cta-text {
-  text-shadow: 0 0 8px rgba(56, 239, 125, 0.35);
+  text-shadow: 0 0 10px rgba(59, 212, 90, 0.3);
 }
 
 .atom-cta:active {
