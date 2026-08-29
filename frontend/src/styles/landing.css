@@ -113,6 +113,10 @@
 .atom-theme-toggle:focus-visible { outline: 2px solid #ffffff; outline-offset: 3px; }
 
 .atom-cta {
+  position: absolute;
+  right: 36px;
+  bottom: 26px;
+  z-index: 6;
   font-family: var(--sans);
   font-size: 14px;
   font-weight: 600;
@@ -120,13 +124,30 @@
   background: #ffffff;
   border: none;
   border-radius: 999px;
-  padding: 10px 22px;
+  padding: 12px 24px;
   cursor: pointer;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.16), 0 2px 6px rgba(0, 0, 0, 0.08);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   transition: transform var(--dur) var(--ease-out), box-shadow var(--dur) var(--ease-out), background-color var(--dur) var(--ease-out);
 }
-.atom-cta:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18); background: #f0fdf4; }
+.atom-cta:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+  background: #f0fdf4;
+}
+.atom-cta:active {
+  transform: translateY(0);
+}
 .atom-cta:focus-visible { outline: 2px solid #ffffff; outline-offset: 3px; }
+.atom-cta-arrow {
+  font-size: 15px;
+  transition: transform var(--dur-fast) var(--ease);
+}
+.atom-cta:hover .atom-cta-arrow {
+  transform: translateX(4px);
+}
 
 /* ── Hero ────────────────────────────────────────────────── */
 
@@ -264,7 +285,7 @@
   .atom-vignette { position: fixed; top: auto; bottom: 0; height: 56svh; }
   .atom-metrics { grid-template-columns: 1fr 1fr; gap: 10px 18px; }
   .atom-hint { bottom: 14px; }
-  .atom-corner-br { bottom: 14px; right: 16px; }
+  .atom-cta { right: 20px; bottom: 18px; padding: 10px 20px; font-size: 13px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
