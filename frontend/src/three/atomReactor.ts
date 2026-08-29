@@ -74,7 +74,7 @@ const CONFIG = {
     ring: { amplitude: 0.024, freqMin: 2.2, freqMax: 5.6 },
   },
 
-  bloom: { strength: 0.42, radius: 0.3, threshold: 0.52 },
+  bloom: { strength: 0.14, radius: 0.25, threshold: 0.70 },
   glowScale: 5.5,
   wave: {
     cycle: 4.8,
@@ -85,15 +85,15 @@ const CONFIG = {
     tail: 0.16,
     coreWidth: 0.065,
     ringBandWidth: 0.065,
-    coreGain: 0.85,
-    ringGain: 1.9,
-    whiteLift: 0.1,
-    ringWhiteLift: 0.62,
-    coreEnergyScale: 5.0,
-    coreEmissiveGain: 0.34,
-    bloomGain: 0.32,
-    pointGain: 2.2,
-    heatOpacityGain: 0.34,
+    coreGain: 0,
+    ringGain: 1.2,
+    whiteLift: 0,
+    ringWhiteLift: 0.3,
+    coreEnergyScale: 0,
+    coreEmissiveGain: 0,
+    bloomGain: 0,
+    pointGain: 0,
+    heatOpacityGain: 0,
     coreOverlayRange: [0.60, 0.92] as [number, number],
     ringOverlayRange: [0.20, 0.72] as [number, number],
   },
@@ -361,8 +361,8 @@ export function createAtomReactor(canvas: HTMLCanvasElement, opts: AtomReactorOp
       roughness: c.coreRoughness,
       vertexColors: true,
       envMapIntensity: 2.1,
-      emissive: 0x8a7f74,
-      emissiveIntensity: 0.16,
+      emissive: 0x222222,
+      emissiveIntensity: 0.04,
     });
     coreMat = material;
     const mesh = new THREE.InstancedMesh(geo, material, count) as unknown as THREE.InstancedMesh & { userData: BandUserData };
@@ -432,7 +432,6 @@ export function createAtomReactor(canvas: HTMLCanvasElement, opts: AtomReactorOp
     };
     core = mesh;
     atom.add(core);
-    createWaveOverlay(mesh, geo, count, 0.18);
   }
 
   function createOrbitalRing(def: typeof CONFIG.rings[number], ringIndex: number) {

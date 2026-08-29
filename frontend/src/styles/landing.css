@@ -1,19 +1,37 @@
-/* Trang chủ (LandingPage.tsx) — "Capability Reactor": lõi + 3 vành quỹ đạo 3D
-   (three.js, xem src/three/atomReactor.ts) làm hero, phủ nav + headline lên
-   trên. --atom-bg CỐ Ý khác --bg chuẩn của app (gần đen / trắng tinh) — kim
-   loại ivory của lõi cần nền có sắc độ vừa phải mới còn tương phản; khớp với
-   ATOM_BG trong LandingPage.tsx (đổi một bên thì phải đổi bên kia). */
+/* Trang chủ (LandingPage.tsx) — Hero Card bo góc xanh lá cây trên nền trắng:
+   Khung viền ngoài cùng (.atom-landing-frame) màu trắng (#ffffff) bao quanh viewport,
+   ôm khối card bên trong (.atom-landing) màu xanh lá cây (#11660f) bo góc lớn. */
 
-:root { --atom-bg: #080b14; }
-:root[data-theme="light"] { --atom-bg: #eedcc0; }
+:root {
+  --atom-frame-bg: #ffffff;
+  --atom-bg: #11660f;
+}
+:root[data-theme="dark"] {
+  --atom-frame-bg: #080b12;
+  --atom-bg: #11660f;
+}
 
-.atom-landing {
+.atom-landing-frame {
   position: fixed;
   inset: 0;
+  padding: 14px;
+  box-sizing: border-box;
+  background: var(--atom-frame-bg);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.atom-landing {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 28px;
   overflow: hidden;
   background: var(--atom-bg);
-  color: var(--text);
+  color: #ffffff;
   font-family: var(--sans);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08);
 }
 
 .atom-canvas {
@@ -32,16 +50,13 @@
   inset: 0;
   pointer-events: none;
   background:
-    radial-gradient(58% 52% at 64% 48%, rgba(120, 72, 58, 0.22), transparent 62%),
-    radial-gradient(125% 125% at 50% 50%, transparent 54%, rgba(0, 0, 0, 0.7));
+    radial-gradient(58% 52% at 64% 48%, rgba(20, 140, 90, 0.18), transparent 62%),
+    radial-gradient(125% 125% at 50% 50%, transparent 54%, rgba(0, 0, 0, 0.45));
   mix-blend-mode: screen;
 }
 .atom-vignette-dark {
   mix-blend-mode: normal;
-  background: radial-gradient(130% 130% at 50% 50%, transparent 58%, rgba(0, 0, 0, 0.3));
-}
-:root[data-theme="light"] .atom-vignette-dark {
-  background: radial-gradient(130% 130% at 50% 50%, transparent 58%, rgba(0, 0, 0, 0.16));
+  background: radial-gradient(130% 130% at 50% 50%, transparent 58%, rgba(0, 0, 0, 0.22));
 }
 
 .atom-fallback {
@@ -71,11 +86,12 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px 28px;
+  padding: 22px 32px;
 }
 .atom-brand { display: flex; align-items: center; gap: 8px; }
-.atom-brand-logo { width: 20px; height: 20px; object-fit: contain; }
-.atom-nav-right { display: flex; align-items: center; gap: 10px; }
+.atom-brand-logo { width: 22px; height: 22px; object-fit: contain; }
+.atom-brand .logo-name-sm { color: #ffffff; }
+.atom-nav-right { display: flex; align-items: center; gap: 12px; }
 
 .atom-theme-toggle {
   display: grid;
@@ -83,39 +99,40 @@
   width: 38px;
   height: 38px;
   padding: 0;
-  border: 1px solid var(--border);
+  border: 1px solid rgba(255, 255, 255, 0.22);
   border-radius: 10px;
-  background: var(--glass);
+  background: rgba(255, 255, 255, 0.1);
   backdrop-filter: var(--blur);
   -webkit-backdrop-filter: var(--blur);
-  color: var(--text2);
+  color: rgba(255, 255, 255, 0.9);
   cursor: pointer;
   transition: color var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease),
               border-color var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
 }
-.atom-theme-toggle:hover { color: var(--text); background: var(--glass-hi); border-color: var(--border2); transform: translateY(-1px); }
-.atom-theme-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.atom-theme-toggle:hover { color: #ffffff; background: rgba(255, 255, 255, 0.2); border-color: rgba(255, 255, 255, 0.35); transform: translateY(-1px); }
+.atom-theme-toggle:focus-visible { outline: 2px solid #ffffff; outline-offset: 3px; }
 
 .atom-cta {
   font-family: var(--sans);
   font-size: 14px;
-  font-weight: 500;
-  color: var(--bg);
-  background: var(--accent);
+  font-weight: 600;
+  color: #11660f;
+  background: #ffffff;
   border: none;
-  border-radius: 10px;
-  padding: 9px 18px;
+  border-radius: 999px;
+  padding: 10px 22px;
   cursor: pointer;
-  transition: transform var(--dur) var(--ease-out), box-shadow var(--dur) var(--ease-out);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+  transition: transform var(--dur) var(--ease-out), box-shadow var(--dur) var(--ease-out), background-color var(--dur) var(--ease-out);
 }
-.atom-cta:hover { transform: translateY(-2px); box-shadow: var(--shadow-2); }
-.atom-cta:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.atom-cta:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18); background: #f0fdf4; }
+.atom-cta:focus-visible { outline: 2px solid #ffffff; outline-offset: 3px; }
 
 /* ── Hero ────────────────────────────────────────────────── */
 
 .atom-hero {
   position: absolute;
-  left: 36px;
+  left: 40px;
   top: 50%;
   transform: translateY(-50%);
   width: min(43vw, 540px);
@@ -129,16 +146,16 @@
   font-size: clamp(22px, 2.4vw, 30px);
   letter-spacing: 0.01em;
   text-transform: none;
-  color: var(--text2);
+  color: rgba(255, 255, 255, 0.9);
   margin-bottom: 18px;
   display: flex;
   align-items: center;
   gap: 14px;
 }
-.atom-eyebrow::before { content: ""; width: 26px; height: 1px; background: var(--text3); flex-shrink: 0; }
+.atom-eyebrow::before { content: ""; width: 26px; height: 1px; background: rgba(255, 255, 255, 0.35); flex-shrink: 0; }
 
 .atom-eyebrow-name {
-  background: linear-gradient(90deg, #ff3b3b, #ff9a3b, #f4e13b, #3bd45a, #3bb8ff, #8a3bff, #ff3bbd, #ff3b3b);
+  background: linear-gradient(90deg, #ff6b6b, #ffa94d, #ffe066, #69db7c, #4dabf7, #b197fc, #f783ac, #ff6b6b);
   background-size: 300% 100%;
   -webkit-background-clip: text;
   background-clip: text;
@@ -159,11 +176,12 @@
   font-size: clamp(30px, 3.6vw, 46px);
   line-height: 1.08;
   letter-spacing: -0.03em;
+  color: #ffffff;
   margin-bottom: 16px;
 }
 .atom-headline em {
   font-style: normal;
-  background: linear-gradient(96deg, var(--accent), var(--accent-research));
+  background: linear-gradient(96deg, #e6fcf0, #8ce99a);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -172,7 +190,7 @@
 .atom-sub {
   font-size: 14px;
   line-height: 1.6;
-  color: var(--text2);
+  color: rgba(255, 255, 255, 0.82);
   max-width: 380px;
   margin-bottom: 26px;
 }
@@ -183,15 +201,15 @@
   gap: 10px 20px;
   max-width: 340px;
 }
-.atom-metric { border-left: 1px solid var(--border); padding: 2px 0 2px 10px; }
-.atom-metric .k { font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text3); }
-.atom-metric .v { font-size: 13px; letter-spacing: 0.01em; margin-top: 4px; color: var(--text); }
+.atom-metric { border-left: 1px solid rgba(255, 255, 255, 0.22); padding: 2px 0 2px 10px; }
+.atom-metric .k { font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(255, 255, 255, 0.62); }
+.atom-metric .v { font-size: 13px; letter-spacing: 0.01em; margin-top: 4px; color: #ffffff; }
 .atom-metrics-note {
   grid-column: 1 / -1;
   font-family: var(--mono);
   font-size: 10px;
   letter-spacing: 0.16em;
-  color: var(--text3);
+  color: rgba(255, 255, 255, 0.6);
   text-transform: uppercase;
   margin-top: 4px;
   opacity: 0.8;
@@ -204,27 +222,27 @@
   font-family: var(--mono);
   font-size: 10px;
   letter-spacing: 0.14em;
-  color: var(--text3);
+  color: rgba(255, 255, 255, 0.55);
   text-transform: uppercase;
   z-index: 6;
   line-height: 1.7;
-  opacity: 0.75;
+  opacity: 0.8;
 }
-.atom-corner-tr { right: 32px; top: 96px; text-align: right; }
-.atom-corner-br { right: 32px; bottom: 24px; text-align: right; }
+.atom-corner-tr { right: 36px; top: 96px; text-align: right; }
+.atom-corner-br { right: 36px; bottom: 26px; text-align: right; }
 
 .atom-hint {
   position: absolute;
   left: 50%;
-  bottom: 20px;
+  bottom: 22px;
   transform: translateX(-50%);
   font-family: var(--mono);
   font-size: 10px;
   letter-spacing: 0.16em;
-  color: var(--text3);
+  color: rgba(255, 255, 255, 0.55);
   text-transform: uppercase;
   z-index: 6;
-  opacity: 0.65;
+  opacity: 0.75;
 }
 
 /* ── Responsive: split → tablet → dọc ───────────────────── */
@@ -236,7 +254,8 @@
 }
 
 @media (max-width: 720px) {
-  .atom-landing { position: relative; min-height: 100svh; overflow-y: auto; }
+  .atom-landing-frame { padding: 8px; }
+  .atom-landing { position: relative; min-height: 100%; border-radius: 20px; overflow-y: auto; }
   .atom-nav { padding: 18px 20px; }
   .atom-hero { position: relative; left: 0; top: 0; transform: none; width: auto; padding: 96px 22px 24px; }
   .atom-headline { font-size: clamp(28px, 8vw, 38px); }
@@ -251,3 +270,4 @@
 @media (prefers-reduced-motion: reduce) {
   .atom-canvas { transition: none; }
 }
+
