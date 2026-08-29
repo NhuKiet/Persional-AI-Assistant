@@ -521,3 +521,44 @@ Final-review minors, not fixed:
   which reads oddly in that configuration.
 
 BRANCH COMPLETE.
+
+---
+
+Sub-projects C and D (2026-08-26), done directly without SDD ceremony — C is a
+reading, not a build, and D turned out to be two small deletions.
+
+C: tools/gate_compare.py produces both a stored-only and a normal answer for
+the same query so a person can read them. Deliberately unscored — the absence
+of a usable metric is why the question stayed open. Read across four queries:
+the judge's strictness is directionally justified (searched answers named the
+RLHF component models and the actual RAG metric list where stored answers
+stopped at concepts), but "insufficient" is not "useless" — at 3-5 stored
+sources the reuse answers were accurate. The judge also said sufficient on the
+MoE query, the second reuse ever observed, so it is not a rubber stamp for no.
+The gap tracks candidate count, which the 14.2 units mismatch suppresses,
+making threshold correction a testable hypothesis. Nothing retuned. Recorded
+as spec section 16.
+
+Two unrelated defects the same run surfaced, both fixed in 4c24fc5:
+- summary_short_medium_prompt still told the model to start with "SUMMARY:",
+  so under structured output it put the label INSIDE the field and readers saw
+  it on three of four answers. Split into structured and text prompts; a
+  defensive strip stays. Verified live against the real model.
+- synthesize_rag's key points carried no [FINDING]/[METHOD] tag, so the UI
+  discarded 0 of 8, 0 of 40, 0 of 49 and 0 of 90 of them — every reuse answer
+  rendered no Key Points panel. Now tagged and capped at 8; the bullet branch
+  had no cap, which is where 40/49/90 came from.
+
+D: only _QueryCache removed (10a89dd). Its read lived in _search_all, reached
+only by _top_up with the GAP query, while the streaming path wrote under the
+ORIGINAL query — keys that never coincide, so the main write was unreadable by
+construction.
+
+D scope reversed on the kill switch, and the reversal is the point: an earlier
+plan had it deleted once observability landed. The capability registry's own
+spec section 9 says it catches a capability that is dead, not one that is
+wrong, and the knowledge gate is squarely in the second class. Deleting
+RESEARCH_SUFFICIENCY_ENABLED would remove the mitigation for the exact gap the
+observability work leaves open. User agreed.
+
+Final state: 573 passed, 17 skipped, 0 failed.

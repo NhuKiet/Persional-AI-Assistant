@@ -5,7 +5,7 @@
    ATOM_BG trong LandingPage.tsx (đổi một bên thì phải đổi bên kia). */
 
 :root { --atom-bg: #080b14; }
-:root[data-theme="light"] { --atom-bg: #f4f1ea; }
+:root[data-theme="light"] { --atom-bg: #eedcc0; }
 
 .atom-landing {
   position: fixed;

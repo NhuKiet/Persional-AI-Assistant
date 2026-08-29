@@ -170,13 +170,12 @@ interface BandUserData {
 }
 
 export interface AtomReactorHandle {
-  setBackgroundColor(hex: number, isLight: boolean): void;
+  setBackgroundColor(hex: number): void;
   dispose(): void;
 }
 
 export interface AtomReactorOptions {
   backgroundColor: number;
-  isLight?: boolean;
   onFail?: (err: unknown) => void;
 }
 
@@ -237,67 +236,11 @@ export function createAtomReactor(canvas: HTMLCanvasElement, opts: AtomReactorOp
     return r;
   }
 
-  // Nền tối vốn đã tối đều nên tự nhiên trông như một "khối" quanh lõi. Nền
-  // sáng phẳng lại làm lõi kim loại/bụi nâu nổi trơ trọi giữa trắng tinh —
-  // vẽ một khối bo tròn bụi nâu tối (cùng độ tối với nền tối) mờ dần ra viền
-  // sáng, làm nền cho lõi thay vì màu phẳng.
-  const LIGHT_BACKDROP_CORE = "#241b14";
-  let backgroundTexture: THREE.CanvasTexture | null = null;
-  let currentBgHex = opts.backgroundColor;
-  let currentBgIsLight = false;
-
-  // Khối bo tròn chỉ cần phủ vùng quanh lõi (~56%,47% màn hình, khớp vị trí
-  // atom trên canvas), không lan sang vùng chữ bên trái. Dựng texture theo
-  // đúng tỉ lệ khung hình hiện tại để hình tròn không bị méo khi stretch full
-  // viewport (WebGLBackground map thẳng texture theo NDC, không tự "cover").
-  function createBackdropTexture(edgeHex: number) {
-    const aspect = window.innerWidth / Math.max(1, window.innerHeight);
-    const height = 512;
-    const width = Math.round(height * aspect);
-    const cv = document.createElement("canvas");
-    cv.width = width; cv.height = height;
-    const g = cv.getContext("2d")!;
-    const edge = new THREE.Color(edgeHex);
-    const edgeCss = `#${edge.getHexString()}`;
-    g.fillStyle = edgeCss;
-    g.fillRect(0, 0, width, height);
-    const cx = width * 0.64, cy = height * 0.47, radius = height * 0.62;
-    const ellipseScaleX = 1.35;
-    // ellipseScaleY tính ngược từ khoảng trống dọc thực tế quanh cy (chừa 8%
-    // biên để gradient kịp mờ hẳn về edgeCss) — cố định 0.85 từng làm elip
-    // vươn quá mép trên/dưới canvas, bị "cắt cụt" ngay biên viewport thay vì
-    // mờ dần, vì bán kính đã tăng lên nhưng biên dọc canvas thì không đổi.
-    const maxVerticalReach = Math.min(cy, height - cy) * 0.92;
-    const ellipseScaleY = maxVerticalReach / radius;
-    g.save();
-    g.translate(cx, cy);
-    g.scale(ellipseScaleX, ellipseScaleY);
-    g.translate(-cx, -cy);
-    const gradient = g.createRadialGradient(cx, cy, 0, cx, cy, radius);
-    gradient.addColorStop(0, LIGHT_BACKDROP_CORE);
-    gradient.addColorStop(0.5, LIGHT_BACKDROP_CORE);
-    gradient.addColorStop(1, edgeCss);
-    g.fillStyle = gradient;
-    // Vẽ dư biên (không phải đúng width/height) — rect này cũng nằm dưới
-    // scale ở trên nên bản thân nó co lại theo trục dọc, kết thúc vùng tô
-    // SỚM hơn lúc gradient kịp mờ hẳn (tạo viền cụt ngay giữa canvas thay vì
-    // ra tới mép). Overscan để rect luôn phủ hết canvas thật bất kể hệ số scale.
-    g.fillRect(-width, -height, width * 3, height * 3);
-    g.restore();
-    const tex = new THREE.CanvasTexture(cv);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    return tex;
-  }
-
-  function applyBackground(hex: number, isLight: boolean) {
-    currentBgHex = hex; currentBgIsLight = isLight;
-    if (backgroundTexture) { backgroundTexture.dispose(); backgroundTexture = null; }
-    if (isLight) {
-      backgroundTexture = createBackdropTexture(hex);
-      scene.background = backgroundTexture;
-    } else {
-      scene.background = new THREE.Color(hex);
-    }
+  // Nền LUÔN là màu phẳng ở cả hai theme. Trước đây theme sáng còn vẽ thêm
+  // một khối elip nâu sẫm phía sau lõi để kim loại ivory có chỗ bám tương
+  // phản; người dùng thấy khối đó lộ như một "cục đen" trên nền kem nên đã bỏ.
+  function applyBackground(hex: number) {
+    scene.background = new THREE.Color(hex);
   }
 
   function createEnvironmentTexture() {
@@ -329,7 +272,7 @@ export function createAtomReactor(canvas: HTMLCanvasElement, opts: AtomReactorOp
     // dưới — bloom (UnrealBloomPass) làm mất kênh alpha của canvas, vùng
     // trống render ra đen đặc bất kể nền CSS đặt màu gì. Vẽ màu nền thẳng vào
     // scene mới đáng tin cậy qua mọi profile chất lượng (có/không bloom).
-    applyBackground(opts.backgroundColor, opts.isLight ?? false);
+    applyBackground(opts.backgroundColor);
     scene.fog = new THREE.FogExp2(opts.backgroundColor, CONFIG.fogDensity);
     const environmentSource = createEnvironmentTexture();
     const pmrem = new THREE.PMREMGenerator(renderer);
@@ -938,7 +881,8 @@ export function createAtomReactor(canvas: HTMLCanvasElement, opts: AtomReactorOp
         composer.setPixelRatio(Math.min(window.devicePixelRatio || 1, profile.maxDpr) * (profile.bloomResolutionScale || 1));
         composer.setSize(size.width, size.height);
       }
-      if (currentBgIsLight) applyBackground(currentBgHex, true);
+      // Nền là màu phẳng nên không phụ thuộc kích thước khung nhìn — trước
+      // đây phải vẽ lại backdrop elip của theme sáng ở đây.
       applyLayout();
     });
   }
@@ -1081,9 +1025,9 @@ export function createAtomReactor(canvas: HTMLCanvasElement, opts: AtomReactorOp
     document.removeEventListener("visibilitychange", onVisibility);
   }
 
-  function setBackgroundColor(hex: number, isLight: boolean) {
+  function setBackgroundColor(hex: number) {
     if (!scene) return;
-    applyBackground(hex, isLight);
+    applyBackground(hex);
 
     // Độ sáng tương đối của nền (0 = đen, 1 = trắng) quyết định bloom co lại
     // bao nhiêu — nền sáng vốn đã gần trắng nên cộng thêm bloom rất dễ cháy,
@@ -1115,7 +1059,6 @@ export function createAtomReactor(canvas: HTMLCanvasElement, opts: AtomReactorOp
     disposeWorld();
     disposeComposer();
     if (environmentTarget) { environmentTarget.dispose(); environmentTarget = null; }
-    if (backgroundTexture) { backgroundTexture.dispose(); backgroundTexture = null; }
     if (renderer) renderer.dispose();
   }
 

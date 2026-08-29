@@ -212,6 +212,18 @@
 .md em       { font-style: italic; color: var(--text2); }
 .md code     { font-family: var(--mono); font-size: 12px; background: var(--bg4); padding: 2px 6px; border-radius: 5px; color: #a8c4ff; border: 1px solid var(--border2); }
 .md ul       { padding-left: 16px; margin: 6px 0; }
+
+/* Fenced code block. `white-space: pre` là thứ giữ được canh cột của sơ đồ
+   ASCII/bảng mà LLM hay trả về; overflow-x cho sơ đồ rộng hơn bong bóng. */
+.md-pre {
+  font-family: var(--mono); font-size: 12px; line-height: 1.5;
+  background: var(--bg4); border: 1px solid var(--border2); border-radius: 8px;
+  padding: 10px 12px; margin: 8px 0; overflow-x: auto;
+  white-space: pre; color: var(--text2);
+}
+.md-pre code { background: none; border: none; padding: 0; font-size: inherit; color: inherit; }
+.md-pre::-webkit-scrollbar       { height: 2px; }
+.md-pre::-webkit-scrollbar-thumb { background: var(--border2); }
 .md li       { margin: 2px 0; }
 .md p        { margin: 0 0 6px; }
 .md p:last-child { margin: 0; }

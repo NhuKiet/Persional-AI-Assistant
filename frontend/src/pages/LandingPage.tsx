@@ -14,8 +14,13 @@ import type { AtomReactorHandle } from "../three/atomReactor";
  *  Nền/fog của cảnh 3D đổi theo theme (setBackgroundColor) thay vì dựng lại
  *  cảnh — xem ATOM_BG bên dưới. Hai màu này CỐ Ý khác thang --bg chuẩn của
  *  app (gần đen / trắng tinh): kim loại ivory của lõi cần một nền có sắc độ
- *  vừa phải để còn tương phản, trắng/đen tuyệt đối sẽ nuốt chi tiết. */
-const ATOM_BG = { dark: 0x080b14, light: 0xf4f1ea };
+ *  vừa phải để còn tương phản, trắng/đen tuyệt đối sẽ nuốt chi tiết.
+ *
+ *  Nền là MÀU PHẲNG ở cả hai theme. Bản trước theme sáng còn vẽ thêm một khối
+ *  elip nâu sẫm sau lõi để kim loại có chỗ bám tương phản, nhưng trên nền kem
+ *  nó lộ ra như một "cục đen" nên đã bỏ hẳn (xem applyBackground trong
+ *  atomReactor.ts). Khớp với --atom-bg trong landing.css. */
+const ATOM_BG = { dark: 0x080b14, light: 0xeedcc0 };
 
 export function LandingPage() {
   const navigate = useNavigate();
@@ -31,7 +36,6 @@ export function LandingPage() {
     if (!canvas) return;
     const handle = createAtomReactor(canvas, {
       backgroundColor: ATOM_BG[theme],
-      isLight: theme === "light",
       onFail: () => {
         canvas.style.display = "none";
         if (failedRef.current) failedRef.current.style.display = "flex";
@@ -49,7 +53,7 @@ export function LandingPage() {
   }, []);
 
   useEffect(() => {
-    handleRef.current?.setBackgroundColor(ATOM_BG[theme], theme === "light");
+    handleRef.current?.setBackgroundColor(ATOM_BG[theme]);
   }, [theme]);
 
   return (
