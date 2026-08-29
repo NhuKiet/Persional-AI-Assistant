@@ -118,15 +118,15 @@
   bottom: 84px;
   z-index: 6;
   font-family: var(--sans);
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 600;
   color: #11660f;
   background: #ffffff;
   border: none;
   border-radius: 999px;
-  padding: 13px 28px;
+  padding: 16px 36px;
   cursor: pointer;
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.16), 0 2px 6px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18), 0 2px 8px rgba(0, 0, 0, 0.08);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -142,12 +142,17 @@
   transition: text-shadow 0.3s ease;
 }
 
-/* Hiệu ứng dòng điện chạy màu RGB quanh viền */
+/* Luồng điện RGB xoay tròn đều 360 độ liên tục (không bị méo hay giật) */
 .atom-cta::before {
   content: "";
   position: absolute;
-  inset: -3px;
-  border-radius: 999px;
+  top: 50%;
+  left: 50%;
+  width: 320px;
+  height: 320px;
+  margin-top: -160px;
+  margin-left: -160px;
+  border-radius: 50%;
   background: conic-gradient(
     from 0deg,
     #ff3b3b 0%,
@@ -162,15 +167,15 @@
   opacity: 0;
   z-index: 1;
   transition: opacity 0.35s ease;
-  animation: atom-cta-electric-spin 1.4s linear infinite;
+  animation: atom-cta-electric-spin 2s linear infinite;
   pointer-events: none;
 }
 
-/* Lớp nền trong để lộ viền điện chạy */
+/* Lớp nền trong che phần giữa để chỉ lộ viền điện chạy */
 .atom-cta::after {
   content: "";
   position: absolute;
-  inset: 2.5px;
+  inset: 3px;
   border-radius: 999px;
   background: #ffffff;
   z-index: 2;
@@ -182,11 +187,11 @@
   transform: translateY(-2px) scale(1.04);
   background: #ffffff;
   box-shadow:
-    0 0 16px rgba(255, 59, 59, 0.4),
-    0 0 28px rgba(59, 212, 90, 0.45),
-    0 0 42px rgba(59, 184, 255, 0.45),
-    0 0 60px rgba(255, 59, 189, 0.35),
-    0 8px 26px rgba(0, 0, 0, 0.25);
+    0 0 18px rgba(255, 59, 59, 0.4),
+    0 0 32px rgba(59, 212, 90, 0.45),
+    0 0 48px rgba(59, 184, 255, 0.45),
+    0 0 64px rgba(255, 59, 189, 0.35),
+    0 10px 30px rgba(0, 0, 0, 0.25);
 }
 
 .atom-cta:hover::before {
