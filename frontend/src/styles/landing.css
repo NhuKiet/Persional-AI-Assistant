@@ -114,8 +114,8 @@
 
 .atom-cta {
   position: absolute;
-  right: 36px;
-  bottom: 26px;
+  right: 56px;
+  bottom: 44px;
   z-index: 6;
   font-family: var(--sans);
   font-size: 14px;
@@ -124,29 +124,88 @@
   background: #ffffff;
   border: none;
   border-radius: 999px;
-  padding: 12px 24px;
+  padding: 13px 26px;
   cursor: pointer;
   box-shadow: 0 4px 18px rgba(0, 0, 0, 0.16), 0 2px 6px rgba(0, 0, 0, 0.08);
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  transition: transform var(--dur) var(--ease-out), box-shadow var(--dur) var(--ease-out), background-color var(--dur) var(--ease-out);
+  justify-content: center;
+  overflow: hidden;
+  isolation: isolate;
+  transition: transform var(--dur) var(--ease-out), box-shadow 0.3s ease, background-color var(--dur) var(--ease-out);
 }
+
+.atom-cta-text {
+  position: relative;
+  z-index: 3;
+  letter-spacing: 0.02em;
+  transition: text-shadow 0.3s ease;
+}
+
+/* Hiệu ứng tia chớp / luồng điện chạy quanh viền */
+.atom-cta::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: 999px;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0%,
+    transparent 40%,
+    #86efac 60%,
+    #ffffff 75%,
+    #38ef7d 90%,
+    transparent 100%
+  );
+  opacity: 0;
+  z-index: 1;
+  transition: opacity 0.35s ease;
+  animation: atom-cta-electric-spin 1.8s linear infinite;
+  pointer-events: none;
+}
+
+/* Lớp nền trong để lộ viền điện chạy */
+.atom-cta::after {
+  content: "";
+  position: absolute;
+  inset: 2px;
+  border-radius: 999px;
+  background: #ffffff;
+  z-index: 2;
+  transition: background-color var(--dur) var(--ease-out);
+}
+
+/* Khi hover: phát sáng hào quang điện (electric pulse & neon aura) */
 .atom-cta:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
-  background: #f0fdf4;
+  transform: translateY(-2px) scale(1.03);
+  background: #ffffff;
+  box-shadow:
+    0 0 16px rgba(134, 239, 172, 0.85),
+    0 0 32px rgba(56, 239, 125, 0.55),
+    0 0 54px rgba(255, 255, 255, 0.4),
+    0 8px 24px rgba(0, 0, 0, 0.22);
 }
+
+.atom-cta:hover::before {
+  opacity: 1;
+}
+
+.atom-cta:hover::after {
+  background: #f7fdf9;
+}
+
+.atom-cta:hover .atom-cta-text {
+  text-shadow: 0 0 8px rgba(56, 239, 125, 0.35);
+}
+
 .atom-cta:active {
-  transform: translateY(0);
+  transform: translateY(0) scale(0.99);
 }
-.atom-cta:focus-visible { outline: 2px solid #ffffff; outline-offset: 3px; }
-.atom-cta-arrow {
-  font-size: 15px;
-  transition: transform var(--dur-fast) var(--ease);
-}
-.atom-cta:hover .atom-cta-arrow {
-  transform: translateX(4px);
+.atom-cta:focus-visible { outline: 2px solid #ffffff; outline-offset: 4px; }
+
+@keyframes atom-cta-electric-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
 /* ── Hero ────────────────────────────────────────────────── */

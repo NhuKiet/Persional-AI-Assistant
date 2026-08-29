@@ -84,8 +84,7 @@ export function LandingPage() {
 
         <div className="atom-corner atom-corner-tr">KiNg — lõi xử lý<br/>trực tuyến · liên tục</div>
         <button type="button" className="atom-cta" onClick={goToChat}>
-          <span>Mở trợ lý</span>
-          <span className="atom-cta-arrow" aria-hidden="true">→</span>
+          <span className="atom-cta-text">Mở trợ lý</span>
         </button>
         <div className="atom-hint">kéo để xoay · cuộn để phóng</div>
       </div>
