@@ -71,7 +71,7 @@ export default function PdfAssistantPanel({
           className="pdf-summarize-btn"
           disabled={busy}
           onClick={onSummarize}
-          style={{ borderColor: `${accentColor}66`, color: accentColor }}
+          style={{ borderColor: `color-mix(in srgb, ${accentColor} 40%, transparent)`, color: accentColor }}
           type="button"
         >
           {summarizing ? <><span className="rp-spinner" /> Đang tóm tắt...</> : "📋 Tóm tắt"}
@@ -89,7 +89,7 @@ export default function PdfAssistantPanel({
                 className="tool-suggestion-pill"
                 key={suggestion}
                 onClick={() => onSend(suggestion)}
-                style={{ borderColor: `${accentColor}44` }}
+                style={{ borderColor: `color-mix(in srgb, ${accentColor} 27%, transparent)` }}
                 type="button"
               >
                 <span style={{ color: accentColor }}>›</span> {suggestion}

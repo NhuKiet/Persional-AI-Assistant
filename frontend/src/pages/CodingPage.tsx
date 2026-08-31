@@ -25,7 +25,7 @@ export function CodingPage() {
   const [notice, setNotice]   = useState("");
   const bottomRef  = useRef<HTMLDivElement>(null);
   const inputRef   = useRef<HTMLTextAreaElement>(null);
-  const accentColor = "#A8E6A3";
+  const accentColor = "var(--accent-coding)";
   const isRunning  = isBusyPhase(phase);
   const { pct, containerRef, onMouseDown } = useDragResize();
   const suggestions = useMemo(() => shuffle(SUGGESTIONS.coding), []);
@@ -151,7 +151,7 @@ export function CodingPage() {
             <div className="tool-suggestions">
               <p className="tool-suggestions-label">Try one</p>
               {suggestions.map(s => (
-                <button key={s} className="tool-suggestion-pill" style={{ borderColor: accentColor + "44" }}
+                <button key={s} className="tool-suggestion-pill" style={{ borderColor: `color-mix(in srgb, ${accentColor} 27%, transparent)` }}
                   onClick={() => handleSend(s)}>
                   <span style={{ color: accentColor }}>›</span> {s}
                 </button>

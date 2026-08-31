@@ -30,8 +30,11 @@
 
 /* ── 1. Fonts & Reset ──────────────────────────────────────── */
 
-/* Instrument Serif chỉ xin bản italic — đó là kiểu duy nhất wordmark dùng. */
-@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Instrument+Serif:ital@1&family=Playfair+Display:ital,wght@1,700&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap');
+/* Instrument Serif chỉ xin bản italic — đó là kiểu duy nhất wordmark dùng.
+   Newsreader xin cả normal (400-800, cho tiêu đề) lẫn italic 700 (cho dòng
+   eyebrow "Trợ lý cá nhân của Kiệt" — trước đây là font riêng Playfair
+   Display, gộp lại còn một family để đỡ một request font). */
+@import url('https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400..800;1,6..72,700&family=Instrument+Serif:ital@1&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap');
 
 *,
 *::before,
@@ -50,17 +53,18 @@
 
 :root {
   /* --- Màu nền — thang nổi (elevation) ---
-     QUY TẮC 1: canvas tối nhất, bề mặt càng nổi càng sáng.
-     Thang phải luôn tăng đơn điệu: bg < bg2 < bg3 < bg4. Đổi một bậc thì
-     phải kiểm lại cả thang.
-     QUY TẮC 2: thang này lệch LẠNH nhẹ (B > R vài đơn vị) — cố ý, để kính
-     mờ có thứ để khúc xạ; xám tuyệt đối làm backdrop-filter ra hộp xám chết.
-     Lệch nhẹ ≠ màu bão hoà. Đừng bao giờ đặt màu có sắc độ rõ vào đây
-     (từng có #60703a olive lọt vào và làm mọi hover trong app ngả xanh rêu). */
-  --bg:   #07080b;   /* canvas — nền trang (tối nhất) */
-  --bg2:  #0e1015;   /* card, input, panel, sidebar */
-  --bg3:  #191d26;   /* hover, bề mặt nổi, header code block */
-  --bg4:  #222734;   /* inline code (sáng nhất) */
+     "Obsidian & Gold" — mực đen ánh tím rất nhẹ (không xám tuyệt đối, không
+     xanh) làm canvas, một accent vàng đồng duy nhất xuyên suốt (nút gửi, CTA,
+     trạng thái active, focus). Đây là hướng B trong 3 hướng phối màu đã đưa
+     người dùng chọn (xem KiNg Color Directions) — dùng cho theme TỐI.
+     QUY TẮC: thang phải luôn tăng đơn điệu bg < bg2 < bg3 < bg4. Đổi một bậc
+     thì phải kiểm lại cả thang (và contrast text/text2/text3 trên bg2, ghi ở
+     dưới). Light theme dùng một hướng khác hẳn (Warm Paper) — xem khối
+     [data-theme="light"], không phải đảo ngược riêng thang này. */
+  --bg:   #0e0e14;   /* canvas — nền trang (tối nhất) */
+  --bg2:  #17171d;   /* card, input, panel, sidebar */
+  --bg3:  #1e1e27;   /* hover, bề mặt nổi, header code block */
+  --bg4:  #272733;   /* inline code (sáng nhất) */
 
   /* --- Kính mờ ---
      Bề mặt kính = --glass + backdrop-filter. Khác --bg2 ở chỗ nó trong suốt,
@@ -70,85 +74,87 @@
   --glass-lit:  rgba(255, 255, 255, 0.28);    /* cạnh bắt sáng — viền trên thẻ kính khi hover */
   --blur:       blur(20px) saturate(150%);
   --canvas-background:
-    radial-gradient(64rem 42rem at 24% 8%, rgba(77, 117, 153, 0.13), transparent 64%),
-    radial-gradient(58rem 40rem at 82% 76%, rgba(30, 209, 194, 0.07), transparent 66%),
-    radial-gradient(38rem 30rem at 91% 12%, rgba(115, 87, 156, 0.07), transparent 70%),
-    linear-gradient(145deg, #07080b, #090c12 52%, #07090d);
-  --shell-surface: rgba(8, 11, 16, 0.54);
-  --shell-edge: rgba(255, 255, 255, 0.09);
+    radial-gradient(64rem 42rem at 24% 8%, rgba(201, 162, 75, 0.09), transparent 64%),
+    radial-gradient(58rem 40rem at 82% 76%, rgba(122, 156, 130, 0.05), transparent 66%),
+    radial-gradient(38rem 30rem at 91% 12%, rgba(154, 125, 148, 0.05), transparent 70%),
+    linear-gradient(145deg, #0e0e14, #101017 52%, #0d0d12);
+  --shell-surface: rgba(14, 14, 20, 0.54);
+  --shell-edge: rgba(255, 255, 255, 0.08);
   --shell-blur: blur(24px) saturate(145%);
   --secondary-glass-surface:
-    linear-gradient(155deg, rgba(255, 255, 255, 0.11), transparent 54%),
-    linear-gradient(180deg, transparent, rgba(95, 140, 170, 0.045)),
-    rgba(255, 255, 255, 0.035);
-  --secondary-glass-edge: rgba(255, 255, 255, 0.16);
-  --secondary-glass-highlight: rgba(255, 255, 255, 0.22);
+    linear-gradient(155deg, rgba(255, 255, 255, 0.10), transparent 54%),
+    linear-gradient(180deg, transparent, rgba(201, 162, 75, 0.05)),
+    rgba(255, 255, 255, 0.032);
+  --secondary-glass-edge: rgba(255, 255, 255, 0.15);
+  --secondary-glass-highlight: rgba(255, 255, 255, 0.20);
   --secondary-glass-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.19),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.025),
-    0 10px 28px rgba(0, 0, 0, 0.24);
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.02),
+    0 10px 28px rgba(0, 0, 0, 0.3);
   --composer-surface:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.052)),
-    rgba(8, 12, 18, 0.36);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.045)),
+    rgba(14, 14, 18, 0.4);
   --composer-specular:
-    radial-gradient(ellipse at 50% 0%, rgba(255, 255, 255, 0.27), transparent 72%);
+    radial-gradient(ellipse at 50% 0%, rgba(255, 255, 255, 0.24), transparent 72%);
   --composer-blur: blur(30px) saturate(175%);
-  --composer-highlight: rgba(255, 255, 255, 0.24);
-  --composer-edge: rgba(255, 255, 255, 0.31);
-  --composer-control: rgba(255, 255, 255, 0.075);
-  --composer-control-edge: rgba(255, 255, 255, 0.16);
+  --composer-highlight: rgba(255, 255, 255, 0.22);
+  --composer-edge: rgba(255, 255, 255, 0.28);
+  --composer-control: rgba(255, 255, 255, 0.07);
+  --composer-control-edge: rgba(255, 255, 255, 0.15);
   --composer-control-inset: inset 0 1px 0 color-mix(in srgb, var(--composer-highlight) 68%, transparent);
-  /* Composer text is measured against its brightest blurred/specular composite,
-     not against --bg2: #f7f9fb stays >= 4.9:1 at the measured #696d72 peak. */
-  --composer-foreground: #ffffff;
-  --composer-muted: #f7f9fb;
-  /* Outside edge must stay visible across both the glass and the aurora canvas. */
-  --focus-ring: #67fff0;
+  --composer-foreground: #fdf8ee;   /* trắng ấm, cùng gia đình với vàng đồng */
+  --composer-muted: #d8d2c6;
+  /* Vàng sáng hơn accent một bậc — cần nổi trên cả nền mực lẫn nút vàng. */
+  --focus-ring: #e0c07f;
   --composer-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.34),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.045),
-    0 20px 52px rgba(0, 0, 0, 0.38),
-    0 0 30px color-mix(in srgb, var(--composer-accent, var(--accent)) 8%, transparent);
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.04),
+    0 20px 52px rgba(0, 0, 0, 0.42),
+    0 0 30px color-mix(in srgb, var(--composer-accent, var(--accent)) 9%, transparent);
 
   /* --- Viền --- */
-  --border:  rgba(255, 255, 255, 0.08);   /* viền nhạt */
-  --border2: rgba(255, 255, 255, 0.14);   /* viền đậm hơn, hover */
+  --border:  rgba(255, 255, 255, 0.07);   /* viền nhạt */
+  --border2: rgba(255, 255, 255, 0.13);   /* viền đậm hơn, hover */
 
   /* --- Đổ bóng — thang nổi, đi kèm --bg ---
      Nền tối gần như nuốt hết bóng đen, nên bóng phải sâu và rộng mới thấy. */
-  --shadow-1: 0 2px 8px rgba(0, 0, 0, 0.4);
-  --shadow-2: 0 12px 32px -8px rgba(0, 0, 0, 0.7);
+  --shadow-1: 0 2px 8px rgba(0, 0, 0, 0.42);
+  --shadow-2: 0 12px 32px -8px rgba(0, 0, 0, 0.72);
 
   /* --- Màu chữ ---
      Độ tương phản đo trên nền --bg2 (nền của hầu hết panel/card):
-       --text 14.98:1   --text2 7.36:1   --text3 4.61:1  (đo trong trình duyệt)
-     --text3 trước đây là #5e5d5b, chỉ đạt 2.89:1 — dưới chuẩn WCAG AA (4.5:1)
-     nên các label nhỏ ("Hôm nay", "Xóa tất cả lịch sử") bị chìm vào nền.
-     Giữ cả ba bậc trên 4.5:1; nếu chỉnh --bg2 thì phải đo lại thang này. */
-  --text:  #e6e4df;   /* chữ chính */
-  --text2: #a3a19a;   /* chữ phụ / label */
-  --text3: #7e7d78;   /* chữ mờ / placeholder */
+       --text 15.66:1   --text2 6.82:1   --text3 5.18:1  (tính bằng WCAG relative
+     luminance formula — text3 là bậc sát ngưỡng nhất, giữ ≥ 4.5:1 khi đổi bg2). */
+  --text:  #f2f0ea;   /* chữ chính */
+  --text2: #a19fa6;   /* chữ phụ / label */
+  --text3: #8c8990;   /* chữ mờ / placeholder */
 
-  /* --- Màu nhấn thương hiệu (accent) --- */
-  --accent:      #1ed1c2;                    /* teal — logo, session active, nút gửi */
-  --accent-soft: rgba(30, 209, 194, 0.08);   /* nền tint khi active */
+  /* --- Màu nhấn thương hiệu (accent) ---
+     Một accent vàng đồng DUY NHẤT, dùng ở khắp nơi (nút gửi, CTA landing,
+     session active, focus) — đây là điểm khác biệt cốt lõi của "Obsidian &
+     Gold" so với hệ cũ: không còn accent tách rời theo từng tool ở mọi nơi,
+     tool chỉ khác nhau bằng icon + gạch chân nhạt (xem accent-* dưới). */
+  --accent:      #c9a24b;                     /* vàng đồng — logo, session active, nút gửi */
+  --accent-soft: rgba(201, 162, 75, 0.10);    /* nền tint khi active */
 
   /* --- Tool accent colors ---
      Nguồn sự thật là các token này. Giá trị gốc cũng nằm ở config/tools.ts
-     (JSX đọc từ đó); CSS phải đọc token, không hardcode lại hex. */
-  --accent-research: #7C9EFF;        /* blue   */
-  --accent-coding:   var(--ok);      /* green — trùng --ok, xem ghi chú dưới */
-  --accent-homework: #FFB085;        /* orange */
-  --accent-essay:    #E8A0FF;        /* purple */
-  --accent-email:    #FF8585;        /* red    */
-  --accent-pdf:      #FF8C69;        /* coral  */
+     (JSX đọc từ đó); CSS phải đọc token, không hardcode lại hex.
+     Trong "Obsidian & Gold", các màu này CỐ TÌNH nhạt/trầm hơn hệ cũ — dùng
+     làm badge/gạch chân nhận diện, không cạnh tranh với accent vàng chủ đạo. */
+  --accent-research: #7d93a3;        /* xanh lam trầm */
+  --accent-coding:   var(--ok);      /* xanh rêu — trùng --ok, xem ghi chú dưới */
+  --accent-homework: #b08c5e;        /* nâu hổ phách */
+  --accent-essay:    #9a7d94;        /* mận trầm */
+  --accent-email:    #a5766a;        /* đất nung trầm */
+  --accent-pdf:      #b09468;        /* be đất sét */
 
   /* --- Trạng thái ---
      App dùng chung một sắc xanh lá cho "coding" và "thành công" — đó là chủ ý,
      không phải trùng lặp: tool coding được đặt màu theo kết quả chạy thành công.
      --accent-coding trỏ vào --ok để quan hệ đó không thể trôi ra hai giá trị. */
-  --ok:     #A8E6A3;   /* thành công, done, output ok */
-  --danger: #FF8585;   /* lỗi, xóa, stderr */
+  --ok:     #7a9c82;   /* thành công, done, output ok */
+  --danger: #b8654f;   /* lỗi, xóa, stderr — tách biệt rõ với --accent-email trầm hơn */
 
   /* --- Syntax highlight --- */
   --sh-keyword: #c792ea;   /* def, class, import... */
@@ -163,15 +169,18 @@
      giữa một từ ("Bài tập" → chữ "ậ" lạc font). Kiểm tra trước khi thêm:
        curl 'https://fonts.googleapis.com/css2?family=<Tên>' | grep vietnamese
 
-     --display  Bricolage Grotesque — CÓ vietnamese. Dùng cho MỌI tiêu đề.
+     --display  Newsreader — CÓ vietnamese (đã kiểm tra 2026-08-30). Serif
+                biên tập, có trục quang học 'opsz' (6-72, xem font-variation-
+                settings ở từng nơi dùng) — thay cho Bricolage Grotesque
+                (grotesk) để tiêu đề có cảm giác sang trọng/editorial hơn,
+                hợp cả bảng màu tối (vàng đồng) lẫn sáng (giấy ấm). Dùng cho
+                MỌI tiêu đề VÀ dòng eyebrow hero (trước là --brand-serif
+                Playfair Display riêng — gộp lại còn một family).
      --wordmark Instrument Serif   — KHÔNG có vietnamese. Chỉ được dùng cho
-                chữ ký "KiNg" (thuần ASCII, cố định). Đừng dùng cho gì khác.
-     --brand-serif Playfair Display — CÓ vietnamese (đã kiểm tra). Dùng cho
-                dòng "Trợ lý cá nhân của Kiệt" ở hero, thay cho --mono cũ. */
+                chữ ký "KiNg" (thuần ASCII, cố định). Đừng dùng cho gì khác. */
   --sans:     'Geist', sans-serif;
-  --display:  'Bricolage Grotesque', sans-serif;
+  --display:  'Newsreader', Georgia, serif;
   --wordmark: 'Instrument Serif', serif;
-  --brand-serif: 'Playfair Display', serif;
   --mono:     'Geist Mono', monospace;
 
   /* --- Shape --- */
@@ -192,65 +201,84 @@
   --ease-in:  cubic-bezier(0.4, 0, 1, 1);     /* exits */
 }
 
-/* ── Theme sáng ──────────────────────────────────────────────
-   Ghi đè token khi <html data-theme="light">. Đảo thang elevation:
-   canvas sáng nhất, bề mặt nổi tối/đậm dần. Giữ cùng TÊN biến nên mọi
-   CSS downstream chạy nguyên. Tương phản chữ đo trên --bg2 sáng, giữ ≥ 4.5:1. */
+/* ── Theme sáng — "Warm Paper" ─────────────────────────────────
+   Ghi đè token khi <html data-theme="light">. Đây là hướng C trong 3 hướng
+   phối màu đã đưa người dùng chọn (xem KiNg Color Directions) — KHÔNG phải
+   một đảo màu cơ học của theme tối "Obsidian & Gold": giấy ấm làm bản sắc
+   chính (không phải "light theme phụ"), accent đất nung, hệ tool-accent
+   quay lại đủ sắc (khác cách tiết chế của theme tối — xem accent-* dưới).
+   Giữ cùng TÊN biến nên mọi CSS downstream chạy nguyên. Tương phản chữ đo
+   trên --bg2, giữ ≥ 4.5:1 (xem số đo ở từng token). */
 :root[data-theme="light"] {
-  --bg:   #ffffff;   /* canvas — nền trang (sáng nhất) */
-  --bg2:  #f5f6f8;   /* card, input, panel, sidebar */
-  --bg3:  #e9ebef;   /* hover, bề mặt nổi */
-  --bg4:  #dfe2e8;   /* inline code (đậm nhất) */
+  --bg:   #f6f1e6;   /* canvas — nền trang (sáng nhất, giấy ấm) */
+  --bg2:  #efe8d8;   /* card, input, panel, sidebar */
+  --bg3:  #e6dcc4;   /* hover, bề mặt nổi */
+  --bg4:  #ddd0ac;   /* inline code (đậm nhất) */
 
-  --glass:      rgba(20, 24, 33, 0.035);
-  --glass-hi:   rgba(20, 24, 33, 0.06);
-  --glass-lit:  rgba(20, 24, 33, 0.14);
+  --glass:      rgba(43, 35, 23, 0.035);
+  --glass-hi:   rgba(43, 35, 23, 0.06);
+  --glass-lit:  rgba(43, 35, 23, 0.14);
   --canvas-background:
-    radial-gradient(58rem 34rem at 30% 34%, rgba(178, 224, 255, 0.50), transparent 68%),
-    radial-gradient(54rem 31rem at 76% 72%, rgba(219, 235, 170, 0.44), transparent 70%),
-    radial-gradient(30rem 24rem at 96% 16%, rgba(251, 222, 179, 0.22), transparent 74%),
-    linear-gradient(145deg, #f9faf9, #edf2f2 52%, #f7f7f6);
-  --shell-surface: rgba(247, 251, 252, 0.48);
-  --shell-edge: rgba(255, 255, 255, 0.72);
+    radial-gradient(58rem 34rem at 30% 34%, rgba(184, 92, 51, 0.10), transparent 68%),
+    radial-gradient(54rem 31rem at 76% 72%, rgba(125, 143, 106, 0.10), transparent 70%),
+    radial-gradient(30rem 24rem at 96% 16%, rgba(201, 154, 62, 0.10), transparent 74%),
+    linear-gradient(145deg, #f9f5ea, #f0e9d7 52%, #f6f1e6);
+  --shell-surface: rgba(249, 245, 238, 0.5);
+  --shell-edge: rgba(255, 255, 255, 0.6);
   --secondary-glass-surface:
-    linear-gradient(155deg, rgba(255, 255, 255, 0.55), transparent 54%),
-    linear-gradient(180deg, transparent, rgba(178, 224, 255, 0.10)),
-    rgba(242, 249, 250, 0.27);
-  --secondary-glass-edge: rgba(255, 255, 255, 0.78);
-  --secondary-glass-highlight: rgba(255, 255, 255, 0.72);
+    linear-gradient(155deg, rgba(255, 255, 255, 0.5), transparent 54%),
+    linear-gradient(180deg, transparent, rgba(184, 92, 51, 0.08)),
+    rgba(246, 241, 230, 0.3);
+  --secondary-glass-edge: rgba(255, 255, 255, 0.7);
+  --secondary-glass-highlight: rgba(255, 255, 255, 0.65);
   --secondary-glass-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.94),
-    inset 0 -1px 0 rgba(83, 112, 126, 0.07),
-    0 12px 30px rgba(72, 105, 119, 0.11);
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    inset 0 -1px 0 rgba(107, 95, 76, 0.08),
+    0 12px 30px rgba(107, 95, 76, 0.12);
   --composer-surface:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.50), rgba(255, 255, 255, 0.20)),
-    rgba(226, 242, 245, 0.22);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.2)),
+    rgba(238, 225, 199, 0.25);
   --composer-specular:
-    radial-gradient(ellipse at 50% 0%, rgba(255, 255, 255, 0.88), transparent 72%);
-  --composer-highlight: rgba(255, 255, 255, 0.88);
-  --composer-edge: rgba(255, 255, 255, 0.82);
-  --composer-control: rgba(255, 255, 255, 0.33);
-  --composer-control-edge: rgba(255, 255, 255, 0.76);
-  --composer-foreground: #182028;
-  --composer-muted: #4b5660;
-  --focus-ring: #006b63;
+    radial-gradient(ellipse at 50% 0%, rgba(255, 255, 255, 0.85), transparent 72%);
+  --composer-highlight: rgba(255, 255, 255, 0.85);
+  --composer-edge: rgba(255, 255, 255, 0.78);
+  --composer-control: rgba(255, 255, 255, 0.32);
+  --composer-control-edge: rgba(255, 255, 255, 0.72);
+  --composer-foreground: #241d12;
+  --composer-muted: #5c5140;
+  --focus-ring: #8a4526;
   --composer-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.98),
-    inset 0 -1px 0 rgba(78, 110, 125, 0.08),
-    0 22px 52px rgba(68, 103, 119, 0.13),
-    0 0 32px color-mix(in srgb, var(--composer-accent, var(--accent)) 7%, transparent);
+    inset 0 1px 0 rgba(255, 255, 255, 0.96),
+    inset 0 -1px 0 rgba(107, 95, 76, 0.09),
+    0 22px 52px rgba(107, 95, 76, 0.14),
+    0 0 32px color-mix(in srgb, var(--composer-accent, var(--accent)) 8%, transparent);
 
-  --border:  rgba(20, 24, 33, 0.10);
-  --border2: rgba(20, 24, 33, 0.16);
+  --border:  rgba(43, 35, 23, 0.10);
+  --border2: rgba(43, 35, 23, 0.17);
 
-  --shadow-1: 0 1px 3px rgba(20, 24, 33, 0.10);
-  --shadow-2: 0 12px 32px -8px rgba(20, 24, 33, 0.18);
+  --shadow-1: 0 1px 3px rgba(43, 35, 23, 0.11);
+  --shadow-2: 0 12px 32px -8px rgba(43, 35, 23, 0.19);
 
-  --text:  #1a1d24;   /* chữ chính */
-  --text2: #545860;   /* chữ phụ / label */
-  --text3: #676b73;   /* chữ mờ / placeholder */
+  /* --text 12.69:1   --text2 5.11:1   --text3 4.9:1 — tính bằng WCAG relative
+     luminance formula trên nền --bg2, cả ba bậc đều ≥ 4.5:1. */
+  --text:  #2b2317;   /* chữ chính */
+  --text2: #6b5f4c;   /* chữ phụ / label */
+  --text3: #6d6250;   /* chữ mờ / placeholder */
 
-  --accent-soft: rgba(30, 209, 194, 0.12);
+  --accent:      #b85c33;                     /* đất nung — khác hẳn vàng đồng của theme tối, xem ghi chú đầu file */
+  --accent-soft: rgba(184, 92, 51, 0.12);
+
+  /* Warm Paper giữ hệ tool-accent ĐỦ sắc (khác cách tiết chế "chỉ badge" của
+     Obsidian & Gold) — giấy sáng đủ chỗ cho các màu đất ấm này thở mà không
+     đấu với accent chủ đạo hay với nhau (cùng chroma/độ sáng vừa phải). */
+  --accent-research: #5b7a8c;        /* xanh lam khói */
+  --accent-homework: #c99a3e;        /* vàng nghệ */
+  --accent-essay:    #9c7291;        /* mận đất */
+  --accent-email:    #af5a44;        /* gạch nung */
+  --accent-pdf:      #c48257;        /* đất sét */
+
+  --ok:     #7d8f6a;   /* xanh ô liu — thành công, done, output ok (Coding dùng chung, xem --accent-coding ở :root) */
+  --danger: #c14e3a;   /* đỏ gạch — tách biệt rõ với --accent-email trầm hơn */
 
   --sh-keyword: #8b3fd6;
   --sh-string:  #4f7a1f;

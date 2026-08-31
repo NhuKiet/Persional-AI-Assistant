@@ -29,6 +29,58 @@ from backend.app.features.research.knowledge_store import get_store, deduplicate
 
 logger = logging.getLogger(__name__)
 
+# Field(s) each synthesis step writes — used to build the partial SSE payload
+# for "section_done" so the frontend gets exactly the fields that just became
+# available, not a full (mostly-empty) snapshot on every event. Kept next to
+# the step list in synthesizer._run_sections_streaming; if a step there
+# starts writing another field, mirror it here.
+_STEP_FIELDS: dict[str, tuple[str, ...]] = {
+    "summaries":   ("summary_short", "summary_medium", "summary_detailed"),
+    "key_points":  ("key_points",),
+    "comparison":  ("comparison_table",),
+    "chart":       ("chart_data",),
+    "follow_ups":  ("follow_up_questions",),
+    "papers":      ("papers", "references"),
+    "grounding":   ("claims", "confidence", "limitations"),
+}
+
+
+def _output_dict(output: ResearchOutput) -> dict:
+    """Full JSON-safe view of `output` — the shape the "done" event has
+    always sent. `_output_partial` (below) slices this down to one step's
+    fields for the progressive "section_done" events."""
+    return {
+        "query":               output.query,
+        "summary_short":       output.summary_short,
+        "summary_medium":      output.summary_medium,
+        "summary_detailed":    output.summary_detailed,
+        "key_points":          output.key_points,
+        "comparison_table":    output.comparison_table,
+        "chart_data":          output.chart_data,
+        "papers":              output.papers,
+        "references":          output.references,
+        "follow_up_questions": output.follow_up_questions,
+        "claims": [
+            {
+                "text":          c.text,
+                "quote":         c.quote,
+                "source_ids":    c.source_ids,
+                "evidence_type": c.evidence_type,
+            }
+            for c in output.claims
+        ],
+        "confidence":   output.confidence,
+        "limitations":  output.limitations,
+    }
+
+
+def _output_partial(output: ResearchOutput, step_name: str) -> dict:
+    full = _output_dict(output)
+    fields = _STEP_FIELDS.get(step_name)
+    if fields is None:
+        return full
+    return {"query": full["query"], **{f: full[f] for f in fields}}
+
 # Source registry: (name, agent_attr, default_k)
 _SOURCES = [
     ("web",           "web",       6),
@@ -534,7 +586,22 @@ class ResearchAgent:
             if rag_path:
                 output = synth.synthesize_rag_grounded(query, all_sources)
             else:
-                output = synth.synthesize_grounded(query, all_sources)
+                # Streamed (not a single blocking call): each section — short
+                # summary, key points, chart, comparison, follow-ups, papers,
+                # then grounding — reaches the client the moment its own LLM
+                # call finishes, instead of the whole 6-7 call pass going
+                # silent until every section is done. See
+                # synthesizer.synthesize_grounded_streaming.
+                output = None
+                for output, step_name in synth.synthesize_grounded_streaming(query, all_sources):
+                    if self._cancelled(cancel_event):
+                        yield _CANCEL
+                        return
+                    yield {
+                        "type":    "section_done",
+                        "section": step_name,
+                        "data":    _output_partial(output, step_name),
+                    }
 
                 # ── Bounded gap-driven iteration (search path only) ─────────
                 rounds = 0
@@ -584,32 +651,7 @@ class ResearchAgent:
             if len(newly_fetched) > dispatched:
                 self._store_sources(knowledge, query, newly_fetched[dispatched:])
 
-            yield {
-                "type": "done",
-                "data": {
-                    "query":               output.query,
-                    "summary_short":       output.summary_short,
-                    "summary_medium":      output.summary_medium,
-                    "summary_detailed":    output.summary_detailed,
-                    "key_points":          output.key_points,
-                    "comparison_table":    output.comparison_table,
-                    "chart_data":          output.chart_data,
-                    "papers":              output.papers,
-                    "references":          output.references,
-                    "follow_up_questions": output.follow_up_questions,
-                    "claims": [
-                        {
-                            "text":          c.text,
-                            "quote":         c.quote,
-                            "source_ids":    c.source_ids,
-                            "evidence_type": c.evidence_type,
-                        }
-                        for c in output.claims
-                    ],
-                    "confidence":   output.confidence,
-                    "limitations":  output.limitations,
-                },
-            }
+            yield {"type": "done", "data": _output_dict(output)}
             return output
 
         except Exception as e:

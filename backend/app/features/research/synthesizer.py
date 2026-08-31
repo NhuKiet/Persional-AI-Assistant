@@ -12,7 +12,7 @@ import json
 import logging
 import os
 import re
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 
 from backend.app.core import capabilities
@@ -619,10 +619,21 @@ class Synthesizer:
         return out
 
     def _run_sections(self, query: str, sources: list[SearchResult], out: ResearchOutput) -> None:
-        """Fill `out` with every synthesis section.
+        """Fill `out` with every synthesis section, blocking until all are done."""
+        for _ in self._run_sections_streaming(query, sources, out):
+            pass
+
+    def _run_sections_streaming(
+        self, query: str, sources: list[SearchResult], out: ResearchOutput,
+    ):
+        """Same as `_run_sections`, but yields each step's name as its future
+        completes instead of only returning once every step is done.
 
         Steps touch disjoint fields of `out` and never read each other's
         results, so they run concurrently; one failure won't block others.
+        `out` is mutated in place — the caller reads whichever fields belong
+        to the yielded step name to build an incremental view, exactly like
+        it would read the fully-populated `out` once this returns.
         """
         logger.info("Synthesizing %d sources for: %s", len(sources), query)
         ranked = sorted(sources, key=lambda s: s.score, reverse=True)
@@ -640,11 +651,16 @@ class Synthesizer:
 
         with ThreadPoolExecutor(max_workers=len(steps)) as ex:
             futures = {ex.submit(fn, *args): name for name, fn, args in steps}
-            for future, step_name in futures.items():
+            # as_completed (not the dict's own iteration order) so the fastest
+            # section — usually key_points or follow_ups, never the 2-call
+            # summaries step — is what the user sees fill in first.
+            for future in as_completed(futures):
+                step_name = futures[future]
                 try:
                     future.result()
                 except Exception as e:
                     logger.error("Step '%s' failed: %s", step_name, e, exc_info=True)
+                yield step_name
 
         logger.info(
             "Done — short: %r… | points: %d | papers: %d",
@@ -676,23 +692,37 @@ class Synthesizer:
             logger.error("Grounding failed (non-fatal): %s", e, exc_info=True)
 
     def synthesize_grounded(self, query: str, sources: list[SearchResult]) -> ResearchOutput:
-        """Đường structured (6 call) + grounding.
+        """Đường structured (6 call) + grounding, blocking until fully done."""
+        out = None
+        for out, _step in self.synthesize_grounded_streaming(query, sources):
+            pass
+        return out
 
-        Grounding chỉ đọc query + sources nên chạy song song với các section.
+    def synthesize_grounded_streaming(self, query: str, sources: list[SearchResult]):
+        """Same as `synthesize_grounded`, but yields `(out, step_name)` as each
+        section finishes instead of only returning once everything is done —
+        this is what lets the research SSE stream fill the answer in
+        progressively instead of going silent for the whole synthesis pass.
+
+        `out` is the SAME object on every yield (mutated in place, same as
+        `_run_sections_streaming`); callers read the field(s) that belong to
+        `step_name` off it. The final yield's `step_name` is "grounding".
         """
         out = ResearchOutput(query=query)
 
         if not sources:
             logger.warning("Synthesize called with 0 sources")
             out.summary_short = "No sources found. Try a different query."
-            return out
+            yield out, "summaries"
+            return
 
         with ThreadPoolExecutor(max_workers=1) as ex:
             grounding = ex.submit(self._attach_grounding, out, query, sources)
-            self._run_sections(query, sources, out)
+            for step_name in self._run_sections_streaming(query, sources, out):
+                yield out, step_name
             grounding.result()
 
-        return out
+        yield out, "grounding"
 
     def synthesize_rag_grounded(self, query: str, sources: list[SearchResult]) -> ResearchOutput:
         """Đường RAG (1 call) + grounding — 2 call thay vì 7.

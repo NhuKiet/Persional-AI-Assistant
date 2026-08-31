@@ -84,7 +84,7 @@ export function ToolPage({ tool }: ToolPageProps) {
               <div className="tool-suggestions">
                 <p className="tool-suggestions-label">Thử ngay</p>
                 {suggestions.map(s => (
-                  <button key={s} className="tool-suggestion-pill" style={{ borderColor: tool.color + "44" }} onClick={() => handleSend(s)}>
+                  <button key={s} className="tool-suggestion-pill" style={{ borderColor: `color-mix(in srgb, ${tool.color} 27%, transparent)` }} onClick={() => handleSend(s)}>
                     <span style={{ color: tool.color }}>›</span> {s}
                   </button>
                 ))}

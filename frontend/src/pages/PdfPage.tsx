@@ -38,7 +38,7 @@ interface UploadedPdf {
 const SESSION_BUSY_NOTICE = "⚠️ Phiên đang bận (một tab/luồng khác đang gửi tin). Thử lại sau vài giây.";
 
 export function PDFPage() {
-  const accentColor = "#FF8C69";
+  const accentColor = "var(--accent-pdf)";
   const { sessions, activeId, setActiveId, addSession, removeSession, clearAll } = useChatHistory("pdf");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [uploadedPDF, setUploadedPDF] = useState<UploadedPdf | null>(null);
@@ -470,7 +470,7 @@ export function PDFPage() {
                 <div
                   className="tool-suggestion-pill"
                   key={suggestion}
-                  style={{ borderColor: `${accentColor}44`, cursor: "default" }}
+                  style={{ borderColor: `color-mix(in srgb, ${accentColor} 27%, transparent)`, cursor: "default" }}
                 >
                   <span style={{ color: accentColor }}>›</span> {suggestion}
                 </div>

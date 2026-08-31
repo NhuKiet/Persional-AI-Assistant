@@ -113,6 +113,11 @@ class Settings(BaseSettings):
     EXECUTOR_CPUS: str = "1.0"
     EXECUTOR_PIDS: int = 128
 
+    # ── Assistant bubble (bridge sang ai-agent, dự án riêng) ──────────
+    # ai-agent chạy bridge_server.py trên máy này; xem README của ai-agent.
+    BRIDGE_URL: str = "http://127.0.0.1:8766"
+    BRIDGE_TOKEN: str | None = None
+
     # ── PDF ─────────────────────────────────────────────────────────
     PDF_UPLOAD_DIR: str = "data/pdfs"
     PDF_CHUNK_SIZE: int = 800

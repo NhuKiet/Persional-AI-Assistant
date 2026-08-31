@@ -8,13 +8,19 @@ export interface Tool {
   desc: string;
 }
 
+/* `color` là chuỗi var(--accent-*), KHÔNG phải hex tĩnh — vì bảng màu tool
+ * giờ khác nhau giữa theme tối/sáng (xem base.css). Dùng var() để nơi tiêu
+ * thụ (ToolDock, ToolPage, ...) tự đổi theo theme qua CSS cascade, khỏi cần
+ * biết theme hiện tại đang là gì. Hệ quả: mọi nơi ghép chuỗi kiểu
+ * `tool.color + "44"` để ra alpha-hex sẽ HỎNG (var() không ghép hậu tố hex
+ * được) — phải dùng `color-mix(in srgb, ${tool.color} N%, transparent)`. */
 export const TOOLS: Tool[] = [
-  { id: "research", label: "Research",  icon: "🔍", color: "#7C9EFF", desc: "Deep research từ Arxiv, HuggingFace, Stack Overflow & Web" },
-  { id: "coding",   label: "Coding",    icon: "💻", color: "#A8E6A3", desc: "AI coding agent: plan → code → execute → debug" },
-  { id: "homework", label: "Bài tập",   icon: "📘", color: "#FFB085", desc: "Giải toán, lý, hóa, lập trình" },
-  { id: "essay",    label: "Nghị luận", icon: "✍️", color: "#E8A0FF", desc: "Viết văn nghị luận, luận điểm" },
-  { id: "email",    label: "Email",     icon: "📧", color: "#FF8585", desc: "Soạn thảo, phân loại email" },
-  { id: "pdf",      label: "PDF Chat",  icon: "📄", color: "#FF8C69", desc: "Chat với tài liệu PDF — tóm tắt, hỏi đáp" },
+  { id: "research", label: "Research",  icon: "🔍", color: "var(--accent-research)", desc: "Deep research từ Arxiv, HuggingFace, Stack Overflow & Web" },
+  { id: "coding",   label: "Coding",    icon: "💻", color: "var(--accent-coding)",   desc: "AI coding agent: plan → code → execute → debug" },
+  { id: "homework", label: "Bài tập",   icon: "📘", color: "var(--accent-homework)", desc: "Giải toán, lý, hóa, lập trình" },
+  { id: "essay",    label: "Nghị luận", icon: "✍️", color: "var(--accent-essay)",    desc: "Viết văn nghị luận, luận điểm" },
+  { id: "email",    label: "Email",     icon: "📧", color: "var(--accent-email)",    desc: "Soạn thảo, phân loại email" },
+  { id: "pdf",      label: "PDF Chat",  icon: "📄", color: "var(--accent-pdf)",      desc: "Chat với tài liệu PDF — tóm tắt, hỏi đáp" },
 ];
 
 /** Tool nào có page riêng thì đi thẳng route đó; còn lại dùng /tool/:id chung.

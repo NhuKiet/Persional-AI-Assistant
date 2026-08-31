@@ -37,7 +37,7 @@ export function ResearchPage() {
   const [followUps, setFollowUps]     = useState<string[]>([]);
   const [notice, setNotice]           = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
-  const accentColor = "#7C9EFF";
+  const accentColor = "var(--accent-research)";
   const trending = useTrendingSuggestions();
   // Trộn gợi ý tĩnh với paper nổi bật hôm nay, random thứ tự mỗi lần mount —
   // vừa là gợi ý vừa cho biết gần đây có nghiên cứu gì mới.
@@ -192,7 +192,7 @@ export function ResearchPage() {
             <p className="tool-suggestions-label">Thử ngay</p>
             {suggestions.map(s => (
               <button key={s} className="tool-suggestion-pill"
-                style={{ borderColor: accentColor + "44" }}
+                style={{ borderColor: `color-mix(in srgb, ${accentColor} 27%, transparent)` }}
                 onClick={() => handleSearch(s)}>
                 <span style={{ color: accentColor }}>›</span> {s}
               </button>
@@ -218,8 +218,10 @@ export function ResearchPage() {
               </div>
             )}
 
-            {/* Done */}
-            {msg.phase === "done" && !!msg.result && (
+            {/* Done, or still synthesizing but sections have started arriving —
+                render what's landed so far and let it fill in as more
+                "section_done" events come through (see useResearch.ts). */}
+            {(msg.phase === "done" || msg.phase === "synthesizing") && !!msg.result && (
               <ResearchResult result={msg.result as ResearchResultData} model={model} />
             )}
 

@@ -4,6 +4,7 @@ import { BrowserRouter, Navigate, Route, Routes, useParams } from "react-router-
 import "./styles.css";
 
 import { TOOLS } from "./config/tools";
+import { AssistantBubble } from "./components/AssistantBubble";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { HomePage } from "./pages/HomePage";
 import { LandingPage } from "./pages/LandingPage";
@@ -71,6 +72,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <AppRoutes />
+      <AssistantBubble />
     </BrowserRouter>
   );
 }

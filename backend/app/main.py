@@ -3,6 +3,7 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from backend.app.features.assistant_bubble.router import router as assistant_bubble_router
 from backend.app.features.chat.router import router as chat_router
 from backend.app.features.coding.router import router as coding_router
 from backend.app.features.models.router import router as models_router
@@ -42,6 +43,7 @@ app.add_middleware(
 
 app.include_router(research_router)
 app.include_router(chat_router)
+app.include_router(assistant_bubble_router)
 app.include_router(coding_router)
 app.include_router(pdf_router)
 app.include_router(models_router)

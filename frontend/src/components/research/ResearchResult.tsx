@@ -64,7 +64,7 @@ interface Panel {
 }
 
 export function ResearchResult({ result, model }: ResearchResultProps) {
-  const accentColor = "#7C9EFF";
+  const accentColor = "var(--accent-research)";
   const [diveSource, setDiveSource] = useState<DiveSource | null>(null);
 
   const validKPs = (result.key_points || []).filter(kp =>

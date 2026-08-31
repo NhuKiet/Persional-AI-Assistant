@@ -66,3 +66,45 @@ describe("useResearch phase mapping", () => {
     expect(collector.state.phase).toBe("synthesizing");
   });
 });
+
+describe("useResearch section_done streaming", () => {
+  it("merges each section_done payload into result instead of replacing it", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(sseResponse([
+      { type: "synthesizing", message: "Synthesizing with AI…", source: "llm" },
+      { type: "section_done", section: "key_points", data: { query: "q", key_points: ["a"] } },
+      { type: "section_done", section: "summaries", data: { query: "q", summary_short: "s" } },
+    ])));
+
+    const { result } = renderHook(() => useResearch());
+    const collector = makeCollector();
+
+    await act(async () => {
+      await result.current.runSearch("q", "sess-1", collector.onUpdate, null);
+    });
+
+    // Second section_done must not wipe out what the first one already
+    // contributed — this is what lets the answer fill in progressively
+    // instead of each event clobbering the last.
+    expect(collector.state.result).toEqual({
+      query: "q", key_points: ["a"], summary_short: "s",
+    });
+    expect(collector.state.phase).toBe("synthesizing");
+  });
+
+  it("keeps section_done's accumulated result as a base for the final done event", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(sseResponse([
+      { type: "section_done", section: "key_points", data: { query: "q", key_points: ["a"] } },
+      { type: "done", data: { query: "q", key_points: ["a"], summary_short: "final" } },
+    ])));
+
+    const { result } = renderHook(() => useResearch());
+    const collector = makeCollector();
+
+    await act(async () => {
+      await result.current.runSearch("q", "sess-1", collector.onUpdate, null);
+    });
+
+    expect(collector.state.phase).toBe("done");
+    expect(collector.state.result).toEqual({ query: "q", key_points: ["a"], summary_short: "final" });
+  });
+});

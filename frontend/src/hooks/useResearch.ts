@@ -52,6 +52,12 @@ export function useResearch() {
         return;
       }
       if (!res.ok) { onUpdate({ phase: "error", errMsg: await readErrorResponse(res) }); return; }
+      // Accumulates across "section_done" events for THIS call only (fresh
+      // per runSearch invocation, not shared across calls/messages) — each
+      // event carries only the field(s) its own section just filled in, so
+      // the result the caller sees needs to keep whatever earlier sections
+      // already contributed.
+      let partial: Record<string, unknown> = {};
       for await (const { data } of parseSSE(res.body!)) {
         try {
           const ev = JSON.parse(data);
@@ -73,6 +79,9 @@ export function useResearch() {
                 x.source === ev.source ? { ...x, count: ev.count, done: true } : x
               ),
             }));
+          } else if (ev.type === "section_done") {
+            partial = { ...partial, ...ev.data };
+            onUpdate({ phase: "synthesizing", result: partial });
           } else if (ev.type === "done") {
             onUpdate({ phase: "done", result: ev.data });
           } else if (ev.type === "error") {

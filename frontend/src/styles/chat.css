@@ -55,6 +55,42 @@
   opacity: 0.7;
   pointer-events: none;
 }
+/* Dòng chảy — vệt sáng nghiêng trôi ngang qua thẻ khi rê chuột, hết vệt này
+   tới vệt khác, như ánh sáng chạy trên mặt suối.
+   Dùng ::after chứ không phải ::before: ::before đã là vệt sáng mép trên của
+   thẻ kính. Cả hai đều z-index auto nên ::after vẽ đè lên ::before (sau trong
+   thứ tự vẽ) nhưng vẫn nằm dưới nội dung — nội dung ở z-index 1, xem quy tắc
+   `.suggestion-card > *` ngay trên. */
+.suggestion-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  background: linear-gradient(
+    104deg,
+    transparent 14%,
+    color-mix(in srgb, var(--accent) 15%, transparent) 31%,
+    color-mix(in srgb, var(--accent) 46%, transparent) 46%,
+    color-mix(in srgb, var(--accent) 15%, transparent) 61%,
+    transparent 79%
+  );
+  /* Nền rộng hơn thẻ để vệt sáng có chỗ trôi vào rồi trôi ra. */
+  background-size: 260% 100%;
+  transition: opacity var(--dur) var(--ease);
+}
+.suggestion-card:hover::after {
+  opacity: 1;
+  animation: suggestion-stream 2.3s linear infinite;
+}
+/* background-position GIẢM dần = ảnh nền dịch sang PHẢI (0% là mép trái ảnh
+   khớp mép trái thẻ, càng tăng thì ảnh càng lùi sang trái). Đảo hai đầu là
+   vệt chạy ngược chiều. */
+@keyframes suggestion-stream {
+  from { background-position: 130% 0; }
+  to   { background-position: -60% 0; }
+}
+
 .suggestion-card > * {
   position: relative;
   z-index: 1;
@@ -204,8 +240,7 @@
 }
 
 /* Markdown rendering */
-/* Không italic: Bricolage không có trục ital, để italic sẽ ra oblique giả. */
-.md h1       { font-family: var(--display); font-size: 21px; font-weight: 600; font-variation-settings: 'opsz' 22; letter-spacing: -0.02em; color: var(--text); margin: 0 0 10px; }
+.md h1       { font-family: var(--display); font-size: 21px; font-weight: 600; font-variation-settings: 'opsz' 21; letter-spacing: -0.02em; color: var(--text); margin: 0 0 10px; }
 .md h2       { font-size: 14px; font-weight: 600; color: var(--text); margin: 14px 0 6px; letter-spacing: -0.01em; }
 .md h3       { font-size: 13px; font-weight: 600; color: var(--text2); margin: 10px 0 4px; text-transform: uppercase; letter-spacing: 0.04em; }
 .md strong   { font-weight: 600; color: var(--text); }
@@ -497,7 +532,7 @@
 
 .tool-title-wrap  { display: flex; align-items: center; gap: 8px; }
 .tool-title-icon  { display: flex; align-items: center; justify-content: center; transform: translateY(1px); font-size: 24px;}
-.tool-title-text  { font-family: var(--display); font-size: 24px; font-weight: 600; font-variation-settings: 'opsz' 26; letter-spacing: -0.02em; color: var(--text); line-height: 1;}
+.tool-title-text  { font-family: var(--display); font-size: 24px; font-weight: 600; font-variation-settings: 'opsz' 24; letter-spacing: -0.02em; color: var(--text); line-height: 1;}
 
 .tool-suggestions       { padding: 16px 0; }
 .tool-suggestions-label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 10px; }

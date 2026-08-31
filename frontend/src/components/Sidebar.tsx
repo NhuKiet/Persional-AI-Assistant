@@ -53,7 +53,7 @@ export function Sidebar({ open, onToggle, sessions, activeId, onSelect, onDelete
           Tin tức
         </button>
 
-        <button className="sb-new-chat" onClick={onNewChat} style={{ borderColor: accentColor + "44" }}>
+        <button className="sb-new-chat" onClick={onNewChat} style={{ borderColor: `color-mix(in srgb, ${accentColor} 27%, transparent)` }}>
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
             <path d="M7 1v12M1 7h12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
           </svg>

@@ -228,7 +228,7 @@
 }
 
 .atom-eyebrow {
-  font-family: var(--brand-serif);
+  font-family: var(--display);
   font-style: italic;
   font-weight: 700;
   font-size: clamp(22px, 2.4vw, 30px);
@@ -260,7 +260,7 @@
 .atom-headline {
   font-family: var(--display);
   font-weight: 700;
-  font-variation-settings: 'opsz' 72;
+  font-variation-settings: 'opsz' 46;   /* Newsreader opsz dải 6-72; clamp(30,3.6vw,46) nên khớp trần thật thay vì trần cũ 96 của Bricolage */
   font-size: clamp(30px, 3.6vw, 46px);
   line-height: 1.08;
   letter-spacing: -0.03em;
