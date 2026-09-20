@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
-import { TOOLS, type Tool } from "../config/tools";
+import { VISIBLE_TOOLS, type Tool } from "../config/tools";
+import { ToolIcon } from "./ToolIcon";
 
 interface ToolDockProps {
   onSelect: (tool: Tool) => void;
@@ -9,7 +10,7 @@ interface ToolDockProps {
 export function ToolDock({ onSelect, visible }: ToolDockProps) {
   return (
     <div className={`dock ${visible ? "dock-visible" : "dock-hidden"}`}>
-      {TOOLS.map(tool => (
+      {VISIBLE_TOOLS.map(tool => (
         <button
           key={tool.id}
           className="dock-item"
@@ -19,7 +20,7 @@ export function ToolDock({ onSelect, visible }: ToolDockProps) {
              React không có kiểu cho custom property nên phải ép kiểu. */
           style={{ "--tint": tool.color } as CSSProperties}
         >
-          <span className="dock-icon">{tool.icon}</span>
+          <span className="dock-icon"><ToolIcon tool={tool.id} /></span>
           <span className="dock-label">{tool.label}</span>
         </button>
       ))}

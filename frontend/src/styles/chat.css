@@ -193,7 +193,7 @@
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
-.dock-icon  { font-size: 18px; line-height: 1; position: relative; z-index: 1; color: var(--tint); }
+.dock-icon  { display: flex; align-items: center; justify-content: center; line-height: 1; position: relative; z-index: 1; color: var(--tint); }
 .dock-label { font-size: 11px; color: var(--text2); font-weight: 500; white-space: nowrap; position: relative; z-index: 1; transition: color var(--dur-slow) var(--ease-out); }
 .dock-item:hover .dock-label { color: var(--text); }
 
@@ -531,7 +531,7 @@
 .mp-option-label { overflow: hidden; text-overflow: ellipsis; }
 
 .tool-title-wrap  { display: flex; align-items: center; gap: 8px; }
-.tool-title-icon  { display: flex; align-items: center; justify-content: center; transform: translateY(1px); font-size: 24px;}
+.tool-title-icon  { display: flex; align-items: center; justify-content: center; transform: translateY(1px); }
 .tool-title-text  { font-family: var(--display); font-size: 24px; font-weight: 600; font-variation-settings: 'opsz' 24; letter-spacing: -0.02em; color: var(--text); line-height: 1;}
 
 .tool-suggestions       { padding: 16px 0; }

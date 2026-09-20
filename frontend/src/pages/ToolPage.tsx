@@ -3,6 +3,7 @@ import ModelPicker from "../components/ModelPicker";
 import { InputBar } from "../components/InputBar";
 import { Message } from "../components/Message";
 import { AppShell } from "../components/AppShell";
+import { ToolIcon } from "../components/ToolIcon";
 import { shuffle, SUGGESTIONS } from "../config/tools";
 import type { Tool } from "../config/tools";
 import { useChat } from "../hooks/useChat";
@@ -71,7 +72,7 @@ export function ToolPage({ tool }: ToolPageProps) {
     <AppShell {...sidebarProps}>
         <div className="page tool-page page-entered">
           <header className="tool-header">
-            <div className="tool-title-wrap"><span className="tool-title-icon" style={{ color: tool.color }}>{tool.icon}</span><span className="tool-title-text">{tool.label}</span></div>
+            <div className="tool-title-wrap"><span className="tool-title-icon" style={{ color: tool.color }}><ToolIcon tool={tool.id} size={22} /></span><span className="tool-title-text">{tool.label}</span></div>
             <button className="clear-btn" onClick={handleClear}>Xóa</button>
           </header>
           {notice && (

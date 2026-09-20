@@ -9,6 +9,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../App.tsx";
+import { TOOLS, VISIBLE_TOOLS } from "../config/tools";
 
 const MODELS = {
   models: [{ provider: "ollama", model: "llama3", label: "llama3 (local)" }],
@@ -22,6 +23,11 @@ const TOOL_TITLE = {
   homework: /Giải toán, lý, hóa/i,
   pdf: /Chat với tài liệu PDF/i,
 };
+
+// Một số tool đang bị ẩn tạm khỏi dock (cờ `hidden` trong config/tools.ts).
+// Các khẳng định về dock ĐỌC TỪ CONFIG chứ không chép cứng danh sách: bật lại
+// một tool chỉ cần xoá `hidden: true`, không phải sửa kèm test ở đây.
+const HIDDEN_TOOLS = TOOLS.filter(t => t.hidden);
 
 beforeEach(() => {
   // BrowserRouter đọc history thật của jsdom, và history sống xuyên suốt file
@@ -39,11 +45,22 @@ beforeEach(() => {
 
 // ToolDock (trang chat) và bảng công cụ trên LandingPage đều đứng sau route
 // riêng /chat và "/" — mở tool luôn đi qua /chat cho nhất quán với hành vi cũ.
+// CHỈ dùng được cho tool còn hiện trong dock; tool đang ẩn thì đi openToolUrl.
 async function openTool(titleRe) {
   const user = userEvent.setup();
   window.history.pushState({}, "", "/chat");
   render(<App />);
   await user.click(await screen.findByTitle(titleRe));
+  return user;
+}
+
+// Tool bị ẩn khỏi dock vẫn phải CHẠY được khi vào thẳng URL — ẩn là bỏ lối vào
+// trong UI, không phải tắt tính năng. Vào bằng URL để vẫn giữ được lưới an toàn
+// cho những page đó thay vì xoá test đi.
+function openToolUrl(path) {
+  const user = userEvent.setup();
+  window.history.pushState({}, "", path);
+  render(<App />);
   return user;
 }
 
@@ -54,9 +71,9 @@ async function openTool(titleRe) {
 // marketing đổi ý, nên ở đây kiểm h1 theo role thay vì theo nội dung.
 describe("Trang chủ (\"/\") — landing, không phải chat", () => {
   // Landing giờ là hero "Capability Reactor" (canvas 3D + nav); không còn ô
-  // nhập chat hay bảng 6 công cụ trực tiếp trên "/" — lối vào duy nhất là CTA
-  // "Mở trợ lý" dẫn sang /chat, nơi vẫn còn đủ 6 tool qua ToolDock (xem describe
-  // "điều hướng sang từng tool" bên dưới, đi qua /chat trước).
+  // nhập chat hay bảng công cụ trực tiếp trên "/" — lối vào duy nhất là CTA
+  // "Mở trợ lý" dẫn sang /chat, nơi ToolDock liệt kê các tool đang hiện (xem
+  // describe "điều hướng sang từng tool" bên dưới, đi qua /chat trước).
   it("hiện headline và CTA vào trợ lý", async () => {
     render(<App />);
     expect(await screen.findByRole("button", { name: /Mở trợ lý/i })).toBeInTheDocument();
@@ -75,11 +92,19 @@ describe("Trang chủ (\"/\") — landing, không phải chat", () => {
 describe("Trang chat (/chat)", () => {
   beforeEach(() => window.history.pushState({}, "", "/chat"));
 
-  it("hiện ô chat và dock đủ 6 tool", async () => {
+  it("hiện ô chat và dock đúng các tool đang bật", async () => {
     render(<App />);
     expect(await screen.findByPlaceholderText(/Hỏi KiNg bất cứ điều gì/i)).toBeInTheDocument();
-    for (const re of Object.values(TOOL_TITLE)) {
-      expect(screen.getByTitle(re)).toBeInTheDocument();
+    for (const tool of VISIBLE_TOOLS) {
+      expect(screen.getByTitle(tool.desc)).toBeInTheDocument();
+    }
+  });
+
+  it("KHÔNG hiện tool đang ẩn trong dock", async () => {
+    render(<App />);
+    await screen.findByPlaceholderText(/Hỏi KiNg bất cứ điều gì/i);
+    for (const tool of HIDDEN_TOOLS) {
+      expect(screen.queryByTitle(tool.desc)).not.toBeInTheDocument();
     }
   });
 
@@ -106,8 +131,9 @@ describe("điều hướng sang từng tool", () => {
     expect(await screen.findByPlaceholderText(/Nhập chủ đề nghiên cứu/i)).toBeInTheDocument();
   });
 
-  it("mở Coding", async () => {
-    await openTool(TOOL_TITLE.coding);
+  // Coding đang ẩn khỏi dock nên vào thẳng /coding; page vẫn phải render đúng.
+  it("mở Coding (đang ẩn khỏi dock — vào thẳng URL)", async () => {
+    openToolUrl("/coding");
     expect(await screen.findByText(/Coding Agent/i)).toBeInTheDocument();
   });
 
@@ -116,8 +142,8 @@ describe("điều hướng sang từng tool", () => {
     expect(await screen.findByText(/Kéo thả file PDF vào đây/i)).toBeInTheDocument();
   });
 
-  it("mở ToolPage (Bài tập)", async () => {
-    await openTool(TOOL_TITLE.homework);
+  it("mở ToolPage (Bài tập — đang ẩn khỏi dock, vào thẳng URL)", async () => {
+    openToolUrl("/tool/homework");
     // ToolPage đặt placeholder động theo tool: `${tool.label}…`
     expect(await screen.findByPlaceholderText(/Bài tập/i)).toBeInTheDocument();
     expect(screen.getByText(/Thử ngay/i)).toBeInTheDocument();
@@ -134,7 +160,7 @@ describe("điều hướng sang từng tool", () => {
   // sidebar là đường về nhà duy nhất, dùng chung cho mọi route. Test riêng
   // để bắt lỗi nếu route /tool/:toolId (ví dụ "Bài tập") lỡ thiếu sidebar.
   it("quay lại trang chủ từ một tool dùng route chung (/tool/:id)", async () => {
-    const user = await openTool(TOOL_TITLE.homework);
+    const user = openToolUrl("/tool/homework");
     await user.click(await screen.findByRole("button", { name: /Trang chủ/i }));
     expect(await screen.findByRole("heading", { level: 1 })).toBeInTheDocument();
     expect(window.location.pathname).toBe("/");

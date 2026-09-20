@@ -10,7 +10,14 @@ interface BubbleMessage {
 
 /** Bong bóng chat nổi cho ai-agent (bridge sang dự án Telegram bot riêng) —
  *  tách biệt hoàn toàn với CTA "Mở trợ lý" (đi /chat, chat riêng của KiNg).
- *  State chỉ sống trong component, mất khi reload trang. */
+ *  State chỉ sống trong component, mất khi reload trang.
+ *
+ *  Tên hiển thị là "Trợ lý nhanh", KHÔNG phải "Trợ lý cá nhân" như trước: nhãn
+ *  cũ khiến aria-label của nút ("Mở trợ lý cá nhân") trùng phần đầu với CTA
+ *  landing ("Mở trợ lý"), nên screen reader đọc ra hai nút na ná nhau và
+ *  app.smoke.test.jsx fail thật với "Found multiple elements with role button
+ *  and name /Mở trợ lý/i". Đổi tên ở đây phải giữ nguyên tắc: không chứa cụm
+ *  "Mở trợ lý". */
 export function AssistantBubble() {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<BubbleMessage[]>([]);
@@ -68,7 +75,7 @@ export function AssistantBubble() {
       {open && (
         <div className="bubble-panel">
           <div className="bubble-header">
-            <span>Trợ lý cá nhân</span>
+            <span>Trợ lý nhanh</span>
             <div className="bubble-header-actions">
               <button type="button" className="bubble-icon-btn" onClick={reset} title="Xoá hội thoại" aria-label="Xoá hội thoại">↺</button>
               <button type="button" className="bubble-icon-btn" onClick={() => setOpen(false)} title="Đóng" aria-label="Đóng">✕</button>
@@ -107,8 +114,8 @@ export function AssistantBubble() {
         type="button"
         className="bubble-toggle"
         onClick={() => setOpen(v => !v)}
-        aria-label={open ? "Đóng trợ lý cá nhân" : "Mở trợ lý cá nhân"}
-        title="Trợ lý cá nhân"
+        aria-label={open ? "Đóng trợ lý nhanh" : "Bật trợ lý nhanh"}
+        title="Trợ lý nhanh"
       >
         {open ? "✕" : "💬"}
       </button>
