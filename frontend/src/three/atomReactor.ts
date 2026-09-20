@@ -220,8 +220,17 @@ export function createAtomReactor(canvas: HTMLCanvasElement, opts: AtomReactorOp
   const fps = { frames: 0, t0: 0, badWindows: 0, downgraded: false };
   const waveFronts: number[] = [];
 
+  /* Kích thước render = HỘP CSS CỦA CHÍNH CANVAS, không phải viewport. Canvas
+   * nằm trong card bo góc (đã trừ padding khung) và ở mobile chỉ cao 56svh,
+   * nên lấy window.innerWidth/Height sẽ cho sai tỉ lệ -> ảnh bị kéo méo và
+   * lệch tâm. clientWidth/Height cũng tự bằng 0 lúc canvas chưa layout hoặc
+   * bị ẩn, nên chặn sàn ở 1 để WebGL không nhận framebuffer zero-size
+   * (nguồn của cảnh báo GL_INVALID_FRAMEBUFFER_OPERATION khi resize). */
   function getRenderSize() {
-    return { width: window.innerWidth, height: window.innerHeight };
+    return {
+      width: Math.max(1, canvas.clientWidth || window.innerWidth),
+      height: Math.max(1, canvas.clientHeight || window.innerHeight),
+    };
   }
 
   function createRenderer() {
@@ -282,7 +291,8 @@ export function createAtomReactor(canvas: HTMLCanvasElement, opts: AtomReactorOp
     environmentSource.dispose();
     pmrem.dispose();
 
-    camera = new THREE.PerspectiveCamera(CONFIG.camera.fov, window.innerWidth / window.innerHeight, 0.1, 100);
+    const initSize = getRenderSize();
+    camera = new THREE.PerspectiveCamera(CONFIG.camera.fov, initSize.width / initSize.height, 0.1, 100);
 
     const L = CONFIG.lights;
     scene.add(new THREE.AmbientLight(L.ambient.color, L.ambient.intensity));

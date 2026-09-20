@@ -7,8 +7,12 @@ import type { AtomReactorHandle } from "../three/atomReactor";
 
 /** Trang chủ — "Capability Reactor": một lõi kim loại 3D bao quanh bởi 3 vành
  *  quỹ đạo, với một làn sóng năng lượng lan tỏa liên tục từ lõi ra từng vành.
- *  Nền 2 lớp: Viền frame ngoài màu trắng (#ffffff) và khối card bên trong màu xanh lá cây (#11660f) bo góc. */
-const ATOM_BG = { dark: 0x11660f, light: 0x11660f };
+ *  Nền 2 lớp: viền frame ngoài (theo theme) và khối card bên trong bo góc.
+ *
+ *  ATOM_BG là clear color của WebGL, PHẢI trùng --atom-bg trong landing.css —
+ *  canvas nằm đè lên card nên lệch một chút là lộ đường ranh. Rêu ô liu trầm
+ *  thay cho xanh lá #11660f cũ, xem ghi chú màu ở đầu landing.css. */
+const ATOM_BG = { dark: 0x2f3d22, light: 0x2f3d22 };
 
 export function LandingPage() {
   const navigate = useNavigate();

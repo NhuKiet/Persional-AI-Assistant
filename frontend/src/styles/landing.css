@@ -1,14 +1,29 @@
-/* Trang chủ (LandingPage.tsx) — Hero Card bo góc xanh lá cây trên nền trắng:
-   Khung viền ngoài cùng (.atom-landing-frame) màu trắng (#ffffff) bao quanh viewport,
-   ôm khối card bên trong (.atom-landing) màu xanh lá cây (#11660f) bo góc lớn. */
+/* Trang chủ (LandingPage.tsx) — Hero Card bo góc trên nền giấy/mực:
+   Khung viền ngoài cùng (.atom-landing-frame) ôm khối card bên trong
+   (.atom-landing) bo góc lớn.
+
+   MÀU NỀN CARD: rêu ô liu trầm #2f3d22, KHÔNG phải xanh lá bão hòa #11660f như
+   trước. Lý do: app có bảng màu đất rất chặt trong base.css (giấy ấm #f6f1e6 +
+   đất nung #b85c33 ở theme sáng, mực + vàng đồng #c9a24b ở theme tối, đã có sẵn
+   ô liu --ok #7d8f6a). Xanh lá chroma cao lệch ~150° hue so với accent đất nung
+   nên bấm "Mở trợ lý" là như nhảy sang app khác; ô liu là bản trầm/tối của --ok,
+   đứng cạnh đất nung và vàng đồng thành bộ đất hòa nhau.
+   Đổi ở đây thì PHẢI đổi ATOM_BG trong LandingPage.tsx cho khớp — nó là clear
+   color của WebGL, nằm DƯỚI card, lệch màu là lộ đường ranh ngay. */
 
 :root {
   --atom-frame-bg: #ffffff;
-  --atom-bg: #11660f;
+  --atom-bg: #2f3d22;
+  /* Card luôn là rêu tối ở CẢ HAI theme, nên accent trên card cũng phải cố
+   * định — không dùng var(--accent) được: ở theme sáng nó là đất nung #b85c33,
+   * đặt trên rêu chỉ đạt 2.55:1, dưới cả ngưỡng 3:1 của chữ lớn. Vàng đồng
+   * #c9a24b là accent theme tối có sẵn của app, trên rêu đạt 4.83:1 (qua AA cả
+   * với chữ thường) và vẫn nằm trong bộ màu đất. */
+  --atom-accent: #c9a24b;
 }
 :root[data-theme="dark"] {
   --atom-frame-bg: #080b12;
-  --atom-bg: #11660f;
+  --atom-bg: #2f3d22;
 }
 
 .atom-landing-frame {
@@ -50,7 +65,7 @@
   inset: 0;
   pointer-events: none;
   background:
-    radial-gradient(58% 52% at 64% 48%, rgba(20, 140, 90, 0.18), transparent 62%),
+    radial-gradient(58% 52% at 64% 48%, rgba(201, 162, 75, 0.16), transparent 62%),
     radial-gradient(125% 125% at 50% 50%, transparent 54%, rgba(0, 0, 0, 0.45));
   mix-blend-mode: screen;
 }
@@ -120,7 +135,7 @@
   font-family: var(--sans);
   font-size: 16px;
   font-weight: 600;
-  color: #11660f;
+  color: var(--atom-bg);
   background: #ffffff;
   border: none;
   border-radius: 999px;
@@ -142,7 +157,9 @@
   transition: text-shadow 0.3s ease;
 }
 
-/* Luồng điện RGB xoay tròn đều 360 độ liên tục (không bị méo hay giật) */
+/* Viền sáng chạy quanh nút khi hover — MỘT màu (accent thương hiệu) thay cho
+ * vòng conic 7 màu trước đây. Vẫn là conic-gradient để có cảm giác luồng sáng
+ * quay, nhưng chỉ chuyển sắc độ trong cùng một hue. */
 .atom-cta::before {
   content: "";
   position: absolute;
@@ -155,20 +172,20 @@
   border-radius: 50%;
   background: conic-gradient(
     from 0deg,
-    #ff3b3b 0%,
-    #ff9a3b 14%,
-    #f4e13b 28%,
-    #3bd45a 42%,
-    #3bb8ff 57%,
-    #8a3bff 71%,
-    #ff3bbd 85%,
-    #ff3b3b 100%
+    var(--atom-accent) 0%,
+    color-mix(in srgb, var(--atom-accent) 45%, #ffffff) 25%,
+    var(--atom-accent) 50%,
+    color-mix(in srgb, var(--atom-accent) 45%, #ffffff) 75%,
+    var(--atom-accent) 100%
   );
   opacity: 0;
   z-index: 1;
   transition: opacity 0.35s ease;
   animation: atom-cta-electric-spin 2s linear infinite;
   pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .atom-cta::before { animation: none; }
 }
 
 /* Lớp nền trong che phần giữa để chỉ lộ viền điện chạy */
@@ -182,15 +199,14 @@
   transition: background-color var(--dur) var(--ease-out);
 }
 
-/* Khi hover: phát sáng hào quang RGB (RGB pulse & neon aura) */
+/* Hover: quầng sáng một màu, ba lớp loang dần — thay cho 4 lớp glow 4 màu. */
 .atom-cta:hover {
   transform: translateY(-2px) scale(1.04);
   background: #ffffff;
   box-shadow:
-    0 0 18px rgba(255, 59, 59, 0.4),
-    0 0 32px rgba(59, 212, 90, 0.45),
-    0 0 48px rgba(59, 184, 255, 0.45),
-    0 0 64px rgba(255, 59, 189, 0.35),
+    0 0 20px color-mix(in srgb, var(--atom-accent) 45%, transparent),
+    0 0 40px color-mix(in srgb, var(--atom-accent) 32%, transparent),
+    0 0 64px color-mix(in srgb, var(--atom-accent) 20%, transparent),
     0 10px 30px rgba(0, 0, 0, 0.25);
 }
 
@@ -203,7 +219,7 @@
 }
 
 .atom-cta:hover .atom-cta-text {
-  text-shadow: 0 0 10px rgba(59, 212, 90, 0.3);
+  text-shadow: 0 0 10px color-mix(in srgb, var(--atom-accent) 28%, transparent);
 }
 
 .atom-cta:active {
@@ -218,14 +234,31 @@
 
 /* ── Hero ────────────────────────────────────────────────── */
 
+/* Hero KHÔNG canh giữa bằng top:50%+translateY(-50%) nữa: cách đó không biết
+ * card cao bao nhiêu, nên ở màn hình thấp (cửa sổ chia đôi, laptop 1366x768 đã
+ * trừ thanh trình duyệt, máy xoay ngang) nó tràn cả lên nav lẫn xuống đáy và bị
+ * overflow:hidden của card cắt cụt — mất hẳn dòng metrics.
+ * Thay bằng một hộp bị kẹp giữa nav (top) và dải CTA/hint/bong bóng trợ lý
+ * (bottom): nội dung vẫn canh giữa nhờ auto-margin của flex item đầu/cuối, mà
+ * khi không đủ chỗ thì cuộn trong hộp chứ không bị cắt.
+ * Dùng auto-margin thay cho justify-content:center vì center sẽ cắt mất phần
+ * đầu khi overflow — lỗi kinh điển của flexbox. */
 .atom-hero {
   position: absolute;
   left: 40px;
-  top: 50%;
-  transform: translateY(-50%);
+  top: 92px;
+  bottom: 96px;
+  display: flex;
+  flex-direction: column;
   width: min(43vw, 540px);
   z-index: 6;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
 }
+.atom-hero::-webkit-scrollbar { display: none; }
+.atom-hero > :first-child { margin-top: auto; }
+.atom-hero > :last-child { margin-bottom: auto; }
 
 .atom-eyebrow {
   font-family: var(--display);
@@ -242,19 +275,14 @@
 }
 .atom-eyebrow::before { content: ""; width: 26px; height: 1px; background: rgba(255, 255, 255, 0.35); flex-shrink: 0; }
 
+/* Tên riêng dùng đúng accent thương hiệu (--atom-accent, xem đầu file) thay
+ * cho gradient cầu vồng 7 chặng có animation. Cầu vồng đưa 7 hue lạ vào một màn hình mà base.css đã tuyên bố
+ * "một accent DUY NHẤT xuyên suốt", và đọc ra rất "demo AI mặc định".
+ * Còn đúng một hue nhấn trên trang: accent ở đây và ở quầng sáng nút CTA —
+ * gradient bạc hà của headline là sắc độ CÙNG HỌ với nền rêu, không tính là
+ * hue nhấn thứ hai. */
 .atom-eyebrow-name {
-  background: linear-gradient(90deg, #ff6b6b, #ffa94d, #ffe066, #69db7c, #4dabf7, #b197fc, #f783ac, #ff6b6b);
-  background-size: 300% 100%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  animation: atom-eyebrow-rgb 7s linear infinite;
-}
-@keyframes atom-eyebrow-rgb {
-  to { background-position: -300% 0; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .atom-eyebrow-name { animation: none; }
+  color: var(--atom-accent);
 }
 
 .atom-headline {
@@ -269,7 +297,7 @@
 }
 .atom-headline em {
   font-style: normal;
-  background: linear-gradient(96deg, #e6fcf0, #8ce99a);
+  background: linear-gradient(96deg, #f2f4e4, #b9c98d);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -290,17 +318,16 @@
   max-width: 340px;
 }
 .atom-metric { border-left: 1px solid rgba(255, 255, 255, 0.22); padding: 2px 0 2px 10px; }
-.atom-metric .k { font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(255, 255, 255, 0.62); }
+.atom-metric .k { font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(255, 255, 255, 0.78); }
 .atom-metric .v { font-size: 13px; letter-spacing: 0.01em; margin-top: 4px; color: #ffffff; }
 .atom-metrics-note {
   grid-column: 1 / -1;
   font-family: var(--mono);
   font-size: 10px;
   letter-spacing: 0.16em;
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(255, 255, 255, 0.8);
   text-transform: uppercase;
   margin-top: 4px;
-  opacity: 0.8;
 }
 
 /* ── Nhãn góc + gợi ý thao tác ───────────────────────────── */
@@ -310,11 +337,10 @@
   font-family: var(--mono);
   font-size: 10px;
   letter-spacing: 0.14em;
-  color: rgba(255, 255, 255, 0.55);
+  color: rgba(255, 255, 255, 0.8);
   text-transform: uppercase;
   z-index: 6;
   line-height: 1.7;
-  opacity: 0.8;
 }
 .atom-corner-tr { right: 36px; top: 96px; text-align: right; }
 .atom-corner-br { right: 36px; bottom: 26px; text-align: right; }
@@ -327,10 +353,9 @@
   font-family: var(--mono);
   font-size: 10px;
   letter-spacing: 0.16em;
-  color: rgba(255, 255, 255, 0.55);
+  color: rgba(255, 255, 255, 0.8);
   text-transform: uppercase;
   z-index: 6;
-  opacity: 0.75;
 }
 
 /* ── Responsive: split → tablet → dọc ───────────────────── */
@@ -341,18 +366,82 @@
   .atom-corner-tr { display: none; }
 }
 
+/* Màn hình thấp nhưng vẫn là layout ngang (chưa tới breakpoint dọc 720px):
+ * thu nhỏ chữ để hero còn vừa chiều cao thật thay vì phải cuộn. */
+@media (min-width: 721px) and (max-height: 620px) {
+  .atom-hero { top: 78px; bottom: 82px; }
+  .atom-eyebrow { font-size: clamp(17px, 1.9vw, 22px); margin-bottom: 10px; }
+  .atom-headline { font-size: clamp(24px, 2.8vw, 34px); margin-bottom: 10px; }
+  .atom-sub { font-size: 13px; margin-bottom: 16px; }
+  .atom-metrics { gap: 6px 18px; }
+  .atom-corner-tr { display: none; }
+  .atom-cta { bottom: 28px; right: 40px; padding: 12px 26px; font-size: 15px; }
+}
+
+/* Dưới 520px chiều cao (cửa sổ chia đôi theo chiều ngang, máy chiếu 4:3 thu
+ * nhỏ) thì kể cả sau khi thu chữ, hero vẫn cao hơn dải trống -> phải cuộn mà
+ * không có dấu hiệu gì, nhìn như bị cắt. Ẩn hẳn bảng metrics: nó là thông tin
+ * bổ trợ, còn eyebrow + headline + sub mới là phần phải thấy ngay. */
+@media (min-width: 721px) and (max-height: 520px) {
+  .atom-metrics { display: none; }
+  .atom-sub { margin-bottom: 0; }
+}
+
 @media (max-width: 720px) {
   .atom-landing-frame { padding: 8px; }
   .atom-landing { position: relative; min-height: 100%; border-radius: 20px; overflow-y: auto; }
   .atom-nav { padding: 18px 20px; }
-  .atom-hero { position: relative; left: 0; top: 0; transform: none; width: auto; padding: 96px 22px 24px; }
+  /* Về lại luồng dọc bình thường: bỏ mọi ràng buộc của hộp kẹp ở desktop.
+   * padding-bottom chừa đúng dải đáy cho bong bóng trợ lý (trái), hint và CTA
+   * (phải) — trước đây 24px nên dòng "TỔNG QUAN NHANH VỀ KING" chui xuống dưới
+   * bong bóng. */
+  .atom-hero {
+    position: relative;
+    left: 0; top: 0; bottom: auto;
+    transform: none;
+    display: block;
+    width: auto;
+    overflow: visible;
+    padding: 96px 22px 112px;
+  }
+  .atom-hero > :first-child { margin-top: 0; }
+  .atom-hero > :last-child { margin-bottom: 0; }
   .atom-headline { font-size: clamp(28px, 8vw, 38px); }
   .atom-sub { max-width: none; }
-  .atom-canvas { position: fixed; inset: auto 0 0 0; height: 56svh; top: auto; }
-  .atom-vignette { position: fixed; top: auto; bottom: 0; height: 56svh; }
+  /* Canvas phải `fixed` để không trôi khi card cuộn, nhưng `inset: auto 0 0 0`
+   * khiến nó tràn ra ngoài khung trắng 8px và phá bo góc 20px của card
+   * (overflow:hidden của card không cắt được con `fixed`). Bám đúng mép trong
+   * của khung và tự bo góc đáy để nằm gọn trong card. */
+  .atom-canvas,
+  .atom-vignette {
+    position: fixed;
+    top: auto;
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    /* KHÔNG dùng `width: auto`: <canvas> là replaced element nên auto rơi về
+     * kích thước nội tại (thuộc tính width do renderer đặt, tính bằng pixel
+     * thiết bị) chứ không theo cặp left/right -> canvas phình ra ngoài màn
+     * hình. Phải ghi width tường minh; với position:fixed thì % tính theo
+     * viewport, khớp đúng bề ngang card sau khi trừ padding 8px mỗi bên. */
+    width: calc(100% - 16px);
+    height: 56svh;
+    border-radius: 0 0 20px 20px;
+  }
   .atom-metrics { grid-template-columns: 1fr 1fr; gap: 10px 18px; }
-  .atom-hint { bottom: 14px; }
+  /* Hint lên trên hàng CTA thay vì nằm cùng đáy — ở 375px nó xuống 2 dòng và
+   * chui xuống dưới nút trắng "Mở trợ lý". */
+  .atom-hint { bottom: 68px; max-width: calc(100% - 40px); text-align: center; }
   .atom-cta { right: 20px; bottom: 18px; padding: 10px 20px; font-size: 13px; }
+}
+
+/* Điện thoại nằm ngang: card quá thấp để chứa cả hero lẫn dải đáy, ẩn hint cho
+ * đỡ chật (thao tác kéo/cuộn vẫn hoạt động, chỉ là không nhắc). */
+@media (max-width: 720px) and (max-height: 520px) {
+  .atom-hint { display: none; }
+  .atom-hero { padding-top: 76px; padding-bottom: 88px; }
+  .atom-canvas,
+  .atom-vignette { height: 62svh; }
 }
 
 @media (prefers-reduced-motion: reduce) {
