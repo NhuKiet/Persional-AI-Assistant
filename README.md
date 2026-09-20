@@ -4,232 +4,423 @@
   <img src="frontend/src/assets/mainlogo.png" alt="KiNg logo" width="120" />
 </p>
 
-KiNg là hệ thống trợ lý AI cá nhân cao cấp chạy trên trình duyệt web, kết hợp giữa trò chuyện đa dạng ngữ cảnh, nghiên cứu chuyên sâu đa nguồn (Deep Research), sinh và thực thi mã Python tự động trong sandbox, cùng trợ lý phân tích tài liệu PDF thông minh. Ứng dụng hỗ trợ cả LLM local chạy qua Ollama và các API provider hàng đầu như Anthropic Claude hoặc OpenAI.
+<p align="center">
+  <em>Một trợ lý AI cá nhân chạy trên trình duyệt: trò chuyện, nghiên cứu sâu đa nguồn,
+  sinh &amp; chạy code Python trong sandbox, đọc PDF, và điểm tin AI hằng ngày —
+  tất cả trong một lõi xử lý duy nhất.</em>
+</p>
 
-> Dự án hiện hướng tới môi trường cá nhân hoặc phát triển nội bộ. API chưa tích hợp lớp authentication hay rate-limiting đa người dùng; không nên public trực tiếp lên Internet nếu chưa bổ sung các lớp bảo vệ phù hợp.
+<p align="center">
+  <img src="https://img.shields.io/badge/python-3.11+-blue" alt="Python 3.11+" />
+  <img src="https://img.shields.io/badge/node-20+-green" alt="Node 20+" />
+  <img src="https://img.shields.io/badge/react-18-61dafb" alt="React 18" />
+  <img src="https://img.shields.io/badge/FastAPI-SSE-009688" alt="FastAPI" />
+</p>
 
----
+KiNg chạy được với **LLM local qua Ollama** hoặc **API provider** (Anthropic Claude,
+OpenAI / endpoint OpenAI-compatible), đổi model ngay trên giao diện mà không cần khởi
+động lại. Mọi phản hồi dài đều stream về client theo thời gian thực bằng
+Server-Sent Events.
 
-## 🌟 Tính năng nổi bật
-
-### 1. Giao diện Pearl Aurora Canvas & Liquid Glass
-- **Hệ thống thiết kế Pearl Aurora**: Tone màu pastel ngọc trai sang trọng, chuyển đổi linh hoạt giữa giao diện Light (mặc định) và Dark mode.
-- **Thành phần Liquid Glass Composer**: Thanh nhập liệu bo tròn hiệu ứng thủy tinh mờ (glassmorphism), với viền vi mô (micro-border), vùng phản chiếu ánh sáng tự nhiên và nút gửi dạng hạt ngọc động (liquid bead button).
-- **Phản hồi linh hoạt**: Đáp ứng liền mạch từ màn hình Desktop siêu rộng, Laptop cho đến thiết bị di động Narrow/Mobile.
-
-### 2. Trợ lý Trò chuyện & Chế độ Chuyên biệt (`/chat`, `/tool/*`)
-- Stream phản hồi theo thời gian thực sử dụng **Server-Sent Events (SSE)**.
-- Đổi model và provider linh hoạt ngay trên thanh điều khiển (Model Picker hỗ trợ Ollama, Anthropic Claude, OpenAI / OpenAI-compatible).
-- **Chế độ chuyên biệt**: Gia sư bài tập (`/tool/homework`), Trợ lý viết văn nghị luận (`/tool/essay`), và Soạn thảo email chuyên nghiệp (`/tool/email`) với System Prompt tối ưu hóa cho từng mục đích.
-- Quản lý lịch sử hội thoại backend trên **Supabase (Postgres)** với cơ chế tự dọn dẹp các phiên làm việc cũ.
-
-### 3. Deep Research Agent (`/research`)
-- **Tìm kiếm song song 7 nguồn**: Tavily Web Search, DuckDuckGo, arXiv (khoa học), Semantic Scholar, Hugging Face Papers, Stack Overflow và bước Tổng hợp (Synthesizing).
-- **Cổng đánh giá kiến thức 3 tầng (Knowledge Gate)**: Phân loại mức độ đầy đủ của tri thức thành `EMPTY`, `STALE`, `THIN`, hoặc `MAYBE` trước khi quyết định tìm kiếm thêm hay trả lời trực tiếp.
-- **Rerank & Deduplicate**: Sử dụng model rerank local `BAAI/bge-reranker-v2-m3` (hoặc adapter Cohere) để lọc trùng lập và sắp xếp kết quả theo độ tin cậy.
-- **Deep Dive & Suggesstions**: Cho phép hỏi sâu từng nguồn cụ thể và đề xuất câu hỏi tiếp theo dựa trên bối cảnh.
-- **Knowledge Store (Tùy chọn)**: Lưu trữ và truy vấn hybrid vector search trên **Weaviate Cloud** kết hợp OpenAI Embeddings.
-
-### 4. Coding Agent Sandbox (`/coding`)
-- **Vòng lặp tự động `Plan → Code → Execute → Debug`**: Sinh kế hoạch, tạo code Python multi-file, thực thi và tự động sửa lỗi lên đến `MAX_DEBUG_ITER` vòng.
-- **Quản lý Tập tin & Artifacts**: Hỗ trợ tải lên file CSV, JSON, JSONL, Excel, Parquet, TXT, TSV, XML để làm phân tích dữ liệu và thu thập kết quả đồ họa (PNG, JPG, SVG, HTML) dạng Artifact.
-- **Bảo mật tuyệt đối qua Docker Executor**: Thực thi code Python trong container Docker cô lập hoàn toàn (`--network none`, root filesystem read-only, rào cản CPU/RAM/PID).
-
-### 5. Trợ lý Phân tích PDF (`/pdf`)
-- **Môi trường làm việc chia đôi (Split-Screen Workspace)**: Tùy chỉnh tỷ lệ giữa tài liệu và bảng hỏi đáp, tương thích thông minh theo độ phân giải màn hình (Desktop split view, Laptop drawer, Narrow overlay).
-- **Trích xuất & Tìm kiếm nội dung**: Đọc PDF bằng PyMuPDF, tìm kiếm từ khóa trực tiếp trên bản vẽ với highlight tự động qua PDF.js / react-pdf.
-- **Khoanh vùng & Ghim ngữ cảnh (Pinning)**: Cho phép bôi đen đoạn văn bản hoặc khoanh vùng ảnh chụp trên tài liệu để dịch, giải thích hoặc thảo luận trực tiếp với model Vision.
+> [!WARNING]
+> Dự án hướng tới môi trường **cá nhân / phát triển nội bộ**. API chưa có lớp
+> authentication, phân quyền hay rate-limiting đa người dùng. Đừng expose thẳng ra
+> Internet nếu chưa bổ sung các lớp bảo vệ đó.
 
 ---
 
-## 🛠️ Công nghệ sử dụng
+## Mục lục
 
-| Thành phần | Công nghệ / Thư viện |
+- [Tính năng](#-tính-năng)
+- [Kiến trúc](#-kiến-trúc)
+- [Công nghệ](#-công-nghệ)
+- [Yêu cầu hệ thống](#-yêu-cầu-hệ-thống)
+- [Cài đặt & chạy local](#-cài-đặt--chạy-local)
+- [Chạy bằng Docker Compose](#-chạy-bằng-docker-compose)
+- [Sandbox thực thi code](#-sandbox-thực-thi-code)
+- [Cấu hình (.env)](#️-cấu-hình-env)
+- [API](#-api)
+- [Kiểm thử & CI](#-kiểm-thử--ci)
+- [Cấu trúc dự án](#-cấu-trúc-dự-án)
+- [Giấy phép](#-giấy-phép)
+
+---
+
+## ✨ Tính năng
+
+### Trang chủ — "Capability Reactor" (`/`)
+
+Landing một màn hình: lõi phản ứng 3D dựng bằng **Three.js** (kéo để xoay, cuộn để
+phóng) đặt trong một card rêu ô liu bo góc, cùng hero giới thiệu và một CTA duy nhất
+dẫn vào trợ lý. Canvas tự nhận diện máy yếu để hạ cấu hình, và có fallback tĩnh nếu
+WebGL không khởi tạo được.
+
+### Trò chuyện (`/chat`)
+
+- Stream phản hồi theo thời gian thực qua **SSE**.
+- **Model Picker** đổi provider/model ngay trên thanh điều khiển (Ollama · Anthropic ·
+  OpenAI / OpenAI-compatible).
+- Render Markdown, code block có tô màu cú pháp và nút copy.
+- Lịch sử hội thoại lưu trên **Supabase (Postgres)**, khôi phục được theo `session_id`;
+  danh sách phiên hiển thị ở sidebar.
+- Dock công cụ để nhảy sang các chế độ chuyên biệt.
+
+### Nghiên cứu sâu (`/research`)
+
+- **Tìm song song nhiều nguồn**: Tavily Web, DuckDuckGo, arXiv, Semantic Scholar,
+  Hugging Face Papers, Stack Overflow — rồi tới bước tổng hợp.
+- **Knowledge Gate**: phân loại độ đầy đủ của tri thức sẵn có (`EMPTY` / `STALE` /
+  `THIN` / `MAYBE`) để quyết định tìm thêm hay trả lời luôn, tránh tốn lượt tìm kiếm.
+- **Rerank & khử trùng lặp** bằng `BAAI/bge-reranker-v2-m3` chạy local (hoặc Cohere
+  Rerank nếu có key).
+- **Grounding & trích dẫn**: câu trả lời gắn nguồn, kèm bước kiểm tra trích dẫn.
+- **Deep dive** từng nguồn và gợi ý câu hỏi tiếp theo theo ngữ cảnh.
+- **Knowledge store (tuỳ chọn)**: hybrid vector search trên **Weaviate Cloud** +
+  OpenAI Embeddings để tái sử dụng tri thức đã thu thập.
+
+### Coding Agent (`/coding`)
+
+- Vòng lặp tự động **Plan → Code → Execute → Debug**, tự sửa lỗi tối đa
+  `MAX_DEBUG_ITER` vòng.
+- Sinh project Python nhiều file; upload dữ liệu (CSV, JSON, JSONL, Excel, Parquet,
+  TXT, TSV, XML) để phân tích.
+- Thu **artifact** do code sinh ra (PNG, JPG, SVG, HTML) và hiển thị ngay trong app.
+- Mọi lần chạy đều diễn ra trong **container Docker dùng một lần** — xem
+  [Sandbox thực thi code](#-sandbox-thực-thi-code).
+
+### Trợ lý PDF (`/pdf`)
+
+- **Workspace chia đôi** tài liệu / hỏi đáp, kéo chỉnh tỉ lệ; tự đổi bố cục theo khổ
+  màn hình (split ở desktop, drawer ở laptop, overlay ở màn hẹp).
+- Trích xuất nội dung bằng **PyMuPDF**, render bằng **react-pdf / PDF.js**, có outline
+  và tìm kiếm highlight trong trang.
+- **Ghim ngữ cảnh**: bôi đen đoạn text hoặc khoanh vùng ảnh trên trang để hỏi riêng về
+  phần đó (vùng ảnh đi qua model vision).
+- Tóm tắt nhanh toàn tài liệu bằng một nút.
+
+### Điểm tin AI (`/news`)
+
+- Tổng hợp định kỳ từ các **RSS đã tuyển chọn**: OpenAI, Google DeepMind, Hugging
+  Face, arXiv cs.AI & cs.RO, IEEE Spectrum Robotics, Hacker News.
+- LLM tóm tắt từng tin, phân nhóm theo chủ đề (model release · research · robotics ·
+  community).
+- Refresh theo lịch **single-flight**: tick tự động và refresh thủ công trùng thời
+  điểm sẽ dùng chung một lần chạy pipeline thay vì mỗi bên chạy (và trả phí) riêng.
+
+### Bong bóng "Trợ lý nhanh"
+
+Bong bóng chat nổi ở mọi trang, bridge sang một dự án **ai-agent (Telegram bot)** chạy
+riêng qua `BRIDGE_URL` / `BRIDGE_TOKEN`. Tách biệt hoàn toàn với chat chính của KiNg.
+
+---
+
+## 🏛 Kiến trúc
+
+```text
+Trình duyệt (React 18 + Vite)
+        │  fetch + Server-Sent Events
+        ▼
+FastAPI (Uvicorn)  ──►  LLM: Ollama | Anthropic | OpenAI-compatible
+        │
+        ├─► Supabase Postgres   (lịch sử phiên & tin nhắn)
+        ├─► Weaviate Cloud      (knowledge store — tuỳ chọn)
+        ├─► Search APIs         (Tavily · DuckDuckGo · arXiv · S2 · HF · SO)
+        └─► Docker Executor     (container dùng một lần, chạy code sinh ra)
+```
+
+Backend cắt theo **feature slice**: mỗi tính năng là một thư mục riêng trong
+`backend/app/features/` với router + service + schema của chính nó, dùng chung phần
+`core/` (config, LLM factory, lifespan, capabilities) và `shared/` (conversation store,
+session lock, SSE encoder). Có test canh **ranh giới giữa các feature** để chúng không
+import chéo lung tung.
+
+Frontend là **React Router v6 SPA**, mỗi tính năng một route. Landing và trang chat
+được nạp sẵn (eager) vì là điểm vào chính; các trang nặng — nhất là PDF, kéo theo
+react-pdf + pdfjs worker — được **lazy-load** theo route. Mỗi route bọc trong
+`ErrorBoundary` riêng nên một trang lỗi không kéo sập cả router.
+
+**Hệ thống thiết kế** là CSS thuần dựa trên design token, hai theme:
+
+- **Warm Paper** (sáng, mặc định) — nền giấy ấm, accent đất nung.
+- **Mực tối** — nền mực, accent vàng đồng.
+
+Toàn bộ icon là **SVG nội tuyến đơn sắc** vẽ bằng `currentColor` (không dùng thư viện
+icon, không dùng emoji) để màu luôn bám theo token của theme.
+
+---
+
+## 🧰 Công nghệ
+
+| Mảng | Công nghệ |
 |---|---|
-| **Frontend** | React 18, TypeScript, Vite, React Router v6, react-pdf, Lucide / Custom Icons |
-| **Styling** | Vanilla CSS Design Tokens, Glassmorphism, Pearl Aurora Theme System |
-| **Backend** | Python 3.11+, FastAPI, Uvicorn, Pydantic Settings, Asyncio |
-| **Streaming** | Server-Sent Events (SSE) via `starlette.responses.StreamingResponse` |
-| **Storage** | Supabase (Postgres) via `psycopg` connection pool, Browser `localStorage` |
-| **LLM & Agent Framework** | LangChain, LangGraph, Ollama SDK, Anthropic API, OpenAI API |
-| **Research Search** | Tavily API, DuckDuckGo (ddgs), arXiv, Semantic Scholar, HuggingFace, Stack Overflow |
-| **Retrieval & Rerank** | BAAI BGE Reranker v2 M3, Cohere Rerank, Weaviate Hybrid Vector Store |
-| **PDF Processing** | PyMuPDF (fitz), PDF.js / react-pdf |
-| **Testing** | Backend: `pytest` (386+ tests) \| Frontend: `vitest` + React Testing Library (182+ tests) |
-| **Container & Isolation** | Docker Engine, Docker Compose, Docker Sandbox Executor |
+| **Frontend** | React 18 · TypeScript · Vite 5 · React Router v6 · Three.js · react-pdf |
+| **Styling** | CSS thuần + design token, hai theme, SVG nội tuyến |
+| **Backend** | Python 3.11+ · FastAPI · Uvicorn · Pydantic Settings · asyncio |
+| **Streaming** | Server-Sent Events qua `StreamingResponse` |
+| **LLM** | Ollama · Anthropic · OpenAI / OpenAI-compatible · LangChain / LangGraph |
+| **Lưu trữ** | Supabase (Postgres) qua `psycopg` pool · `localStorage` phía client |
+| **Tìm kiếm** | Tavily · DuckDuckGo (ddgs) · arXiv · Semantic Scholar · Hugging Face · Stack Overflow |
+| **Retrieval** | BGE Reranker v2 M3 · Cohere Rerank · Weaviate hybrid search · OpenAI Embeddings |
+| **PDF** | PyMuPDF (fitz) phía server · PDF.js / react-pdf phía client |
+| **Sandbox** | Docker Engine — container dùng một lần, không mạng |
+| **Kiểm thử** | pytest (backend) · Vitest + React Testing Library (frontend) |
 
 ---
 
 ## 📋 Yêu cầu hệ thống
 
-- **Python**: `>= 3.11`
-- **Node.js**: `>= 20.x` & `npm`
-- **uv**: Trình quản lý gói và môi trường Python siêu tốc (khuyên dùng)
-- **Ollama**: Nền tảng chạy LLM local (nếu dùng các model như `llama3`, `qwen2.5-coder`, ...)
-- **Docker Engine / Desktop**: Cần thiết nếu chạy toàn bộ app bằng Docker Compose hoặc sử dụng Docker Coding Sandbox.
+| | Bắt buộc | Ghi chú |
+|---|---|---|
+| **Python** | ✅ `>= 3.11` | |
+| **Node.js** | ✅ `>= 20` + npm | |
+| **Docker** | ✅ | Bắt buộc cho Coding Agent — `EXECUTOR_MODE=docker` là giá trị duy nhất được chấp nhận |
+| **uv** | khuyên dùng | Trình quản lý môi trường/gói Python |
+| **Ollama** | tuỳ chọn | Chỉ cần khi chạy LLM local |
+| **GPU NVIDIA** | tuỳ chọn | Tăng tốc BGE reranker; không có thì torch tự rơi về CPU |
 
 ---
 
-## 🚀 Hướng dẫn Cài đặt & Chạy Local
+## 🚀 Cài đặt & chạy local
 
-### 1. Clone Repository
+### 1. Clone
 
 ```bash
 git clone https://github.com/NhuKiet/Persional-AI-Assistant.git
-cd Persional-AI-Assistant
 ```
 
-### 2. Cài đặt Python Dependencies (sử dụng `uv`)
+### 2. Cài dependency Python
 
 ```bash
 uv sync --dev
 ```
-*Lệnh này sẽ tự động khởi tạo môi trường `.venv` và cài đặt đầy đủ các gói cần thiết từ `uv.lock`.*
 
-### 3. Cấu hình Môi trường `.env`
+Lệnh này tự tạo `.venv` và cài đúng phiên bản đã khoá trong `uv.lock`.
 
-Tạo file `.env` từ file mẫu:
+### 3. Tạo file `.env`
 
 ```bash
-# Windows PowerShell
-Copy-Item .env.example .env
-
-# macOS / Linux
 cp .env.example .env
 ```
 
-Các biến môi trường cơ bản để chạy local với Ollama:
+Trên Windows PowerShell:
+
+```bash
+Copy-Item .env.example .env
+```
+
+Cấu hình tối thiểu để chạy với Ollama — xem [Cấu hình (.env)](#️-cấu-hình-env) cho
+danh sách đầy đủ:
+
 ```env
 DEFAULT_PROVIDER=ollama
 OLLAMA_URL=http://localhost:11434
 OLLAMA_MODEL=llama3
 ```
 
-Các API key nâng cao (tùy chọn):
-- `ANTHROPIC_API_KEY`: Gọi các model Claude (Claude 3.5 Sonnet, Claude 3 Opus).
-- `OPENAI_API_KEY`: Gọi OpenAI GPT-4o và sinh Embeddings cho Knowledge Store.
-- `TAVILY_API_KEY`: Phụ trách nguồn tìm kiếm Web nâng cao cho Research.
-- `WEAVIATE_URL` & `WEAVIATE_API_KEY`: Cấu hình vector database Weaviate Cloud.
-- `SUPABASE_DB_URL`: Chuỗi kết nối PostgreSQL Supabase cho quản lý lịch sử phiên chat.
-
-### 4. Chuẩn bị Ollama (Nếu dùng Local LLM)
+### 4. Chuẩn bị model local (nếu dùng Ollama)
 
 ```bash
 ollama pull llama3
-ollama serve
 ```
 
-### 5. Khởi chạy Backend
-
-Từ thư mục gốc dự án:
+### 5. Chạy backend
 
 ```bash
 uv run uvicorn main:app --reload --port 8000
 ```
-- Endpoint API Backend: `http://localhost:8000`
-- Tài liệu API (Swagger UI): `http://localhost:8000/docs`
+
+- API: `http://localhost:8000`
+- Swagger UI: `http://localhost:8000/docs`
 - Health check: `http://localhost:8000/health`
 
-### 6. Khởi chạy Frontend
+### 6. Chạy frontend
 
-Mở một Terminal khác:
+Mở terminal thứ hai:
 
 ```bash
-cd frontend
-npm ci
-npm run dev
+npm ci --prefix frontend
 ```
-- Giao diện ứng dụng sẽ chạy tại: **`http://localhost:5173`** (hoặc port động như 5174/3000 - Backend CORS tự động chấp nhận các port `localhost` / `127.0.0.1`).
+
+```bash
+npm run dev --prefix frontend
+```
+
+Giao diện chạy ở `http://localhost:5173`. Backend tự chấp nhận CORS từ mọi cổng
+`localhost` / `127.0.0.1` nên đổi port cũng không sao.
 
 ---
 
-## 🐳 Khởi chạy bằng Docker Compose
-
-Để đóng gói và chạy toàn bộ dịch vụ (Frontend + Backend):
+## 🐳 Chạy bằng Docker Compose
 
 ```bash
 docker compose up --build
 ```
 
-Nguồn tài nguyên container:
-- **Frontend (nginx)**: `http://localhost:5173`
-- **Backend (FastAPI)**: `http://localhost:8000`
+- Frontend (nginx): `http://localhost:5173`
+- Backend (FastAPI): `http://localhost:8000`
+
+Vài điểm compose đã xử lý sẵn:
+
+- **Ollama và Supabase chạy trên máy host**, không phải trong container — compose trỏ
+  qua `host.docker.internal`. Nhớ điền `SUPABASE_DB_URL_DOCKER` (cùng connection string
+  nhưng đổi host) vì container không resolve được `127.0.0.1` về máy host.
+- **Cache model HuggingFace** được gắn volume riêng. Thiếu volume này thì sau mỗi lần
+  rebuild, câu hỏi research **đầu tiên** sẽ treo hàng phút để tải lại reranker (~2GB).
+- **GPU NVIDIA** của host được khai báo sẵn cho backend; không có GPU/driver thì torch
+  tự chuyển sang CPU chứ không lỗi.
 
 ---
 
-## 🔒 Bảo mật Coding Executor (Docker Sandbox)
+## 🔒 Sandbox thực thi code
 
-Mã Python do LLM tạo ra là nguồn không tin cậy. KiNg áp dụng cơ chế cô lập nghiêm ngặt `EXECUTOR_MODE=docker`:
+Code Python do LLM sinh ra là **đầu vào không tin cậy**, nên KiNg chỉ chạy nó trong
+Docker — `EXECUTOR_MODE` không nhận giá trị nào khác, sai là Settings từ chối ngay lúc
+khởi động.
 
-1. Build image sandbox executor:
-   ```bash
-   docker build -f Dockerfile.executor -t king-executor:latest .
-   ```
-2. Cấu hình `.env`:
-   ```env
-   EXECUTOR_MODE=docker
-   EXECUTOR_IMAGE=king-executor:latest
-   EXECUTOR_MEMORY=512m
-   EXECUTOR_CPUS=1.0
-   EXECUTOR_PIDS=128
-   ```
-*Mỗi lần chạy code sẽ khởi tạo một container tạm thời chỉ tồn tại trong thời gian thực thi, bị ngắt mạng hoàn toàn (`--network none`), đọc hệ thống file dạng Read-Only ngoại trừ `/tmp`, và thả bỏ mọi đặc quyền Linux Capabilities.*
+Build image executor một lần:
+
+```bash
+docker build -f Dockerfile.executor -t king-executor:latest .
+```
+
+Rồi cấu hình trong `.env`:
+
+```env
+EXECUTOR_MODE=docker
+EXECUTOR_IMAGE=king-executor:latest
+EXECUTOR_MEMORY=512m
+EXECUTOR_CPUS=1.0
+EXECUTOR_PIDS=128
+```
+
+Mỗi lần chạy sinh một container tạm, sống đúng trong thời gian thực thi, với:
+
+| Lớp cô lập | Thiết lập |
+|---|---|
+| Mạng | `--network none` — cắt hoàn toàn |
+| Filesystem | read-only, trừ `/tmp` |
+| Bộ nhớ / CPU / tiến trình | giới hạn theo `EXECUTOR_MEMORY` · `EXECUTOR_CPUS` · `EXECUTOR_PIDS` |
+| Đặc quyền | drop toàn bộ Linux capabilities |
+| Thời gian | cắt theo `CODE_TIMEOUT` |
+
+> [!CAUTION]
+> `ENABLE_AUTO_INSTALL=true` cho phép code sinh ra tự `pip install`. Chỉ bật khi
+> executor đang chạy ở chế độ Docker.
 
 ---
 
-## 🧪 Kiểm thử & Đảm bảo Chất lượng (Testing)
+## ⚙️ Cấu hình (.env)
 
-Dự án sở hữu bộ test tự động toàn diện được tích hợp với GitHub Actions CI:
+`.env.example` là nguồn tham chiếu đầy đủ, có chú thích từng biến. Tóm tắt theo nhóm:
 
-### Kiểm thử Backend (Pytest)
+| Nhóm | Biến tiêu biểu |
+|---|---|
+| **LLM** | `DEFAULT_PROVIDER` · `DEFAULT_MODEL` · `OLLAMA_URL` · `OLLAMA_MODEL` · `LLM_NUM_GPU` · `LLM_TIMEOUT` |
+| **API key** | `ANTHROPIC_API_KEY` · `OPENAI_API_KEY` · `OPENAI_BASE_URL` |
+| **Tìm kiếm** | `TAVILY_API_KEY` (cần cho web search) · `S2_API_KEY` (tuỳ chọn, nới rate limit) |
+| **Knowledge store** | `WEAVIATE_URL` · `WEAVIATE_API_KEY` · `OPENAI_EMBEDDING_MODEL` · `KNOWLEDGE_*` |
+| **Rerank** | `RERANKER_MODEL` · `RERANK_ENABLED` · `RERANK_GATE_THRESHOLD` · `COHERE_API_KEY` |
+| **Lưu trữ** | `SUPABASE_DB_URL` · `SUPABASE_DB_URL_DOCKER` |
+| **Coding** | `CODE_TIMEOUT` · `MAX_DEBUG_ITER` · `ENABLE_AUTO_INSTALL` · `EXECUTOR_*` |
+| **Giới hạn** | `MAX_MESSAGE_CHARS` · `MAX_UPLOAD_MB` · `MAX_HISTORY` |
+| **PDF** | `PDF_MAX_CONTEXT` · `PDF_CHUNK_SIZE` · `PDF_CHUNK_OVERLAP` |
+| **Bubble** | `BRIDGE_URL` · `BRIDGE_TOKEN` |
+
+DuckDuckGo và Stack Overflow không cần API key.
+
+---
+
+## 🔌 API
+
+Tất cả endpoint nằm dưới `/api`. Các endpoint `*/stream` trả về **SSE**, phần còn lại
+trả JSON. Chi tiết schema xem Swagger UI tại `/docs`.
+
+| Nhóm | Endpoint |
+|---|---|
+| **Chat** | `POST /api/chat/stream` · `GET /api/chat/sessions/{id}` · `DELETE /api/chat/session/{id}` |
+| **Research** | `POST /api/research/stream` · `POST /api/research/deep-dive` · `GET /api/research/trending` · `GET /api/research/sessions/{id}` |
+| **Coding** | `POST /api/coding/stream` · `POST /api/coding/upload` · `GET /api/coding/artifact/{...}` · `DELETE /api/coding/file/{name}` · `GET /api/coding/sessions/{id}` |
+| **PDF** | `POST /api/pdf/upload` · `GET /api/pdf/list` · `GET /api/pdf/raw/{name}` · `POST /api/pdf/stream` · `POST /api/pdf/summarize` · `DELETE /api/pdf/file/{name}` |
+| **News** | `GET /api/news` · `POST /api/news/refresh` |
+| **Models** | `GET /api/models` |
+| **Bubble** | `POST /api/bubble/chat` · `POST /api/bubble/reset` |
+| **Health** | `GET /health` |
+
+---
+
+## 🧪 Kiểm thử & CI
+
+### Backend — pytest
+
 ```bash
 uv run pytest
 ```
-*Bao gồm 386+ test cases kiểm tra hợp đồng API (API Contracts), luồng RAG, công cụ Research, PDF Context, Supabase Session Store và Security Gate.*
 
-### Kiểm thử Frontend (Vitest & TypeCheck)
+Khoảng 590 test trên 65 file, phủ: hợp đồng API, luồng research (gate, grounding,
+trích dẫn, iteration), coding service & Docker executor, PDF context, news
+fetcher/scheduler, session store trên Supabase, capability registry, và cả ranh giới
+import giữa các feature.
+
+### Frontend — Vitest + typecheck
+
 ```bash
-cd frontend
-npm run typecheck
-npm run test
+npm run typecheck --prefix frontend
 ```
-*Bao gồm 182+ unit/integration tests trên 27 test files đảm bảo tính ổn định của các Component, Hook, Layout PDF, Theme System và Route contracts.*
+
+```bash
+npm run test --prefix frontend
+```
+
+269 test trên 39 file, phủ: component, hook, bố cục PDF, hệ theme, và hợp đồng route
+(đi qua `<App />` thật, chỉ khẳng định những gì người dùng nhìn thấy — nhờ vậy test
+sống sót qua refactor).
+
+### CI
+
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) chạy trên mọi push và pull
+request: backend `pytest`; frontend `typecheck` → `test` → `build`.
 
 ---
 
-## 📂 Cấu trúc Dự án
+## 📂 Cấu trúc dự án
 
 ```text
 Persional-AI-Assistant/
-├── main.py                        # Entrypoint re-export app FastAPI cho Uvicorn
+├── main.py                     # Entrypoint re-export app FastAPI cho Uvicorn
 ├── backend/app/
-│   ├── main.py                    # Cấu hình FastAPI app, middleware CORS, Routers
-│   ├── core/                      # Config settings, LLM Factory, Lifespan lifecycle
-│   ├── shared/                    # Supabase session store, Session locks, SSE encoders
-│   └── features/
-│       ├── chat/                  # Service, Router & Prompts cho Chat tổng quát
-│       ├── research/              # Agent, Searchers (7 sources), Reranker, Knowledge Store
-│       ├── coding/                # Coding agent, Docker executor, Artifact collector
-│       ├── pdf/                   # PDF text extractor, Context ranker, Split workspace
-│       └── models/                # Registry danh sách các Provider & Model
+│   ├── main.py                 # Khởi tạo FastAPI, CORS, đăng ký router
+│   ├── core/                   # config · llm factory · lifespan · capabilities
+│   ├── shared/                 # conversation store · session lock · SSE · files
+│   └── features/               # mỗi tính năng một slice: router + service + schema
+│       ├── chat/               #   chat tổng quát + prompt theo từng chế độ
+│       ├── research/           #   agent, searcher đa nguồn, rerank, knowledge store
+│       ├── coding/             #   agent plan→code→run→debug, docker executor, artifact
+│       ├── pdf/                #   trích xuất, xếp hạng ngữ cảnh, hỏi đáp tài liệu
+│       ├── news/               #   RSS fetcher, summarizer, scheduler, store
+│       ├── models/             #   registry provider & model
+│       └── assistant_bubble/   #   bridge sang ai-agent bên ngoài
 ├── frontend/
-│   ├── src/
-│   │   ├── pages/                 # HomePage, ChatPage, ResearchPage, CodingPage, PdfPage, ToolPage
-│   │   ├── components/            # Design system, Composer, Sidebar, ModelPicker, PDF controls
-│   │   ├── hooks/                 # Custom React hooks (usePdfLayout, useTheme, useResearch, ...)
-│   │   ├── styles/                # Hand-written CSS, Pearl Aurora design tokens, glass effects
-│   │   └── test/                  # Vitest suite & Contract test files
-│   └── vite.config.ts
-├── tests/                         # Backend Pytest suite
-├── Dockerfile                     # Dockerfile cho Backend
-├── Dockerfile.executor            # Dockerfile cho Coding Sandbox Executor
-├── docker-compose.yml             # Docker Compose orchestration
-├── pyproject.toml                 # Cấu hình dự án & dependencies Python
-└── uv.lock                        # Lockfile chuẩn hóa bởi uv
+│   └── src/
+│       ├── pages/              # Landing · Home · Research · Coding · Pdf · News · Tool
+│       ├── components/         # dock, sidebar, composer, model picker, markdown, pdf, ...
+│       ├── hooks/              # useChat · useResearch · useCoding · useTheme · ...
+│       ├── three/              # lõi phản ứng 3D của trang chủ
+│       ├── config/             # registry tool, token theme, hiển thị event
+│       ├── styles/             # CSS thuần + design token
+│       └── test/               # Vitest suite
+├── tests/                      # pytest suite của backend
+├── supabase/                   # migration cho session store
+├── data/                       # dữ liệu runtime (pdf đã upload, sandbox)
+├── Dockerfile                  # image backend
+├── Dockerfile.executor         # image sandbox chạy code
+├── docker-compose.yml
+├── pyproject.toml · uv.lock    # dependency Python
+└── .env.example                # tham chiếu cấu hình đầy đủ
 ```
 
 ---
 
-## 📄 Giấy phép & Đóng góp
+## 📄 Giấy phép
 
-Dự án được duy trì bởi **Nhukiet**. Mọi đóng góp, báo lỗi hoặc yêu cầu tính năng mới đều được hoan nghênh qua GitHub Issues và Pull Requests!
+Dự án được duy trì bởi **Nhukiet**. Mọi đóng góp, báo lỗi và đề xuất tính năng đều
+được hoan nghênh qua GitHub Issues / Pull Requests.
