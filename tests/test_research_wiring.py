@@ -7,6 +7,7 @@ import backend.app.features.research.agent as ra_mod
 import backend.app.features.research.router as research_router
 import backend.app.shared.conversation_store as conv_mod
 from tests.fake_session_store import FakeSessionStore
+from tests.fake_synth import StreamingSynthFake
 
 
 def test_run_streaming_done_includes_grounding_keys(monkeypatch):
@@ -27,7 +28,7 @@ def test_run_streaming_done_includes_grounding_keys(monkeypatch):
     agent = ra.ResearchAgent.__new__(ra.ResearchAgent)  # tránh __init__ nặng
     agent._pool = ThreadPoolExecutor(max_workers=2)
 
-    class _Synth:
+    class _Synth(StreamingSynthFake):
         def synthesize_grounded(self, q, s):
             o = ResearchOutput(query=q)
             o.claims = [Claim(text="c", source_ids=["x"], grounded=True)]
@@ -174,7 +175,7 @@ def test_run_streaming_iterates_once_when_first_result_weak(monkeypatch):
 
     calls = {"synth": 0, "search_rounds": 0}
 
-    class _Synth:
+    class _Synth(StreamingSynthFake):
         def synthesize_grounded(self, q, s):
             calls["synth"] += 1
             o = ResearchOutput(query=q)
@@ -222,7 +223,7 @@ def test_run_streaming_no_iteration_when_first_result_strong(monkeypatch):
     monkeypatch.setattr(cfg.settings, "RESEARCH_MAX_ITERATIONS", 1, raising=False)
     agent = ra.ResearchAgent.__new__(ra.ResearchAgent)
 
-    class _Synth:
+    class _Synth(StreamingSynthFake):
         def synthesize_grounded(self, q, s):
             o = ResearchOutput(query=q)
             o.claims = [Claim(text="c", source_ids=["x"], grounded=True) for _ in range(5)]
@@ -277,7 +278,7 @@ def test_run_streaming_stops_early_when_cancelled(monkeypatch):
     agent = ra.ResearchAgent.__new__(ra.ResearchAgent)
     synth_called = {"n": 0}
 
-    class _Synth:
+    class _Synth(StreamingSynthFake):
         def synthesize_grounded(self, q, s):
             synth_called["n"] += 1
             return ResearchOutput(query=q)
@@ -312,7 +313,7 @@ def test_run_streaming_normal_when_not_cancelled(monkeypatch):
     from backend.app.features.research.models import ResearchOutput
     agent = ra.ResearchAgent.__new__(ra.ResearchAgent)
 
-    class _Synth:
+    class _Synth(StreamingSynthFake):
         def synthesize_grounded(self, q, s):
             o = ResearchOutput(query=q); o.confidence = 0.9
             o.claims = []

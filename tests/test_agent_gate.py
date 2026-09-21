@@ -1,5 +1,6 @@
 import backend.app.features.research.agent as agent_mod
 from backend.app.features.research.models import ResearchOutput, SearchResult
+from tests.fake_synth import StreamingSynthFake
 
 
 def _sr(title="t", content="transformer attention mechanism", **extra):
@@ -34,7 +35,7 @@ def _run(monkeypatch, candidates, judge_verdict=(True, None), topup_new=None):
     monkeypatch.setattr(agent_mod, "expand_query", lambda q, **kw: [q])
     monkeypatch.setattr(agent_mod, "needs_iteration", lambda *args, **kw: False)
 
-    class _Synth:
+    class _Synth(StreamingSynthFake):
         def synthesize_rag_grounded(self, q, s): return ResearchOutput(query=q)
         def synthesize_grounded(self, q, s):     return ResearchOutput(query=q)
 
@@ -124,7 +125,7 @@ def test_kill_switch_uses_legacy_retrieve_and_reuses(monkeypatch):
                         lambda *args: judged.append(1) or (True, None), raising=False)
     monkeypatch.setattr(agent_mod, "needs_iteration", lambda *a_, **k: False)
 
-    class _Synth:
+    class _Synth(StreamingSynthFake):
         def synthesize_rag_grounded(self, q, s): return ResearchOutput(query=q)
         def synthesize_grounded(self, q, s):     return ResearchOutput(query=q)
 
@@ -167,7 +168,7 @@ def test_thin_coverage_emits_top_up_decision_without_judge(monkeypatch):
     monkeypatch.setattr(agent_mod, "expand_query", lambda q, **kw: [q])
     monkeypatch.setattr(agent_mod, "needs_iteration", lambda *args, **kw: False)
 
-    class _Synth:
+    class _Synth(StreamingSynthFake):
         def synthesize_rag_grounded(self, q, s): return ResearchOutput(query=q)
         def synthesize_grounded(self, q, s):     return ResearchOutput(query=q)
 

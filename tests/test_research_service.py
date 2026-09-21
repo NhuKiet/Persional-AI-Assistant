@@ -9,6 +9,7 @@ from backend.app.features.research.schemas import DeepDiveRequest, ResearchReque
 from backend.app.shared.conversation_store import ConversationManager
 from backend.app.shared.session_locks import SessionBusyError
 from tests.fake_session_store import FakeSessionStore
+from tests.fake_synth import StreamingSynthFake
 
 
 def test_stream_events_yields_done_with_contract_keys(monkeypatch):
@@ -256,7 +257,7 @@ def test_run_streaming_degrades_gracefully_on_search_timeout(monkeypatch):
 
     agent = ra.ResearchAgent.__new__(ra.ResearchAgent)
 
-    class _Synth:
+    class _Synth(StreamingSynthFake):
         def synthesize_grounded(self, q, sources):
             return ResearchOutput(query=q)
 
@@ -297,7 +298,7 @@ def test_run_streaming_emits_a_dedicated_synthesizing_event(monkeypatch):
 
     agent = ra.ResearchAgent.__new__(ra.ResearchAgent)
 
-    class _Synth:
+    class _Synth(StreamingSynthFake):
         def synthesize_grounded(self, q, sources):
             return ResearchOutput(query=q)
 
@@ -339,7 +340,7 @@ def test_run_streaming_threads_the_selected_provider_into_query_expansion(monkey
 
     agent = ra.ResearchAgent.__new__(ra.ResearchAgent)
 
-    class _Synth:
+    class _Synth(StreamingSynthFake):
         def __init__(self, *a, **k):
             pass
 

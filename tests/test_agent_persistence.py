@@ -1,5 +1,6 @@
 import backend.app.features.research.agent as agent_mod
 from backend.app.features.research.models import ResearchOutput, SearchResult
+from tests.fake_synth import StreamingSynthFake
 
 
 def _sr(title="t", content="transformer attention mechanism", **extra):
@@ -49,7 +50,7 @@ def _run(monkeypatch, candidates, judge_verdict=(True, None), topup_new=None):
     monkeypatch.setattr(agent_mod, "rerank_results", lambda q, r, top_k=15: r)
     monkeypatch.setattr(agent_mod, "_enrich_web_results", lambda r: r)
 
-    class _Synth:
+    class _Synth(StreamingSynthFake):
         def synthesize_rag_grounded(self, q, s): return ResearchOutput(query=q)
         def synthesize_grounded(self, q, s):     return ResearchOutput(query=q)
 
@@ -121,7 +122,7 @@ def test_iteration_sources_are_stored_exactly_once(monkeypatch):
     monkeypatch.setattr(a, "_iteration_step",
                         lambda q, s, o, sy: (s + [extra], o, [extra]), raising=False)
 
-    class _Synth:
+    class _Synth(StreamingSynthFake):
         def synthesize_rag_grounded(self, q, s): return ResearchOutput(query=q)
         def synthesize_grounded(self, q, s):     return ResearchOutput(query=q)
 

@@ -15,6 +15,7 @@ import backend.app.features.research.agent as research_agent
 import backend.app.features.research.service as research_service
 import backend.app.shared.conversation_store as conv_store
 from tests.fake_session_store import FakeSessionStore
+from tests.fake_synth import StreamingSynthFake
 
 
 PUBLIC_ROUTES = {
@@ -52,6 +53,11 @@ PUBLIC_ROUTES = {
     ("GET", "/api/pdf/sessions/{session_id}"),
     ("GET", "/api/news"),
     ("POST", "/api/news/refresh"),
+    # Bridge sang ai-agent (dự án Telegram bot riêng) — thêm ở 0c4ad6f nhưng
+    # quên khai báo ở đây, nên test này đỏ đúng như thiết kế: mọi thay đổi bề
+    # mặt API phải được ghi nhận có chủ đích, không lọt qua im lặng.
+    ("POST", "/api/bubble/chat"),
+    ("POST", "/api/bubble/reset"),
 }
 
 
@@ -229,7 +235,7 @@ def test_research_stream_serializes_knowledge_decision_event(monkeypatch, tmp_pa
         def retrieve(self, _query):
             return self.retrieve_candidates(_query)
 
-    class Synthesizer:
+    class Synthesizer(StreamingSynthFake):
         def synthesize_rag_grounded(self, query, _sources):
             return ResearchOutput(query=query)
 
