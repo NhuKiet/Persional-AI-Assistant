@@ -27,11 +27,16 @@ Project gốc còn có `main.js`, `ui/app.js` (bảng điều khiển) và
 khung (vị trí Mặt Trời), kim Mặt Trăng trên vành 28 tú, và ba ô sáng ứng với
 tiết khí / tháng kiến / tú hiện tại.
 
-Khác một điểm so với bản gốc: bản gốc khoá cả bốn vành theo vị trí Mặt Trời và
-tắt hẳn vành tự quay, vì ở chế độ lịch góc xoay mang nghĩa tuyệt đối. Ở đây chỉ
-L1 và L2 (hai vành thực sự mang dấu lịch) bị khoá, còn L0 (chòm sao) và L3 (lõi
-Bắc Đẩu) vẫn quay — trang chủ giữ được chuyển động nền mà phần tra ngày vẫn đọc
-đúng. Xem `SPINNING_LAYERS` trong index.ts.
+Khác một điểm so với bản gốc. Bản gốc ghim kim Mặt Trời CỐ ĐỊNH ở đỉnh khung
+rồi xoay cả đĩa sao cho vị trí Mặt Trời trồi lên đúng dưới nó — nên bật lịch là
+phải khoá cả bốn vành và tắt hẳn vành tự quay. Ở đây làm ngược lại: không khoá
+vành nào, gắn kim vào chính vành lịch (L1) và xoay nó đi `-plateSpin`, nên kim
+bám đúng ô tiết khí hiện tại dù vành xoay tới đâu. Đổi lại quy ước "Mặt Trời
+luôn ở đỉnh khung", nhưng cả bốn vành cùng quay.
+
+Kiểm lại được: nếu vành đang ở `spin = plateSpin` (đúng trạng thái khoá của bản
+gốc) thì tổng góc bằng 0 và kim về đỉnh khung, khớp y hệt hành vi cũ. Xem
+`SUN_INDEX_RADIUS` và `applyCalendar()` trong index.ts.
 
 Bảng đọc số (ngày, kinh độ Mặt Trời, tên tiết khí, pha trăng) thì KHÔNG được
 port — nó nằm trong `ui/app.js`. Trên trang chủ lớp lịch chỉ là hình.

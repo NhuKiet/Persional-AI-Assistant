@@ -94,15 +94,16 @@ const LAYOUT = {
   mobile:  { minWidth: 0,    discFraction: 0.86, offsetX: 0 },
 };
 
-/** Vành nào được phép tự quay khi lớp lịch đang bật.
+/** Bán kính đặt kim chỉ Mặt Trời, ngay ngoài mép vành lịch (L1 hết ở 0.8R).
  *
- *  Bản gốc khoá CẢ BỐN vành theo vị trí Mặt Trời và tắt hẳn vành tự quay, vì
- *  ở chế độ lịch góc xoay mang nghĩa tuyệt đối. Nhưng chỉ L1 (tiết khí + 28 tú
- *  + kim Mặt Trăng) và L2 (12 tháng) mới mang dấu lịch; L0 (chòm sao) và L3
- *  (lõi Bắc Đẩu) thì không, nên để hai vành đó quay tiếp — trang chủ giữ được
- *  chuyển động nền, mà phần tra ngày vẫn đọc đúng. Vành sao quay trên mặt đĩa
- *  đứng yên cũng chính là cách một chiếc astrolabe thật hoạt động. */
-const SPINNING_LAYERS = ["L0", "L3"] as const;
+ *  Bản gốc ghim kim này CỐ ĐỊNH ở đỉnh khung rồi xoay cả đĩa sao cho vị trí
+ *  Mặt Trời trồi lên đúng dưới nó — nghĩa là muốn giữ kim đứng yên thì mặt
+ *  đĩa phải đứng yên, và cả bốn vành mất luôn chuyển động nền. Ở đây làm
+ *  ngược lại: gắn kim vào chính vành lịch và xoay nó tới góc của Mặt Trời,
+ *  nên kim bám đúng ô tiết khí hiện tại dù vành xoay tới đâu. Đổi lại quy
+ *  ước "Mặt Trời luôn ở đỉnh khung" của bản gốc, nhưng giữ được cả bốn vành
+ *  cùng quay — thứ đáng giá hơn nhiều trên một trang chủ. */
+const SUN_INDEX_RADIUS = 0.84;
 
 /** Bao lâu tính lại lịch một lần (ms). Kinh độ Mặt Trời nhích ~1°/ngày nên
  *  mười phút là thừa mịn; để lâu hơn thì tab mở qua đêm sẽ lệch ngày. */
@@ -279,8 +280,10 @@ export function createCompass(canvas: HTMLCanvasElement, opts: CompassOptions): 
     moonNeedle = new Needle("#BFD8FF", RINGS.C14 - 0.02, RINGS.lodgeOut + 0.012);
     pivotOf("L1").add(moonNeedle.mesh);
 
-    topIndex = buildTopIndex(1.06);
-    scene.add(topIndex);
+    // Gắn vào pivot của vành lịch, không phải vào scene: kim phải nghiêng và
+    // xoay y hệt vành mà nó đang chỉ vào.
+    topIndex = buildTopIndex(SUN_INDEX_RADIUS);
+    pivotOf("L1").add(topIndex);
   }
 
   /** Khoá vành lịch theo ngày giờ hiện tại và đặt lại các dấu tra cứu. */
@@ -289,26 +292,16 @@ export function createCompass(canvas: HTMLCanvasElement, opts: CompassOptions): 
     const cal = calendarFor(new Date());
     calendarAt = performance.now();
 
-    // Khoá spin tuyệt đối cho cả bốn vành rồi trả tự do lại cho hai vành không
-    // mang dấu lịch — setCalendarSpin() của bản gốc không nhận từng vành riêng.
+    // KHÔNG gọi poses.setCalendarSpin(): không vành nào bị khoá, cả bốn cùng
+    // tự quay. Các dấu lịch đều gắn vào pivot của vành nên chúng xoay theo và
+    // vẫn chỉ đúng ô của mình.
     //
-    // Phải cất góc xoay cũ của hai vành đó ra trước và trả lại nguyên vẹn:
-    // setCalendarSpin kéo spinTarget của MỌI vành về plateSpin (hiện ~217°),
-    // nên nếu chỉ gán calendarSpin = null thì chúng vẫn mang cái đích đó, và
-    // lần applyPreset kế tiếp (tự về nếp) sẽ quật chúng ngược hơn 200° — một
-    // cú giật kèm bung bụi, đúng 4 giây sau khi trang vừa mở.
-    const layers = poses.layers as Record<
-      string, { calendarSpin: number | null; spin: number; spinTarget: number }
-    >;
-    const freeLayers = SPINNING_LAYERS.map((id) => ({
-      id, spin: layers[id].spin, spinTarget: layers[id].spinTarget,
-    }));
-    poses.setCalendarSpin(cal.plateSpin);
-    for (const k of freeLayers) {
-      layers[k.id].calendarSpin = null;
-      layers[k.id].spin = k.spin;
-      layers[k.id].spinTarget = k.spinTarget;
-    }
+    // `plateSpin` là góc mà bản gốc xoay đĩa đi để đưa Mặt Trời lên đỉnh, nên
+    // quay kim đi đúng chừng đó theo chiều ngược lại là kim nằm vào vị trí
+    // Mặt Trời trên mặt đĩa. Kiểm lại được: nếu vành đang ở spin = plateSpin
+    // (đúng trạng thái khoá của bản gốc) thì tổng bằng 0, kim về đỉnh khung —
+    // khớp y hệt hành vi cũ.
+    topIndex!.rotation.z = -cal.plateSpin;
 
     moonNeedle.setAngle(cal.moonTheta);
 
@@ -366,16 +359,7 @@ export function createCompass(canvas: HTMLCanvasElement, opts: CompassOptions): 
   function render(dt: number) {
     if (!renderer || !post || !stack || !poses || !agit || !controls || !stars || !smoke) return;
 
-    // step() chỉ biết bật/tắt tự quay cho CẢ BỐN vành, nên gọi với false rồi
-    // tự cộng góc quay nền cho riêng hai vành không mang dấu lịch.
-    poses.step(dt, false);
-    if (AUTO_SPIN.enabled && !prefersReduced) {
-      const layers = poses.layers as Record<string, { autoSpin: number }>;
-      for (const id of SPINNING_LAYERS) {
-        const speed = (AUTO_SPIN.speeds[id] ?? 0) * (Math.PI / 180);
-        layers[id].autoSpin = (layers[id].autoSpin + speed * dt) % (Math.PI * 2);
-      }
-    }
+    poses.step(dt, AUTO_SPIN.enabled && !prefersReduced);
     agit.update(dt, poses);
 
     // Buông tay đủ lâu thì các vành tự trở về tư thế ban đầu và camera bò về
