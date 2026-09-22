@@ -2,12 +2,16 @@ import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import mainlogo from "../assets/mainlogo.png";
 import { useTheme } from "../hooks/useTheme";
-import { createAtomReactor } from "../three/atomReactor";
-import type { AtomReactorHandle } from "../three/atomReactor";
+import { createCompass } from "../three/compass";
+import type { CompassHandle } from "../three/compass";
 
-/** Trang chủ — "Capability Reactor": một lõi kim loại 3D bao quanh bởi 3 vành
- *  quỹ đạo, với một làn sóng năng lượng lan tỏa liên tục từ lõi ra từng vành.
+/** Trang chủ — "La bàn thiên văn": bốn vành đồng tâm (chòm sao, lịch ngoài,
+ *  12 tháng, lõi Bắc Đẩu) vẽ bằng nét sáng, tự quay chậm ngược chiều nhau;
+ *  kéo một vành để xoay riêng nó, kéo ngoài đĩa để xoay cả cảnh, cuộn để phóng.
  *  Nền 2 lớp: viền frame ngoài (theo theme) và khối card bên trong bo góc.
+ *
+ *  Cảnh cũ "Capability Reactor" (three/atomReactor.ts) vẫn còn trong repo và
+ *  cùng hình dạng handle — đổi lại chỉ là đổi hai dòng import này.
  *
  *  ATOM_BG là clear color của WebGL, PHẢI trùng --atom-bg trong landing.css —
  *  canvas nằm đè lên card nên lệch một chút là lộ đường ranh. Rêu ô liu trầm
@@ -18,7 +22,7 @@ export function LandingPage() {
   const navigate = useNavigate();
   const { theme, toggle } = useTheme();
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const handleRef = useRef<AtomReactorHandle | null>(null);
+  const handleRef = useRef<CompassHandle | null>(null);
   const failedRef = useRef<HTMLDivElement>(null);
 
   const goToChat = () => navigate("/chat");
@@ -26,7 +30,7 @@ export function LandingPage() {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const handle = createAtomReactor(canvas, {
+    const handle = createCompass(canvas, {
       backgroundColor: ATOM_BG[theme],
       onFail: () => {
         canvas.style.display = "none";
