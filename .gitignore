@@ -23,6 +23,7 @@ frontend/node_modules/
 data/sessions.db
 data/sandbox/
 data/pdfs/
+data/hmer/
 data/papers/
 data/knowledge/
 

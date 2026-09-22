@@ -58,6 +58,13 @@ PUBLIC_ROUTES = {
     # mặt API phải được ghi nhận có chủ đích, không lọt qua im lặng.
     ("POST", "/api/bubble/chat"),
     ("POST", "/api/bubble/reset"),
+    # Nhận dạng công thức toán viết tay (SwinCoMER). /status luôn 200 kể cả
+    # khi model không nạp được — lý do nằm trong body, không phải trong mã lỗi.
+    ("GET", "/api/hmer/status"),
+    ("POST", "/api/hmer/recognize"),
+    ("GET", "/api/hmer/images"),
+    ("GET", "/api/hmer/images/{filename}"),
+    ("DELETE", "/api/hmer/images/{filename}"),
 }
 
 

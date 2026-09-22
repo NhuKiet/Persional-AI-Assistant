@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend.app.features.assistant_bubble.router import router as assistant_bubble_router
 from backend.app.features.chat.router import router as chat_router
 from backend.app.features.coding.router import router as coding_router
+from backend.app.features.hmer.router import router as hmer_router
 from backend.app.features.models.router import router as models_router
 from backend.app.features.news.router import router as news_router
 from backend.app.features.pdf.router import router as pdf_router
@@ -47,6 +48,7 @@ app.include_router(assistant_bubble_router)
 app.include_router(coding_router)
 app.include_router(pdf_router)
 app.include_router(models_router)
+app.include_router(hmer_router)
 app.include_router(news_router)
 
 

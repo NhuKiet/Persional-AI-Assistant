@@ -9,6 +9,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _VALID_PROVIDERS = {"ollama", "anthropic", "openai"}
 _VALID_EXECUTOR_MODES = {"docker"}
+_VALID_HMER_DEVICES = {"auto", "cuda", "cpu"}
 
 
 class Settings(BaseSettings):
@@ -123,6 +124,26 @@ class Settings(BaseSettings):
     PDF_CHUNK_SIZE: int = 800
     PDF_CHUNK_OVERLAP: int = 100
     PDF_MAX_CONTEXT: int = 6000
+
+    # ── HMER (nhận dạng công thức toán viết tay) ────────────────────
+    # Checkpoint SwinCoMER không nằm trong repo nào (quá lớn, và .gitignore
+    # của dự án capstone chặn *.ckpt). Chưa trỏ tới file hợp lệ thì capability
+    # "hmer" báo disabled và /api/hmer/recognize trả 503 — app vẫn chạy bình
+    # thường, các tính năng khác không bị ảnh hưởng.
+    HMER_CHECKPOINT: str | None = None
+    HMER_UPLOAD_DIR: str = "data/hmer"
+    HMER_DEVICE: str = "auto"
+    HMER_MAX_IMAGE_MB: int = 10
+
+    @field_validator("HMER_DEVICE")
+    @classmethod
+    def _check_hmer_device(cls, v: str) -> str:
+        if v not in _VALID_HMER_DEVICES:
+            raise ValueError(
+                f"HMER_DEVICE '{v}' không hợp lệ. "
+                f"Chọn một trong: {sorted(_VALID_HMER_DEVICES)}"
+            )
+        return v
 
     @field_validator("DEFAULT_PROVIDER")
     @classmethod

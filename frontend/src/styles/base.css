@@ -148,6 +148,7 @@
   --accent-essay:    #9a7d94;        /* mận trầm */
   --accent-email:    #a5766a;        /* đất nung trầm */
   --accent-pdf:      #b09468;        /* be đất sét */
+  --accent-hmer:     #8f9a7e;        /* xanh rêu nhạt — công thức viết tay */
 
   /* --- Trạng thái ---
      App dùng chung một sắc xanh lá cho "coding" và "thành công" — đó là chủ ý,
@@ -276,6 +277,7 @@
   --accent-essay:    #9c7291;        /* mận đất */
   --accent-email:    #af5a44;        /* gạch nung */
   --accent-pdf:      #c48257;        /* đất sét */
+  --accent-hmer:     #7f8f68;        /* xanh rêu — công thức viết tay */
 
   --ok:     #7d8f6a;   /* xanh ô liu — thành công, done, output ok (Coding dùng chung, xem --accent-coding ở :root) */
   --danger: #c14e3a;   /* đỏ gạch — tách biệt rõ với --accent-email trầm hơn */

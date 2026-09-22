@@ -53,6 +53,7 @@ test.each([
   ["/pdf", /PDF/i],
   ["/tool/homework", /Bài tập/i],
   ["/news", /News/],
+  ["/hmer", /Công thức viết tay/i],
 ])("keeps public route %s renderable", async (path, expectedContent) => {
   render(
     <MemoryRouter initialEntries={[path]}>
@@ -75,6 +76,7 @@ describe.each([
   ["/coding", () => screen.findByPlaceholderText(/Mô tả task cần làm/i)],
   ["/pdf", () => screen.findByText(/Kéo thả file PDF vào đây/i)],
   ["/tool/homework", () => screen.findByPlaceholderText(/Bài tập…/i)],
+  ["/hmer", () => screen.findByText(/Kéo thả ảnh công thức vào đây/i)],
 ])("sidebar reopen control on %s", (path, findAnchor) => {
   it("closes via mouse, then reopens via mouse", async () => {
     const user = userEvent.setup();

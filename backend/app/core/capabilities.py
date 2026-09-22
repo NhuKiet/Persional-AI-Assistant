@@ -26,8 +26,13 @@ LLM = "llm"
 EMBEDDINGS = "embeddings"
 KNOWLEDGE_STORE = "knowledge_store"
 RERANKER = "reranker"
+# Handwritten maths recognition. Belongs here for the same reason the reranker
+# does: a heavy optional model whose failures are otherwise invisible — a
+# missing checkpoint and a working one look identical from outside until
+# someone uploads an image.
+HMER = "hmer"
 
-CAPABILITIES = (LLM, EMBEDDINGS, KNOWLEDGE_STORE, RERANKER)
+CAPABILITIES = (LLM, EMBEDDINGS, KNOWLEDGE_STORE, RERANKER, HMER)
 
 OK = "ok"
 DEGRADED = "degraded"

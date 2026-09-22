@@ -19,6 +19,7 @@ const CodingPage   = lazy(() => import("./pages/CodingPage").then(m => ({ defaul
 const PDFPage      = lazy(() => import("./pages/PdfPage").then(m => ({ default: m.PDFPage })));
 const NewsPage    = lazy(() => import("./pages/NewsPage").then(m => ({ default: m.NewsPage })));
 const ToolPage     = lazy(() => import("./pages/ToolPage").then(m => ({ default: m.ToolPage })));
+const HmerPage     = lazy(() => import("./pages/HmerPage").then(m => ({ default: m.HmerPage })));
 
 /** Fallback trong lúc chunk route đang tải. Spinner tự chứa (dùng keyframe
  *  `spin` toàn cục + token màu) để không phụ thuộc CSS của trang chưa tải. */
@@ -62,6 +63,7 @@ export function AppRoutes() {
       <Route path="/coding"       element={guarded(<CodingPage />, "Coding")} />
       <Route path="/pdf"          element={guarded(<PDFPage />, "PDF Chat")} />
       <Route path="/news"         element={guarded(<NewsPage />, "News")} />
+      <Route path="/hmer"         element={guarded(<HmerPage />, "Công thức viết tay")} />
       <Route path="/tool/:toolId" element={guarded(<ToolRoute />)} />
       <Route path="*"             element={<Navigate to="/" replace />} />
     </Routes>

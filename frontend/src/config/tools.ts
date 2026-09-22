@@ -25,6 +25,7 @@ export const TOOLS: Tool[] = [
   { id: "essay",    label: "Nghị luận", color: "var(--accent-essay)",    desc: "Viết văn nghị luận, luận điểm", hidden: true },
   { id: "email",    label: "Email",     color: "var(--accent-email)",    desc: "Soạn thảo, phân loại email", hidden: true },
   { id: "pdf",      label: "PDF Chat",  color: "var(--accent-pdf)",      desc: "Chat với tài liệu PDF — tóm tắt, hỏi đáp" },
+  { id: "hmer",     label: "Công thức", color: "var(--accent-hmer)",     desc: "Ảnh công thức toán viết tay → LaTeX" },
 ];
 
 /** Danh sách tool THỰC SỰ hiện cho người dùng. Dock và mọi UI liệt kê tool
@@ -35,7 +36,7 @@ export const VISIBLE_TOOLS: Tool[] = TOOLS.filter(t => !t.hidden);
 /** Tool nào có page riêng thì đi thẳng route đó; còn lại dùng /tool/:id chung.
  *  Dùng chung ở cả LandingPage (thẻ công cụ) và HomePage (dock 6 tool) —
  *  đừng để hai nơi tự định nghĩa DEDICATED_ROUTES riêng, dễ trôi. */
-const DEDICATED_ROUTES: Record<string, string> = { research: "/research", coding: "/coding", pdf: "/pdf" };
+const DEDICATED_ROUTES: Record<string, string> = { research: "/research", coding: "/coding", pdf: "/pdf", hmer: "/hmer" };
 export const toolPath = (tool: Tool) => DEDICATED_ROUTES[tool.id] ?? `/tool/${tool.id}`;
 
 export const SUGGESTIONS: Record<string, string[]> = {
