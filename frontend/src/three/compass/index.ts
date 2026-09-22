@@ -12,7 +12,7 @@ import * as THREE from "three";
 import "@fontsource/noto-serif-sc/chinese-simplified-400.css";
 import "@fontsource/noto-serif-sc/latin-400.css";
 
-import { CAMERA, LAYERS, AUTO_SPIN, DEFAULT_PRESET } from "./config.js";
+import { CAMERA, LAYERS, AUTO_SPIN, DEFAULT_PRESET, RINGS } from "./config.js";
 import { drawAllLayers } from "./textures/drawLayers.js";
 import { LayerStack } from "./scene/layers.js";
 import { StarField, SmokeField } from "./scene/particles.js";
@@ -20,6 +20,9 @@ import { buildComposer } from "./scene/post.js";
 import { Controls } from "./scene/controls.js";
 import { PoseState } from "./anim/poses.js";
 import { AgitationState } from "./anim/agitation.js";
+import { CellHighlight, Needle, buildTopIndex } from "./scene/markers.js";
+import { calendarFor } from "./astro/calendar.js";
+import { BAND_BY_ID } from "./bands.js";
 import { resolveTheme, DEFAULT_THEME } from "./theme.js";
 
 /** Tư thế ban đầu của bốn vành: mặc định của project gốc (`nghieng` — tách
@@ -79,6 +82,27 @@ const LAYOUT = {
   mobile:  { minWidth: 0,    discFraction: 0.86, offsetX: 0 },
 };
 
+/** Vành nào được phép tự quay khi lớp lịch đang bật.
+ *
+ *  Bản gốc khoá CẢ BỐN vành theo vị trí Mặt Trời và tắt hẳn vành tự quay, vì
+ *  ở chế độ lịch góc xoay mang nghĩa tuyệt đối. Nhưng chỉ L1 (tiết khí + 28 tú
+ *  + kim Mặt Trăng) và L2 (12 tháng) mới mang dấu lịch; L0 (chòm sao) và L3
+ *  (lõi Bắc Đẩu) thì không, nên để hai vành đó quay tiếp — trang chủ giữ được
+ *  chuyển động nền, mà phần tra ngày vẫn đọc đúng. Vành sao quay trên mặt đĩa
+ *  đứng yên cũng chính là cách một chiếc astrolabe thật hoạt động. */
+const SPINNING_LAYERS = ["L0", "L3"] as const;
+
+/** Bao lâu tính lại lịch một lần (ms). Kinh độ Mặt Trời nhích ~1°/ngày nên
+ *  mười phút là thừa mịn; để lâu hơn thì tab mở qua đêm sẽ lệch ngày. */
+const CALENDAR_REFRESH_MS = 10 * 60 * 1000;
+
+/** Sau khi người dùng buông tay bao lâu thì các vành tự về nếp (giây), và tốc
+ *  độ camera bò về chỗ cũ. Trang chủ không có nút "về mức chuẩn" như bản gốc,
+ *  nên nếu không tự về thì một khách vãng lai kéo rối tung là nó nằm rối luôn
+ *  cho tới khi tải lại trang. Nhấp đúp để về ngay, không phải chờ. */
+const SETTLE_AFTER_SECONDS = 4;
+const CAMERA_SETTLE_RATE = 1.8;
+
 export interface CompassHandle {
   setBackgroundColor(hex: number): void;
   dispose(): void;
@@ -92,6 +116,9 @@ export interface CompassOptions {
 /** Nạp font chữ Hán trước khi vẽ texture — canvas vẽ chữ bằng font đang có tại
  *  thời điểm gọi, nạp sau thì texture đã nướng xong với font dự phòng rồi. */
 async function ensureFonts() {
+  // jsdom (vitest) không có document.fonts — không chặn, cũng không kêu ca:
+  // mọi bài test dựng LandingPage đều đi qua đây.
+  if (!document.fonts) return;
   try {
     await document.fonts.load('400 64px "Noto Serif SC"',
       "正月二十八宿立春角亢氐房心尾箕子星紀寅析木");
@@ -120,6 +147,22 @@ export function createCompass(canvas: HTMLCanvasElement, opts: CompassOptions): 
   let agit: AgitationState | null = null;
   let resizeObserver: ResizeObserver | null = null;
 
+  // Lớp lịch: ô tiết khí / tháng / tú đang tra, kim Mặt Trăng (gắn vào vành
+  // nên tự xoay theo khi kéo) và kim chỉ cố định ở đỉnh khung = vị trí Mặt Trời.
+  let termHL: CellHighlight | null = null;
+  let monthHL: CellHighlight | null = null;
+  let lodgeHL: CellHighlight | null = null;
+  let hoverHL: CellHighlight | null = null;
+  let moonNeedle: Needle | null = null;
+  let topIndex: THREE.Group | null = null;
+  let calendarAt = 0;
+
+  // Tự về nếp: mốc thời gian lần tương tác cuối, và vị trí camera ban đầu.
+  let lastTouchAt = performance.now();
+  let settling = false;
+  const cameraHome = new THREE.Vector3(0, 0, CAMERA.distance);
+
+  const ORIGIN = new THREE.Vector3(0, 0, 0);
   const rotArr = [new THREE.Matrix3(), new THREE.Matrix3(), new THREE.Matrix3(), new THREE.Matrix3()];
 
   /* Kích thước render = hộp CSS của chính canvas, không phải viewport: canvas
@@ -169,7 +212,67 @@ export function createCompass(canvas: HTMLCanvasElement, opts: CompassOptions): 
     for (const kind of ["line", "text", "star", "wash"] as const) {
       stack.setInkGain(kind, TUNING.ink[kind]);
     }
+    // Dấu lịch: ô tiết khí/tháng và kim chỉ đỉnh dùng màu `marker` (sáng hơn
+    // lõi nét một chút), còn kim Mặt Trăng dùng `moon` — sắc độ đối nghịch,
+    // cố ý tách hẳn khỏi màu đĩa để không lẫn vào nét.
+    termHL?.setColor(th.marker);
+    monthHL?.setColor(th.marker);
+    hoverHL?.setColor(th.marker);
+    lodgeHL?.setColor(th.moon);
+    moonNeedle?.setColor(th.moon);
+    if (topIndex) topIndex.userData.material.color.copy(th.marker);
     applyBackground();
+  }
+
+  /** Pivot của một vành. `LayerStack.byId` dùng Array.find nên TS suy ra kiểu
+   *  có thể undefined; ở đây id luôn là một trong bốn vành đã dựng sẵn. */
+  function pivotOf(id: string): THREE.Object3D {
+    return stack!.byId(id)!.pivot;
+  }
+
+  function buildMarkers() {
+    if (!scene || !stack) return;
+    hoverHL = new CellHighlight(undefined, 0.30);
+    termHL = new CellHighlight("#FFD98A", 0.26);
+    monthHL = new CellHighlight("#FFD98A", 0.20);
+    lodgeHL = new CellHighlight("#BFD8FF", 0.26);
+
+    moonNeedle = new Needle("#BFD8FF", RINGS.C14 - 0.02, RINGS.lodgeOut + 0.012);
+    pivotOf("L1").add(moonNeedle.mesh);
+
+    topIndex = buildTopIndex(1.06);
+    scene.add(topIndex);
+  }
+
+  /** Khoá vành lịch theo ngày giờ hiện tại và đặt lại các dấu tra cứu. */
+  function applyCalendar() {
+    if (!stack || !poses || !moonNeedle) return;
+    const cal = calendarFor(new Date());
+    calendarAt = performance.now();
+
+    // Khoá spin tuyệt đối cho cả bốn vành rồi trả tự do lại cho hai vành không
+    // mang dấu lịch — setCalendarSpin() của bản gốc không nhận từng vành riêng.
+    poses.setCalendarSpin(cal.plateSpin);
+    const layers = poses.layers as Record<string, { calendarSpin: number | null; autoSpin: number }>;
+    for (const id of SPINNING_LAYERS) layers[id].calendarSpin = null;
+
+    moonNeedle.setAngle(cal.moonTheta);
+    termHL?.show(BAND_BY_ID.terms, cal.termIndex, pivotOf("L1"));
+    monthHL?.show(BAND_BY_ID.months, cal.monthIndex, pivotOf("L2"));
+    lodgeHL?.show(BAND_BY_ID.lodges, cal.lodgeIndex, pivotOf("L1"));
+  }
+
+  /** Người dùng vừa chạm vào cảnh — hoãn việc tự về nếp. */
+  function touch() {
+    lastTouchAt = performance.now();
+    settling = false;
+  }
+
+  /** Đưa các vành về đúng tư thế ban đầu; camera bò về theo trong render(). */
+  function settleNow() {
+    if (!poses) return;
+    poses.applyPreset(PRESET);
+    settling = true;
   }
 
   function resize() {
@@ -196,9 +299,31 @@ export function createCompass(canvas: HTMLCanvasElement, opts: CompassOptions): 
   function render(dt: number) {
     if (!renderer || !post || !stack || !poses || !agit || !controls || !stars || !smoke) return;
 
-    poses.step(dt, AUTO_SPIN.enabled && !prefersReduced);
+    // step() chỉ biết bật/tắt tự quay cho CẢ BỐN vành, nên gọi với false rồi
+    // tự cộng góc quay nền cho riêng hai vành không mang dấu lịch.
+    poses.step(dt, false);
+    if (AUTO_SPIN.enabled && !prefersReduced) {
+      const layers = poses.layers as Record<string, { autoSpin: number }>;
+      for (const id of SPINNING_LAYERS) {
+        const speed = (AUTO_SPIN.speeds[id] ?? 0) * (Math.PI / 180);
+        layers[id].autoSpin = (layers[id].autoSpin + speed * dt) % (Math.PI * 2);
+      }
+    }
     agit.update(dt, poses);
+
+    // Buông tay đủ lâu thì các vành tự trở về tư thế ban đầu và camera bò về
+    // chỗ cũ. OrbitControls đọc lại camera.position trong update() nên chỉnh
+    // thẳng vị trí ở đây là hợp lệ, miễn là update() chạy ngay sau.
+    const idle = (performance.now() - lastTouchAt) / 1000;
+    if (!settling && idle > SETTLE_AFTER_SECONDS) settleNow();
+    if (settling) {
+      const k = 1 - Math.exp(-CAMERA_SETTLE_RATE * dt);
+      camera!.position.lerp(cameraHome, k);
+      controls.orbit.target.lerp(ORIGIN, k);
+    }
     controls.update();
+
+    if (performance.now() - calendarAt > CALENDAR_REFRESH_MS) applyCalendar();
 
     stack.hoveredId = controls.hover?.id ?? null;
     stack.update(poses, (id: string) => agit!.strokeOpacity(id));
@@ -274,14 +399,30 @@ export function createCompass(canvas: HTMLCanvasElement, opts: CompassOptions): 
     // pan-y: vuốt dọc vẫn cuộn được trang trên mobile, chỉ vuốt ngang mới rơi
     // vào OrbitControls — nếu không, canvas nuốt trọn thao tác cuộn.
     canvas.style.touchAction = "pan-y";
-    controls = new Controls(camera, canvas, stack, poses);
+    controls = new Controls(camera, canvas, stack, poses, {
+      onHover(hit: { id: string; band?: unknown; cellIndex: number } | null) {
+        const band = hit?.band as { count?: number } | undefined;
+        if (!hit || !band || hit.cellIndex < 0 || !band.count) hoverHL?.hide();
+        else hoverHL?.show(band, hit.cellIndex, pivotOf(hit.id));
+      },
+      onGrab: touch,
+      onDrag: touch,
+      onRelease: touch,
+    });
     controls.resetCamera(CAMERA.distance);
+    canvas.addEventListener("pointerdown", touch);
+    canvas.addEventListener("wheel", touch, { passive: true });
+    canvas.addEventListener("dblclick", settleNow);
+
+    buildMarkers();
+    applyCalendar();
 
     resize();
     applyTheme();
 
     resizeObserver = new ResizeObserver(resize);
     resizeObserver.observe(canvas);
+    lastTouchAt = performance.now();
 
     last = performance.now();
     rafId = requestAnimationFrame(loop);
@@ -302,7 +443,15 @@ export function createCompass(canvas: HTMLCanvasElement, opts: CompassOptions): 
       disposed = true;
       cancelAnimationFrame(rafId);
       resizeObserver?.disconnect();
+      canvas.removeEventListener("pointerdown", touch);
+      canvas.removeEventListener("wheel", touch);
+      canvas.removeEventListener("dblclick", settleNow);
       controls?.dispose();
+      for (const m of [termHL, monthHL, lodgeHL, hoverHL, moonNeedle]) m?.dispose();
+      if (topIndex) {
+        topIndex.userData.material.dispose();
+        (topIndex.children[0] as THREE.Mesh).geometry.dispose();
+      }
       stack?.dispose();
       stars?.dispose();
       smoke?.dispose();
@@ -318,6 +467,9 @@ export function createCompass(canvas: HTMLCanvasElement, opts: CompassOptions): 
       // tự được thu hồi khi renderer không còn ai tham chiếu.
       renderer?.dispose();
       resizeObserver = null;
+      termHL = monthHL = lodgeHL = hoverHL = null;
+      moonNeedle = null;
+      topIndex = null;
       controls = null;
       stack = null;
       stars = null;
