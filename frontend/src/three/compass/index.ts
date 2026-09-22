@@ -12,7 +12,7 @@ import * as THREE from "three";
 import "@fontsource/noto-serif-sc/chinese-simplified-400.css";
 import "@fontsource/noto-serif-sc/latin-400.css";
 
-import { CAMERA, LAYERS, DUST, BLOOM, AUTO_SPIN } from "./config.js";
+import { CAMERA, LAYERS, DUST, BLOOM, AUTO_SPIN, DEFAULT_PRESET } from "./config.js";
 import { drawAllLayers } from "./textures/drawLayers.js";
 import { LayerStack } from "./scene/layers.js";
 import { StarField, SmokeField } from "./scene/particles.js";
@@ -20,17 +20,21 @@ import { buildComposer } from "./scene/post.js";
 import { Controls } from "./scene/controls.js";
 import { PoseState } from "./anim/poses.js";
 import { AgitationState } from "./anim/agitation.js";
-import { resolveTheme } from "./theme.js";
+import { resolveTheme, DEFAULT_THEME } from "./theme.js";
 
-/** Bảng màu dùng cho trang chủ. Nền và mép vignette KHÔNG lấy từ bảng màu này
- *  — chúng do `backgroundColor` quyết định để khớp màu card của trang chủ. */
-const THEME_ID = "luc";
-
-/** Tư thế ban đầu của bốn vành, chọn trong `PRESETS` của config.js:
- *  `phang` (mọi vành trùng nhau, nhìn thẳng) · `nghieng` (tách lớp nhẹ, vẫn
- *  đọc được chữ Hán) · `cau` (các vành cắt nhau như armillary sphere) ·
- *  `det` (dẹt thành elip rất mảnh). Đổi một dòng này là đổi dáng trang chủ. */
-const PRESET = "nghieng";
+/** Bảng màu và tư thế ban đầu: lấy thẳng mặc định của project gốc (vàng kem
+ *  `vang` + tách lớp nhẹ `nghieng`) thay vì ghi lại tên ở đây, để sửa mặc định
+ *  bên project gốc là trang chủ đi theo luôn.
+ *
+ *  Muốn đổi riêng cho trang chủ thì thay bằng một id cụ thể:
+ *  màu — `vang` · `lam` · `luc` · `do` · `tim` · `bac` (xem theme.js);
+ *  tư thế — `phang` (mọi vành trùng nhau) · `nghieng` · `cau` (các vành cắt
+ *  nhau như armillary sphere) · `det` (dẹt thành elip mảnh) (xem config.js).
+ *
+ *  Nền và mép vignette KHÔNG lấy từ bảng màu — chúng do `backgroundColor`
+ *  quyết định để khớp màu card của trang chủ. */
+const THEME_ID = DEFAULT_THEME;
+const PRESET = DEFAULT_PRESET;
 
 /** Mép khung tối hơn nền bao nhiêu (nhân vào từng kênh RGB). Bảng màu gốc
  *  dùng một màu vignette riêng; ở đây nền là màu của app nên suy ra cho khớp. */
@@ -280,11 +284,12 @@ export function createCompass(canvas: HTMLCanvasElement, opts: CompassOptions): 
         for (const pass of post.composer.passes) pass.dispose?.();
         post.composer.dispose();
       }
-      // dispose() một mình chỉ trả lại tài nguyên GPU, KHÔNG trả lại context.
-      // Trang chủ mount/unmount nhiều lần (StrictMode ở dev, điều hướng
-      // router ở prod) mà trình duyệt chỉ cho khoảng 16 context WebGL sống
-      // cùng lúc — không buông thì context cũ nhất bị giết, canvas trắng.
-      renderer?.forceContextLoss();
+      // KHÔNG gọi forceContextLoss() ở đây: thẻ <canvas> là của React, không
+      // phải của renderer, và React dùng lại đúng node đó khi remount
+      // (StrictMode ở dev, điều hướng router ở prod). Đã ép mất context thì
+      // canvas đó chết hẳn, lần mount sau getContext() trả null và cảnh rơi
+      // về quả cầu dự phòng. dispose() trả lại tài nguyên GPU là đủ; context
+      // tự được thu hồi khi renderer không còn ai tham chiếu.
       renderer?.dispose();
       resizeObserver = null;
       controls = null;
