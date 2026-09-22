@@ -12,7 +12,7 @@ import * as THREE from "three";
 import "@fontsource/noto-serif-sc/chinese-simplified-400.css";
 import "@fontsource/noto-serif-sc/latin-400.css";
 
-import { CAMERA, LAYERS, DUST, BLOOM, AUTO_SPIN, DEFAULT_PRESET } from "./config.js";
+import { CAMERA, LAYERS, AUTO_SPIN, DEFAULT_PRESET } from "./config.js";
 import { drawAllLayers } from "./textures/drawLayers.js";
 import { LayerStack } from "./scene/layers.js";
 import { StarField, SmokeField } from "./scene/particles.js";
@@ -22,19 +22,40 @@ import { PoseState } from "./anim/poses.js";
 import { AgitationState } from "./anim/agitation.js";
 import { resolveTheme, DEFAULT_THEME } from "./theme.js";
 
-/** Bảng màu và tư thế ban đầu: lấy thẳng mặc định của project gốc (vàng kem
- *  `vang` + tách lớp nhẹ `nghieng`) thay vì ghi lại tên ở đây, để sửa mặc định
- *  bên project gốc là trang chủ đi theo luôn.
- *
- *  Muốn đổi riêng cho trang chủ thì thay bằng một id cụ thể:
- *  màu — `vang` · `lam` · `luc` · `do` · `tim` · `bac` (xem theme.js);
- *  tư thế — `phang` (mọi vành trùng nhau) · `nghieng` · `cau` (các vành cắt
- *  nhau như armillary sphere) · `det` (dẹt thành elip mảnh) (xem config.js).
- *
- *  Nền và mép vignette KHÔNG lấy từ bảng màu — chúng do `backgroundColor`
- *  quyết định để khớp màu card của trang chủ. */
-const THEME_ID = DEFAULT_THEME;
+/** Tư thế ban đầu của bốn vành: mặc định của project gốc (`nghieng` — tách
+ *  lớp nhẹ, vẫn đọc được chữ Hán). Các lựa chọn khác trong `PRESETS` của
+ *  config.js: `phang` (mọi vành trùng nhau), `cau` (các vành cắt nhau như
+ *  armillary sphere), `det` (dẹt thành elip mảnh). */
 const PRESET = DEFAULT_PRESET;
+
+/** Bảng màu và các mức hiệu chỉnh, CHÉP LẠI ĐÚNG bộ mà người dùng đã dò trên
+ *  bảng điều khiển của project gốc — không phải mặc định của config.js. Trang
+ *  chủ không có bảng điều khiển nên đây là nơi duy nhất chỉnh được.
+ *
+ *  Tên các mức khớp nhãn trong bảng điều khiển gốc, kèm dải giá trị của nó:
+ *  Sắc độ −180…180 · Đậm nhạt 0…2 · Nét vẽ/Chữ Hán/Chấm sao 0…4 ·
+ *  Lớp phủ 0…2 · Hạt sao/Khói bụi 0…2.5 · Quầng sáng 0…1.5.
+ *
+ *  Lưu ý: bộ số này được dò trên NỀN ĐEN #171412 của project gốc, còn ở đây
+ *  nền là card rêu ô liu sáng hơn nhiều, nên cùng một mức độ sáng sẽ đọc ra
+ *  "cháy" hơn. Nếu thấy chói thì hạ `ink` xuống chứ đừng đổi nền — nền phải
+ *  trùng --atom-bg của landing.css. */
+const THEME_ID = DEFAULT_THEME;      // 'vang' — Vàng kem
+const TUNING = {
+  hueDeg: 20,                        // Sắc độ  (mặc định 0)
+  sat: 2.0,                          // Đậm nhạt (mặc định 1)
+  ink: {
+    line: 4.0,                       // Nét vẽ   (mặc định 1)
+    text: 4.0,                       // Chữ Hán  (mặc định 1)
+    star: 4.0,                       // Chấm sao (mặc định 1)
+    wash: 2.0,                       // Lớp phủ  (mặc định 1)
+  },
+  dust: {
+    star: 2.20,                      // Hạt sao  (mặc định 1)
+    smoke: 2.18,                     // Khói bụi (mặc định 1)
+  },
+  bloom: 0.28,                       // Quầng sáng — đúng bằng BLOOM.strength gốc
+};
 
 /** Mép khung tối hơn nền bao nhiêu (nhân vào từng kênh RGB). Bảng màu gốc
  *  dùng một màu vignette riêng; ở đây nền là màu của app nên suy ra cho khớp. */
@@ -139,10 +160,15 @@ export function createCompass(canvas: HTMLCanvasElement, opts: CompassOptions): 
 
   function applyTheme() {
     if (!stack || !stars || !smoke) return;
-    const th = resolveTheme(THEME_ID);
+    // resolveTheme nhận sắc độ theo VÒNG (−0.5…0.5), bảng điều khiển gốc thì
+    // hiển thị theo độ — chia 360 đúng như uiHandlers.onHue() của main.js.
+    const th = resolveTheme(THEME_ID, TUNING.hueDeg / 360, TUNING.sat);
     stack.setColors(th);
     stars.setColor(th.star);
     smoke.setColor(th.smoke);
+    for (const kind of ["line", "text", "star", "wash"] as const) {
+      stack.setInkGain(kind, TUNING.ink[kind]);
+    }
     applyBackground();
   }
 
@@ -180,7 +206,7 @@ export function createCompass(canvas: HTMLCanvasElement, opts: CompassOptions): 
 
     // Bụi chỉ bung ra theo CHUYỂN ĐỘNG do người dùng kéo; vành tự quay nền
     // không tính là "khuấy động" nên lúc đứng yên hai hệ hạt tắt hẳn.
-    for (const [field, amount] of [[stars, DUST.star], [smoke, DUST.smoke]] as const) {
+    for (const [field, amount] of [[stars, TUNING.dust.star], [smoke, TUNING.dust.smoke]] as const) {
       const u = field.uniforms;
       u.uTime.value += dt;
       for (let i = 0; i < 4; i++) {
@@ -243,7 +269,7 @@ export function createCompass(canvas: HTMLCanvasElement, opts: CompassOptions): 
       width: renderer.domElement.width,
       height: renderer.domElement.height,
     });
-    post.bloom.strength = BLOOM.strength;
+    post.bloom.strength = TUNING.bloom;
 
     // pan-y: vuốt dọc vẫn cuộn được trang trên mobile, chỉ vuốt ngang mới rơi
     // vào OrbitControls — nếu không, canvas nuốt trọn thao tác cuộn.
