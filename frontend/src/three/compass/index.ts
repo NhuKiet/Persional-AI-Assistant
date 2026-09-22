@@ -22,7 +22,7 @@ import { PoseState } from "./anim/poses.js";
 import { AgitationState } from "./anim/agitation.js";
 import { CellHighlight, Needle, buildTopIndex } from "./scene/markers.js";
 import { calendarFor } from "./astro/calendar.js";
-import { BAND_BY_ID } from "./bands.js";
+import { BAND_BY_ID, cellLabel } from "./bands.js";
 import { resolveTheme, DEFAULT_THEME } from "./theme.js";
 
 /** Tư thế ban đầu của bốn vành: mặc định của project gốc (`nghieng` — tách
@@ -58,6 +58,18 @@ const TUNING = {
     smoke: 2.18,                     // Khói bụi (mặc định 1)
   },
   bloom: 0.28,                       // Quầng sáng — đúng bằng BLOOM.strength gốc
+
+  /** Độ đậm của các ô sáng tra cứu. Bản gốc để 0.20–0.30 vì nét ở mức chuẩn
+   *  1.0; ở đây nét kịch 4.0 nên ô mờ chìm nghỉm trong chính nền nét. Nâng
+   *  lên khoảng gấp đôi là đọc được mà chưa thành mảng bệt — không nâng theo
+   *  đúng tỉ lệ 4× của nét, vì ô là hình quạt ĐẶC cộng thêm (additive), đậm
+   *  gấp bốn thì nó nuốt luôn chữ Hán nằm dưới. */
+  highlight: {
+    term: 0.55,                      // ô tiết khí (vành L1)
+    month: 0.45,                     // ô tháng kiến (vành L2)
+    lodge: 0.55,                     // ô 28 tú Mặt Trăng đang ở (vành L1)
+    hover: 0.60,                     // ô dưới con trỏ
+  },
 };
 
 /** Mép khung tối hơn nền bao nhiêu (nhân vào từng kênh RGB). Bảng màu gốc
@@ -108,9 +120,36 @@ export interface CompassHandle {
   dispose(): void;
 }
 
+/** Số liệu lịch để trang chủ in thành chữ. Mỗi mục là cặp [chữ Hán, tiếng
+ *  Việt] đúng như nhãn vẽ trên vành, để dòng đọc số và mặt đĩa luôn khớp nhau. */
+export interface CompassReadout {
+  date: Date;
+  /** kinh độ hoàng đạo của Mặt Trời, độ */
+  sunLon: number;
+  term: [string, string];
+  month: [string, string];
+  /** tú Mặt Trăng đang ở; phần "· Huyền Vũ" đã tách ra `lodgeQuadrant` */
+  lodge: [string, string];
+  lodgeQuadrant: string;
+  phaseName: string;
+  /** tỉ lệ diện tích sáng, 0…1 */
+  illumination: number;
+  /** tuổi trăng, ngày kể từ sóc */
+  moonAge: number;
+}
+
 export interface CompassOptions {
   backgroundColor: number;
   onFail?: (err: unknown) => void;
+  /** Gọi mỗi lần lịch được tính lại (lúc dựng cảnh, rồi mỗi CALENDAR_REFRESH_MS). */
+  onCalendar?: (readout: CompassReadout) => void;
+}
+
+/** `cellLabel` trả về ["牛", "Ngưu · Huyền Vũ"] — tách tên tú khỏi tên cung. */
+function splitLabel(raw: [string, string] | null): { pair: [string, string]; rest: string } {
+  const [han, vi] = raw ?? ["", ""];
+  const [name, ...rest] = vi.split(" · ");
+  return { pair: [han, name], rest: rest.join(" · ") };
 }
 
 /** Nạp font chữ Hán trước khi vẽ texture — canvas vẽ chữ bằng font đang có tại
@@ -232,10 +271,10 @@ export function createCompass(canvas: HTMLCanvasElement, opts: CompassOptions): 
 
   function buildMarkers() {
     if (!scene || !stack) return;
-    hoverHL = new CellHighlight(undefined, 0.30);
-    termHL = new CellHighlight("#FFD98A", 0.26);
-    monthHL = new CellHighlight("#FFD98A", 0.20);
-    lodgeHL = new CellHighlight("#BFD8FF", 0.26);
+    hoverHL = new CellHighlight(undefined, TUNING.highlight.hover);
+    termHL = new CellHighlight("#FFD98A", TUNING.highlight.term);
+    monthHL = new CellHighlight("#FFD98A", TUNING.highlight.month);
+    lodgeHL = new CellHighlight("#BFD8FF", TUNING.highlight.lodge);
 
     moonNeedle = new Needle("#BFD8FF", RINGS.C14 - 0.02, RINGS.lodgeOut + 0.012);
     pivotOf("L1").add(moonNeedle.mesh);
@@ -252,11 +291,39 @@ export function createCompass(canvas: HTMLCanvasElement, opts: CompassOptions): 
 
     // Khoá spin tuyệt đối cho cả bốn vành rồi trả tự do lại cho hai vành không
     // mang dấu lịch — setCalendarSpin() của bản gốc không nhận từng vành riêng.
+    //
+    // Phải cất góc xoay cũ của hai vành đó ra trước và trả lại nguyên vẹn:
+    // setCalendarSpin kéo spinTarget của MỌI vành về plateSpin (hiện ~217°),
+    // nên nếu chỉ gán calendarSpin = null thì chúng vẫn mang cái đích đó, và
+    // lần applyPreset kế tiếp (tự về nếp) sẽ quật chúng ngược hơn 200° — một
+    // cú giật kèm bung bụi, đúng 4 giây sau khi trang vừa mở.
+    const layers = poses.layers as Record<
+      string, { calendarSpin: number | null; spin: number; spinTarget: number }
+    >;
+    const freeLayers = SPINNING_LAYERS.map((id) => ({
+      id, spin: layers[id].spin, spinTarget: layers[id].spinTarget,
+    }));
     poses.setCalendarSpin(cal.plateSpin);
-    const layers = poses.layers as Record<string, { calendarSpin: number | null; autoSpin: number }>;
-    for (const id of SPINNING_LAYERS) layers[id].calendarSpin = null;
+    for (const k of freeLayers) {
+      layers[k.id].calendarSpin = null;
+      layers[k.id].spin = k.spin;
+      layers[k.id].spinTarget = k.spinTarget;
+    }
 
     moonNeedle.setAngle(cal.moonTheta);
+
+    const lodge = splitLabel(cellLabel(BAND_BY_ID.lodges, cal.lodgeIndex));
+    opts.onCalendar?.({
+      date: cal.date,
+      sunLon: cal.sunLon,
+      term: splitLabel(cellLabel(BAND_BY_ID.terms, cal.termIndex)).pair,
+      month: splitLabel(cellLabel(BAND_BY_ID.months, cal.monthIndex)).pair,
+      lodge: lodge.pair,
+      lodgeQuadrant: lodge.rest,
+      phaseName: cal.phaseName,
+      illumination: cal.phase.illumination,
+      moonAge: cal.phase.age,
+    });
     termHL?.show(BAND_BY_ID.terms, cal.termIndex, pivotOf("L1"));
     monthHL?.show(BAND_BY_ID.months, cal.monthIndex, pivotOf("L2"));
     lodgeHL?.show(BAND_BY_ID.lodges, cal.lodgeIndex, pivotOf("L1"));

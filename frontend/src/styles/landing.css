@@ -345,6 +345,58 @@
 .atom-corner-tr { right: 36px; top: 96px; text-align: right; }
 .atom-corner-br { right: 36px; bottom: 26px; text-align: right; }
 
+/* ── Dòng đọc số của la bàn ──────────────────────────────
+   Chú thích cho những gì đang sáng trên mặt đĩa: một dải nằm ngang ở giữa
+   đáy, ngay trên dòng gợi ý thao tác — cùng ngôn ngữ chữ với dòng đó.
+   Không đặt ở góc phải trên cạnh đĩa dù nhãn đứng cạnh vật thì dễ đọc hơn:
+   đĩa chiếm gần trọn nửa phải và nét thì rất sáng, chữ đặt lên là mất đọc.
+   Dải đáy nằm dưới mép đĩa nên luôn trên nền trơn.
+   max-width chừa chỗ hai bên cho bong bóng trợ lý (trái) và nút CTA (phải). */
+.atom-readout {
+  position: absolute;
+  left: 50%;
+  bottom: 46px;
+  transform: translateX(-50%);
+  z-index: 6;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 3px 20px;
+  max-width: calc(100% - 320px);
+  text-align: center;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.82);
+  /* Nét đĩa rất sáng, chữ trắng đặt lên dễ mất chân — một quầng tối mỏng bám
+   * theo chữ đủ để tách ra mà không thành hộp nền đục. */
+  text-shadow: 0 0 6px rgba(0, 0, 0, 0.85), 0 1px 2px rgba(0, 0, 0, 0.7);
+}
+/* Không dùng dấu chấm phân cách giữa các mục: dải này xuống dòng ở khổ hẹp,
+   dấu sẽ rơi vào đầu hàng. Khoảng cách cột cộng với tương phản nhãn (mờ, hoa)
+   với giá trị (vàng đồng) đã đủ tách các mục. */
+.atom-readout > div {
+  display: flex;
+  gap: 6px;
+  white-space: nowrap;
+}
+.atom-readout dt {
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.45);
+}
+.atom-readout dd {
+  margin: 0;
+  color: var(--atom-accent);
+}
+.atom-readout .han {
+  /* Chữ Hán cùng bộ với chữ trên mặt đĩa, không phải font mono của khối này */
+  font-family: "Noto Serif SC", serif;
+  letter-spacing: 0;
+  margin-right: 2px;
+}
+
 .atom-hint {
   position: absolute;
   left: 50%;
@@ -432,6 +484,26 @@
   /* Hint lên trên hàng CTA thay vì nằm cùng đáy — ở 375px nó xuống 2 dòng và
    * chui xuống dưới nút trắng "Mở trợ lý". */
   .atom-hint { bottom: 68px; max-width: calc(100% - 40px); text-align: center; }
+  /* Ở khổ dọc, canvas là một dải chiếm 56svh đáy card nên dòng đọc số không
+     còn chỗ nào nằm trên nền trơn — chữ mảnh đặt lên nét vàng là mất đọc hẳn.
+     Cho nó một dải nền mờ để tách khỏi đĩa, thay vì bỏ bớt mục đi. */
+  .atom-readout {
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    bottom: 104px;
+    left: 8px;
+    right: 8px;
+    max-width: none;
+    transform: none;
+    padding: 7px 12px;
+    border-radius: 12px;
+    background: rgba(12, 16, 8, 0.58);
+    backdrop-filter: blur(7px);
+    -webkit-backdrop-filter: blur(7px);
+    text-shadow: none;
+  }
+
   .atom-cta { right: 20px; bottom: 18px; padding: 10px 20px; font-size: 13px; }
 }
 
@@ -439,6 +511,7 @@
  * đỡ chật (thao tác kéo/cuộn vẫn hoạt động, chỉ là không nhắc). */
 @media (max-width: 720px) and (max-height: 520px) {
   .atom-hint { display: none; }
+  .atom-readout { display: none; }
   .atom-hero { padding-top: 76px; padding-bottom: 88px; }
   .atom-canvas,
   .atom-vignette { height: 62svh; }

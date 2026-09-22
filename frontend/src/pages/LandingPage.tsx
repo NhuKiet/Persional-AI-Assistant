@@ -1,9 +1,9 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import mainlogo from "../assets/mainlogo.png";
 import { useTheme } from "../hooks/useTheme";
 import { createCompass } from "../three/compass";
-import type { CompassHandle } from "../three/compass";
+import type { CompassHandle, CompassReadout } from "../three/compass";
 
 /** Trang chủ — "La bàn thiên văn": bốn vành đồng tâm (chòm sao, lịch ngoài,
  *  12 tháng, lõi Bắc Đẩu) vẽ bằng nét sáng, tự quay chậm ngược chiều nhau;
@@ -18,12 +18,21 @@ import type { CompassHandle } from "../three/compass";
  *  thay cho xanh lá #11660f cũ, xem ghi chú màu ở đầu landing.css. */
 const ATOM_BG = { dark: 0x2f3d22, light: 0x2f3d22 };
 
+const dateFmt = new Intl.DateTimeFormat("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" });
+const formatDate = (d: Date) => dateFmt.format(d);
+
+/** "Trăng khuyết đầu" → "khuyết đầu": nhãn bên cạnh đã ghi "Trăng" rồi. Các
+ *  tên không bắt đầu bằng "Trăng" ("Sóc (trăng mới)", "Thượng huyền") chỉ bị
+ *  hạ chữ hoa đầu dòng. */
+const shortPhase = (name: string) => name.replace(/^Trăng\s+/i, "").toLowerCase();
+
 export function LandingPage() {
   const navigate = useNavigate();
   const { theme, toggle } = useTheme();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const handleRef = useRef<CompassHandle | null>(null);
   const failedRef = useRef<HTMLDivElement>(null);
+  const [cal, setCal] = useState<CompassReadout | null>(null);
 
   const goToChat = () => navigate("/chat");
 
@@ -32,6 +41,7 @@ export function LandingPage() {
     if (!canvas) return;
     const handle = createCompass(canvas, {
       backgroundColor: ATOM_BG[theme],
+      onCalendar: setCal,
       onFail: () => {
         canvas.style.display = "none";
         if (failedRef.current) failedRef.current.style.display = "flex";
@@ -91,6 +101,33 @@ export function LandingPage() {
         </header>
 
         <div className="atom-corner atom-corner-tr">KiNg — lõi xử lý<br/>trực tuyến · liên tục</div>
+
+        {/* Dòng đọc số của la bàn: chính là những gì đang sáng trên mặt đĩa —
+            ô tiết khí, ô tháng kiến, tú Mặt Trăng đang ở. Chỉ hiện khi cảnh 3D
+            dựng được; máy không có WebGL thì không có gì để chú thích. */}
+        {cal && (
+          <dl className="atom-readout" aria-label="Lịch thiên văn hôm nay">
+            <div>
+              <dt>{formatDate(cal.date)}</dt>
+              <dd><span className="han">{cal.term[0]}</span> tiết {cal.term[1]}</dd>
+            </div>
+            <div>
+              <dt>Tháng kiến</dt>
+              <dd><span className="han">{cal.month[0]}</span> {cal.month[1]}</dd>
+            </div>
+            <div>
+              <dt>Mặt Trời</dt>
+              <dd>{cal.sunLon.toFixed(1)}° hoàng đạo</dd>
+            </div>
+            <div>
+              <dt>Trăng</dt>
+              <dd>
+                <span className="han">{cal.lodge[0]}</span> tú {cal.lodge[1]}
+                {" · "}{shortPhase(cal.phaseName)} {Math.round(cal.illumination * 100)}%
+              </dd>
+            </div>
+          </dl>
+        )}
         <button type="button" className="atom-cta" onClick={goToChat}>
           <span className="atom-cta-text">Mở trợ lý</span>
         </button>
