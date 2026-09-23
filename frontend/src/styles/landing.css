@@ -247,7 +247,7 @@
   position: absolute;
   left: 40px;
   top: 92px;
-  bottom: 96px;
+  bottom: 80px;
   display: flex;
   flex-direction: column;
   width: min(43vw, 540px);
@@ -268,7 +268,7 @@
   letter-spacing: 0.01em;
   text-transform: none;
   color: rgba(255, 255, 255, 0.9);
-  margin-bottom: 18px;
+  margin-bottom: 12px;
   display: flex;
   align-items: center;
   gap: 14px;
@@ -293,7 +293,7 @@
   line-height: 1.08;
   letter-spacing: -0.03em;
   color: #ffffff;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 .atom-headline em {
   font-style: normal;
@@ -308,7 +308,7 @@
   line-height: 1.6;
   color: rgba(255, 255, 255, 0.82);
   max-width: 380px;
-  margin-bottom: 26px;
+  margin-bottom: 14px;
 }
 
 .atom-metrics {
@@ -454,7 +454,10 @@
     display: block;
     width: auto;
     overflow: visible;
-    padding: 96px 22px 112px;
+    /* padding-bottom phải chừa cả DẢI ĐÁY: dòng đọc số (bottom 104px, cao ~4
+       dòng), hint và nút CTA. Trước khi có quyển sách thì nội dung hero ngắn,
+       112px là đủ; giờ trang cuối của sách chạm đúng vào dòng đọc số. */
+    padding: 96px 22px 208px;
   }
   .atom-hero > :first-child { margin-top: 0; }
   .atom-hero > :last-child { margin-bottom: 0; }
@@ -484,10 +487,19 @@
   /* Hint lên trên hàng CTA thay vì nằm cùng đáy — ở 375px nó xuống 2 dòng và
    * chui xuống dưới nút trắng "Mở trợ lý". */
   .atom-hint { bottom: 68px; max-width: calc(100% - 40px); text-align: center; }
-  /* Ở khổ dọc, canvas là một dải chiếm 56svh đáy card nên dòng đọc số không
-     còn chỗ nào nằm trên nền trơn — chữ mảnh đặt lên nét vàng là mất đọc hẳn.
-     Cho nó một dải nền mờ để tách khỏi đĩa, thay vì bỏ bớt mục đi. */
+  /* Ở khổ dọc, dòng đọc số là một overlay ghim ở dải đáy card, trong khi nội
+     dung hero (giờ có cả quyển sách portfolio) thì CUỘN qua bên dưới nó — nên
+     không có giá trị padding nào tách được hai thứ ra: cuộn tới đâu cũng có
+     lúc trang sách chui xuống dưới bảng lịch. Hai overlay tranh nhau cùng một
+     dải, phải bỏ một; bỏ bảng lịch vì nó là chú thích cho đĩa la bàn, còn
+     portfolio mới là thứ trang này để cho người ta đọc. Đĩa vẫn xoay và kéo
+     được bình thường, chỉ là không có dòng chú giải.
+     Muốn giữ lại trên điện thoại thì đổi display thành flex và cho quyển sách
+     lùn xuống (.pf-stage ở portfolio.css) để hai bên không chạm nhau. */
   .atom-readout {
+    /* Bỏ dòng này là bảng lịch hiện lại, với nguyên bộ style bên dưới. */
+    display: none;
+
     flex-direction: column;
     align-items: center;
     gap: 2px;

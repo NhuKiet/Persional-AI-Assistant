@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import mainlogo from "../assets/mainlogo.png";
+import { PortfolioBook } from "../components/PortfolioBook";
+import { CORE_FEATURES, type Lang } from "../config/portfolio";
 import { useTheme } from "../hooks/useTheme";
 import { createCompass } from "../three/compass";
 import type { CompassHandle, CompassReadout } from "../three/compass";
@@ -33,6 +35,9 @@ export function LandingPage() {
   const handleRef = useRef<CompassHandle | null>(null);
   const failedRef = useRef<HTMLDivElement>(null);
   const [cal, setCal] = useState<CompassReadout | null>(null);
+  // Nút VI/EN nằm trong quyển portfolio nhưng chi phối cả mấy dòng năng lực ở
+  // trên nó, nên ngôn ngữ phải do trang chủ giữ.
+  const [lang, setLang] = useState<Lang>("vi");
 
   const goToChat = () => navigate("/chat");
 
@@ -91,13 +96,18 @@ export function LandingPage() {
             KiNg gộp nghiên cứu, viết code, giải bài tập và đọc tài liệu vào một lõi xử lý
             duy nhất — luôn sẵn sàng, luôn học hỏi.
           </p>
-          <div className="atom-metrics">
-            <div className="atom-metric"><div className="k">Công cụ</div><div className="v">Nghiên cứu, code, PDF, tin tức</div></div>
-            <div className="atom-metric"><div className="k">Phản hồi</div><div className="v">Trả lời ngay, không chờ</div></div>
-            <div className="atom-metric"><div className="k">Bộ nhớ</div><div className="v">Nhớ mạch chuyện đang nói</div></div>
-            <div className="atom-metric"><div className="k">Ngôn ngữ</div><div className="v">Nói chuyện như người Việt</div></div>
-            <div className="atom-metrics-note">Tổng quan nhanh về KiNg</div>
+          {/* Vài dòng năng lực cốt lõi rồi tới portfolio. Thay cho bảng
+              metrics 2x2 cũ: chỗ này đáng giá hơn khi nói về NGƯỜI làm ra
+              KiNg, còn năng lực của KiNg thì headline + sub ở trên đã nói. */}
+          <div className="atom-core">
+            {CORE_FEATURES.map(f => (
+              <div className="atom-core-row" key={f.k.vi}>
+                <span className="atom-core-k">{f.k[lang]}</span>
+                <span className="atom-core-v">{f.v[lang]}</span>
+              </div>
+            ))}
           </div>
+          <PortfolioBook lang={lang} onLangChange={setLang} />
         </header>
 
         <div className="atom-corner atom-corner-tr">KiNg — lõi xử lý<br/>trực tuyến · liên tục</div>

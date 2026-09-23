@@ -1,0 +1,400 @@
+/* Quyển sách portfolio ở trang chủ (components/PortfolioBook.tsx).
+   Sống trên card rêu ô liu của landing, nên mọi màu ở đây đều là sắc độ của
+   nền đó + đúng một hue nhấn --atom-accent, giữ nguyên kỷ luật một-accent đã
+   đặt ra ở đầu landing.css. Không dùng token --bg/--text của app: những token
+   đó đổi theo theme sáng/tối, còn card landing thì LUÔN tối ở cả hai theme —
+   lấy chúng vào là chữ sẽ biến mất ở theme sáng. */
+
+/* ── Vài dòng năng lực cốt lõi, ngay trên quyển sách ────────────── */
+
+.atom-core {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+.atom-core-row {
+  display: grid;
+  grid-template-columns: 78px 1fr;
+  gap: 10px;
+  align-items: baseline;
+}
+.atom-core-k {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--atom-accent);
+}
+.atom-core-v {
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.86);
+}
+
+/* ── Quyển sách ─────────────────────────────────────────────────── */
+
+.pf-book {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  /* Nhận phần chiều cao dư của hero. .atom-hero đặt `> :last-child {
+     margin-bottom: auto }` để canh giữa khối chữ; margin auto đó nuốt hết
+     chỗ dư nên phải trả về 0, nếu không flex-grow ở trên không có gì để ăn.
+
+     Co giãn được cả hai chiều, nhưng phần co lại dồn hết vào .pf-stage (xem
+     dưới): thanh tiêu đề và hàng nút lật KHÔNG được phép co. Trước đây khung
+     trang cao cố định nên ở màn ~660px, hero thiếu 39px và phần bị cắt rơi
+     đúng vào hàng nút — người xem không thấy mũi tên lẫn chấm trang, tức là
+     không biết quyển sách còn 7 trang nữa. */
+  flex: 1 1 auto;
+  min-height: 0;
+  margin-bottom: 0;
+  border-radius: 10px;
+  /* Gáy sách: dải đậm bên trái + vạch accent mảnh, gợi chỗ các trang được
+     đóng vào. Vẽ bằng gradient chứ không thêm phần tử — nó thuần trang trí,
+     không đáng tốn một node cho screen reader đọc qua. */
+  background:
+    linear-gradient(90deg,
+      rgba(0, 0, 0, 0.28) 0,
+      rgba(0, 0, 0, 0.28) 7px,
+      color-mix(in srgb, var(--atom-accent) 55%, transparent) 7px,
+      color-mix(in srgb, var(--atom-accent) 55%, transparent) 8px,
+      transparent 8px),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.085), rgba(255, 255, 255, 0.05)),
+    /* Lớp ĐỤC dưới cùng. Bắt buộc: canvas 3D nằm ngay sau quyển sách, và ở
+       khổ dọc nó là dải sáng chiếm 56svh đáy card — để nền trong suốt thì nét
+       vàng của la bàn xuyên qua chữ, đọc không nổi. Tối hơn card một chút để
+       quyển sách đọc ra như một vật đặt TRÊN mặt nền, không phải một ô khoét
+       vào nền. */
+    linear-gradient(var(--atom-bg), var(--atom-bg));
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.28);
+}
+.pf-book:focus-visible {
+  outline: 2px solid var(--atom-accent);
+  outline-offset: 3px;
+}
+
+/* Mép giấy xếp lớp ở cạnh phải — cho cảm giác còn nhiều trang phía sau. */
+.pf-book::after {
+  content: "";
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  right: -3px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: repeating-linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.18) 0 2px,
+    transparent 2px 4px
+  );
+  pointer-events: none;
+}
+
+.pf-bar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px 6px 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+.pf-bar-title {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.8);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pf-lang { display: flex; gap: 2px; flex-shrink: 0; }
+.pf-lang-btn {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  padding: 2px 6px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: none;
+  color: rgba(255, 255, 255, 0.62);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease);
+}
+.pf-lang-btn:hover { color: #ffffff; background: rgba(255, 255, 255, 0.1); }
+.pf-lang-btn.is-on {
+  color: var(--atom-accent);
+  border-color: color-mix(in srgb, var(--atom-accent) 45%, transparent);
+  background: color-mix(in srgb, var(--atom-accent) 12%, transparent);
+}
+.pf-lang-btn:focus-visible { outline: 2px solid var(--atom-accent); outline-offset: 1px; }
+
+/* Sân khấu lật: perspective phải đặt ở CHA thì con mới xoay ra chiều sâu
+   thật; đặt trên chính phần tử xoay sẽ ra phép chiếu phẳng, nhìn như trượt
+   chứ không như lật. Chiều cao cố định — đây là điểm mấu chốt khiến nội dung
+   dài thêm không làm vỡ hero. */
+.pf-stage {
+  position: relative;
+  /* ĂN HẾT chỗ trống còn lại của hero thay vì chốt một chiều cao theo vh.
+     Lý do: hero là flex column canh giữa, ở 1440x900 nó còn dư hơn 200px
+     trống, trong khi 19vh chỉ cho trang sách 171px — hậu quả là 8/16 trang
+     (mọi trang dự án, ở cả hai thứ tiếng) bị cắt mất nửa dưới, đúng phần
+     nhà tuyển dụng cần đọc. Để nó lớn lên thì mọi trang vừa khít ở khổ màn
+     hình thường gặp, mà cơ chế phân trang vẫn còn nguyên tác dụng: chiều cao
+     vẫn biết trước tại thời điểm dựng, chỉ là do layout quyết định chứ không
+     do một con số viết cứng.
+     min = mức cũ, để màn thấp không tệ hơn trước. max để màn rất cao không
+     kéo quyển sách dài ngoẵng thành một cột chữ. */
+  flex: 1 1 auto;
+  /* Sàn thấp có chủ ý: khi hero chật, thà khung trang lùn lại và phải cuộn
+     (đã có vệt mờ + chevron báo) còn hơn đẩy hàng nút lật ra khỏi tầm nhìn. */
+  min-height: 84px;
+  max-height: 420px;
+  perspective: 1100px;
+  overflow: hidden;
+}
+
+/* Trang còn nội dung bên dưới: làm mờ dần mép đáy và thả một mũi chevron nhỏ.
+   Thanh cuộn ở đây là loại overlay, rộng 0px và chỉ hiện lúc đang cuộn, nên
+   nếu không có dấu này thì trang bị cắt trông y hệt trang đã hết chữ — người
+   đọc không có lý do gì để cuộn. */
+.pf-stage.is-clipped::after {
+  content: "";
+  position: absolute;
+  left: 1px;
+  right: 1px;
+  bottom: 0;
+  height: 34px;
+  pointer-events: none;
+  background: linear-gradient(to bottom, transparent, var(--atom-bg) 88%);
+}
+.pf-stage.is-clipped::before {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  left: 50%;
+  bottom: 6px;
+  width: 7px;
+  height: 7px;
+  margin-left: -4px;
+  border-right: 1.5px solid var(--atom-accent);
+  border-bottom: 1.5px solid var(--atom-accent);
+  transform: rotate(45deg);
+  pointer-events: none;
+  animation: pf-more 1.9s ease-in-out infinite;
+}
+@keyframes pf-more {
+  0%, 100% { opacity: 0.35; transform: rotate(45deg) translate(0, 0); }
+  50%      { opacity: 0.9;  transform: rotate(45deg) translate(2px, 2px); }
+}
+
+.pf-leaf {
+  position: absolute;
+  inset: 0;
+  transform-origin: left center;
+  animation: pf-flip-next 0.42s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  backface-visibility: hidden;
+}
+.pf-leaf[data-dir="prev"] {
+  transform-origin: right center;
+  animation-name: pf-flip-prev;
+}
+
+@keyframes pf-flip-next {
+  from { transform: rotateY(-74deg); opacity: 0; }
+  60%  { opacity: 1; }
+  to   { transform: rotateY(0deg); opacity: 1; }
+}
+@keyframes pf-flip-prev {
+  from { transform: rotateY(74deg); opacity: 0; }
+  60%  { opacity: 1; }
+  to   { transform: rotateY(0deg); opacity: 1; }
+}
+
+.pf-leaf-body {
+  height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 10px 14px 12px 18px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.22) transparent;
+}
+.pf-leaf-body::-webkit-scrollbar { width: 4px; }
+.pf-leaf-body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.22);
+  border-radius: 2px;
+}
+
+.pf-title {
+  font-family: var(--display);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  color: #ffffff;
+  margin: 0 0 3px;
+}
+.pf-meta {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--atom-accent);
+  margin: 0 0 8px;
+}
+.pf-body {
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.86);
+  margin: 0 0 8px;
+}
+
+.pf-list { margin: 0; padding: 0; list-style: none; }
+.pf-list li {
+  position: relative;
+  font-size: 12px;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.86);
+  padding-left: 13px;
+  margin-bottom: 7px;
+}
+.pf-list li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 8px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--atom-accent) 75%, transparent);
+}
+
+.pf-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin: 10px 0 0;
+}
+.pf-links a {
+  font-size: 12px;
+  color: var(--atom-accent);
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--atom-accent) 40%, transparent);
+  padding-bottom: 1px;
+  transition: border-color var(--dur-fast) var(--ease);
+}
+.pf-links a:hover { border-bottom-color: var(--atom-accent); }
+.pf-links a:focus-visible { outline: 2px solid var(--atom-accent); outline-offset: 2px; }
+
+/* ── Điều hướng ─────────────────────────────────────────────────── */
+
+.pf-nav {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 12px 6px 18px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+.pf-nav-btn {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.07);
+  color: rgba(255, 255, 255, 0.88);
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease),
+              color var(--dur-fast) var(--ease), opacity var(--dur-fast) var(--ease);
+}
+.pf-nav-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--atom-accent) 20%, transparent);
+  border-color: color-mix(in srgb, var(--atom-accent) 55%, transparent);
+  color: #ffffff;
+}
+.pf-nav-btn:disabled { opacity: 0.3; cursor: default; }
+.pf-nav-btn:focus-visible { outline: 2px solid var(--atom-accent); outline-offset: 2px; }
+
+.pf-dots {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.pf-dot {
+  display: block;
+  width: 6px;
+  height: 6px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.28);
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
+}
+.pf-dot:hover { background: rgba(255, 255, 255, 0.55); }
+.pf-dot.is-on { background: var(--atom-accent); transform: scale(1.35); }
+.pf-dot:focus-visible { outline: 2px solid var(--atom-accent); outline-offset: 2px; }
+
+/* Chỉ dành cho screen reader — không dùng display:none vì như thế thì vùng
+   aria-live không còn được đọc. */
+.pf-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── Responsive ─────────────────────────────────────────────────── */
+
+/* Màn thấp: hero đã bị kẹp sẵn giữa nav và dải CTA, nên trang sách phải lùn
+   lại theo. Dưới 520px thì bỏ hẳn mấy dòng năng lực — quyển sách mới là thứ
+   người ta vào đây để xem. */
+@media (min-width: 721px) and (max-height: 620px) {
+  .pf-stage { max-height: 190px; }
+  .atom-core { gap: 3px; margin-bottom: 8px; }
+}
+@media (min-width: 721px) and (max-height: 520px) {
+  .atom-core { display: none; }
+  .pf-stage { max-height: 150px; }
+}
+
+@media (max-width: 720px) {
+  /* 180 chứ không phải 210: cao hơn nữa là đáy quyển sách chạm vào dòng gợi ý
+     "kéo để xoay" ghim ở dải đáy. Thà trang sách lùn hơn một chút còn hơn bỏ
+     nốt dòng gợi ý đó đi. */
+  .pf-stage { min-height: 180px; max-height: 180px; }
+  .pf-book { box-shadow: 0 8px 20px rgba(0, 0, 0, 0.34); }
+  .atom-core-row { grid-template-columns: 72px 1fr; }
+}
+
+/* Giảm chuyển động: bỏ hẳn phần xoay 3D, chỉ còn một nhịp mờ dần để vẫn thấy
+   là trang đã đổi. */
+@media (prefers-reduced-motion: reduce) {
+  .pf-leaf,
+  .pf-leaf[data-dir="prev"] {
+    animation: pf-fade 0.15s linear both;
+  }
+  @keyframes pf-fade {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+  .pf-dot.is-on { transform: none; }
+}
