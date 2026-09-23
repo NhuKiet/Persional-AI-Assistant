@@ -10,8 +10,8 @@
 }
 
 .hmer-head { display: flex; flex-direction: column; gap: 6px; }
-.hmer-title { margin: 0; font-size: 26px; font-weight: 600; color: var(--fg1); }
-.hmer-sub { margin: 0; font-size: 14px; line-height: 1.6; color: var(--fg2); }
+.hmer-title { margin: 0; font-size: 26px; font-weight: 600; color: var(--text); }
+.hmer-sub { margin: 0; font-size: 14px; line-height: 1.6; color: var(--text2); }
 
 /* Operator-facing, not an error: a missing checkpoint is a deployment state,
    so it reads as a notice rather than a failure. */
@@ -21,7 +21,7 @@
   border-radius: 10px;
   border-left: 3px solid var(--accent-hmer);
   background: color-mix(in srgb, var(--accent-hmer) 10%, transparent);
-  color: var(--fg2);
+  color: var(--text2);
   font-size: 13px;
   line-height: 1.55;
 }
@@ -32,7 +32,7 @@
   border-radius: 10px;
   border-left: 3px solid var(--danger);
   background: color-mix(in srgb, var(--danger) 10%, transparent);
-  color: var(--fg1);
+  color: var(--text);
   font-size: 13px;
   line-height: 1.55;
 }
@@ -64,10 +64,10 @@
 
 .hmer-drop.is-busy { cursor: progress; }
 
-.hmer-drop-main { font-size: 15px; font-weight: 500; color: var(--fg1); }
-.hmer-drop-sub { font-size: 13px; color: var(--fg3); }
+.hmer-drop-main { font-size: 15px; font-weight: 500; color: var(--text); }
+.hmer-drop-sub { font-size: 13px; color: var(--text3); }
 
-.hmer-busy { display: inline-flex; align-items: center; gap: 10px; color: var(--fg2); font-size: 14px; }
+.hmer-busy { display: inline-flex; align-items: center; gap: 10px; color: var(--text2); font-size: 14px; }
 
 .hmer-spinner {
   width: 16px; height: 16px;
@@ -103,7 +103,7 @@
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--fg3);
+  color: var(--text3);
 }
 
 .hmer-thumb {
@@ -119,17 +119,17 @@
   overflow-x: auto;
   overflow-y: hidden;
   padding: 10px 2px;
-  color: var(--fg1);
+  color: var(--text);
 }
 
-.hmer-empty { margin: 0; font-size: 14px; color: var(--fg3); }
+.hmer-empty { margin: 0; font-size: 14px; color: var(--text3); }
 
 .hmer-code {
   display: block;
   padding: 10px 12px;
   border-radius: 8px;
   background: var(--bg3);
-  color: var(--fg2);
+  color: var(--text2);
   font-family: var(--mono, ui-monospace, monospace);
   font-size: 12.5px;
   line-height: 1.6;
@@ -143,12 +143,12 @@
   border: 1px solid var(--border2);
   border-radius: 8px;
   background: transparent;
-  color: var(--fg2);
+  color: var(--text2);
   font-size: 13px;
   cursor: pointer;
 }
 
-.hmer-copy:hover { border-color: var(--accent-hmer); color: var(--fg1); }
+.hmer-copy:hover { border-color: var(--accent-hmer); color: var(--text); }
 
 .hmer-meta {
   display: flex;
@@ -156,11 +156,11 @@
   gap: 18px;
   margin: 0;
   padding-top: 4px;
-  border-top: 1px solid var(--border1);
+  border-top: 1px solid var(--border);
 }
 
-.hmer-meta dt { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--fg3); }
-.hmer-meta dd { margin: 2px 0 0; font-size: 14px; color: var(--fg1); }
+.hmer-meta dt { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text3); }
+.hmer-meta dd { margin: 2px 0 0; font-size: 14px; color: var(--text); }
 
 @media (max-width: 760px) {
   .hmer-page { padding: 20px 16px 48px; }
