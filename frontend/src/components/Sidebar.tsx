@@ -1,5 +1,7 @@
 import mainlogo from "../assets/mainlogo.png";
 import { useNavigate } from "react-router-dom";
+
+import { FEATURES } from "../config/features";
 import { ACCENT } from "../config/theme";
 import { groupByDate, type Session } from "../lib/storage";
 import { useTheme } from "../hooks/useTheme";
@@ -46,12 +48,14 @@ export function Sidebar({ open, onToggle, sessions, activeId, onSelect, onDelete
           Trang chủ
         </button>
 
-        <button className="sb-home-link" onClick={() => navigate("/news")}>
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-            <path d="M2 3.5h10M2 7h10M2 10.5h6" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
-          </svg>
-          Tin tức
-        </button>
+        {FEATURES.news && (
+          <button className="sb-home-link" onClick={() => navigate("/news")}>
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+              <path d="M2 3.5h10M2 7h10M2 10.5h6" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
+            </svg>
+            Tin tức
+          </button>
+        )}
 
         <button className="sb-new-chat" onClick={onNewChat} style={{ borderColor: `color-mix(in srgb, ${accentColor} 27%, transparent)` }}>
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none">

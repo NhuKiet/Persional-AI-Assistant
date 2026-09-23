@@ -23,9 +23,9 @@ Project gốc còn có `main.js`, `ui/app.js` (bảng điều khiển) và
 
 ## Lớp lịch
 
-`astro/calendar.js` + `scene/markers.js` CÓ được port: kim chỉ cố định ở đỉnh
-khung (vị trí Mặt Trời), kim Mặt Trăng trên vành 28 tú, và ba ô sáng ứng với
-tiết khí / tháng kiến / tú hiện tại.
+`astro/calendar.js` + `scene/markers.js` CÓ được port: kim chỉ vị trí Mặt Trời,
+kim Mặt Trăng trên vành 28 tú, và ba ô sáng ứng với tiết khí / tháng kiến / tú
+hiện tại.
 
 Khác một điểm so với bản gốc. Bản gốc ghim kim Mặt Trời CỐ ĐỊNH ở đỉnh khung
 rồi xoay cả đĩa sao cho vị trí Mặt Trời trồi lên đúng dưới nó — nên bật lịch là

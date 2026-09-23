@@ -3,8 +3,9 @@
  *  sao / khói bung ra theo chuyển động, bloom và một lớp vignette + grain.
  *
  *  Đây là lớp vỏ có kiểu thay cho `main.js` của project gốc: nó dựng cảnh, gắn
- *  điều khiển và chạy vòng lặp render, bỏ hẳn bảng điều khiển, lịch âm và chế
- *  độ phát animation. Xem [README.md](README.md) để biết file nào là vendor.
+ *  điều khiển, chạy vòng lặp render và khoá lớp lịch vào ngày hôm nay; bỏ hẳn
+ *  bảng điều khiển và chế độ phát animation 14 giây.
+ *  Xem [README.md](README.md) để biết file nào là vendor.
  *
  *  Hình dạng handle cố ý trùng với `createAtomReactor` (../atomReactor.ts) nên
  *  LandingPage đổi qua lại giữa hai cảnh chỉ bằng một dòng import. */
