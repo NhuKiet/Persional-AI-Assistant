@@ -46,6 +46,20 @@ if (!global.ResizeObserver) {
     observe() {} unobserve() {} disconnect() {}
   };
 }
+// jsdom không có PointerEvent; khung vẽ HMER nghe pointer events. Dựng trên
+// MouseEvent để giữ clientX/clientY/button, thêm các trường của pointer.
+if (!window.PointerEvent) {
+  class PointerEventShim extends MouseEvent {
+    constructor(type, init = {}) {
+      super(type, init);
+      this.pointerId = init.pointerId ?? 1;
+      this.pointerType = init.pointerType ?? "mouse";
+      this.isPrimary = init.isPrimary ?? true;
+    }
+  }
+  window.PointerEvent = PointerEventShim;
+  globalThis.PointerEvent = PointerEventShim;
+}
 if (!global.IntersectionObserver) {
   global.IntersectionObserver = class {
     constructor(callback) { this.callback = callback; }

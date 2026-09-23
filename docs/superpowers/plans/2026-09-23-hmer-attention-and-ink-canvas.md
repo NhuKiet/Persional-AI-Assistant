@@ -109,14 +109,17 @@ T1 ──► T5 spikes ──► T6 attention.py ──► T7 API ──► T8 A
 **Description:** Add input tabs "Tải ảnh" / "Vẽ tay" to `HmerPage`. `InkCanvas` captures pointer strokes (mouse, pen, touch; `touch-action: none`; pointer capture), previews them at `PEN_PX`, and has Hoàn tác / Xoá / Nhận dạng. Export renders the T2 layout on an offscreen canvas (white, black, `lineWidth` 22, dots as filled circles), binarises at 128, and sends `File("ve-tay.png")` through the existing `recognizeImage`.
 
 **Acceptance criteria:**
-- [ ] Switching tabs leaves the upload path working unchanged (existing `HmerPage` tests still pass).
-- [ ] Undo removes the last stroke and Clear removes all. Nhận dạng is disabled while empty or busy.
-- [ ] In the browser, a drawn expression is recognized and the result panel shows the stored, normalised image.
+- [x] Switching tabs leaves the upload path working unchanged (existing `HmerPage` tests still pass). Both panels stay mounted and are only hidden, so a drawing survives a trip to the upload tab. Arrow keys move between tabs (ARIA tabs pattern).
+- [x] Undo removes the last stroke and Clear removes all. Nhận dạng is disabled while empty or busy. A second finger and non-primary mouse buttons add no ink.
+- [x] In the browser, a drawn expression is recognized and the result panel shows the stored, normalised image.
 
 **Verification:**
-- [ ] `cd frontend && npx vitest run src/components/hmer src/pages/HmerPage.test.tsx`
-- [ ] `npm run typecheck && npm test && npm run build` → 279 + new, all passing.
-- [ ] Browser pane: draw → Nhận dạng → result renders; zero console errors.
+- [x] `cd frontend && npx vitest run src/components/hmer src/pages/HmerPage.test.tsx` → 17 passed (8 InkCanvas, 9 HmerPage).
+- [x] `npm run typecheck && npm test && npm run build` → 299 passed in 42 files; build ok.
+- [x] Browser pane (frontend 5174 → backend 8001, via `.claude/launch.json`): a real mouse drag draws and Hoàn tác removes it. `x + 1`, drawn as pointer-event polylines, was exported as 913×391, 2 grey levels, margins 0/0/0/1 px, median stroke 22.0 px, and recognized on `cuda:0` in 6.2 s. The result panel showed the normalised image. The only console errors were two `/api/hmer/status` calls made while the backend was still starting.
+- [x] Light and dark themes checked by computed style, which also confirmed commit `4ed4082`: `hmer.css` had referenced undefined tokens (`--fg1/2/3`, `--border1`), and the metadata divider now renders.
+
+**Observed, not a T3 criterion:** the output was `X \underline { t } = 1` (score −3.29). The code-drawn `x` is two straight crossing lines as tall as the `1`, which is an uppercase X by shape; the `+` misread is real. Straight polylines are not handwriting, so T4's experiment needs real strokes.
 
 **Dependencies:** T2 (and T1 for the browser check)
 **Files:** `components/hmer/InkCanvas.tsx`, `components/hmer/InkCanvas.test.tsx`, `pages/HmerPage.tsx`, `pages/HmerPage.test.tsx`, `styles/hmer.css`

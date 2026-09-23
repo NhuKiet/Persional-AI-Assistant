@@ -33,7 +33,7 @@ function json(body: unknown, status = 200) {
  *  it cares about. */
 function mockBackend(
   { status = STATUS_READY, recognize = () => json({}) }:
-  { status?: HmerStatus; recognize?: () => Response } = {},
+  { status?: HmerStatus; recognize?: (init?: RequestInit) => Response } = {},
 ) {
   vi.stubGlobal(
     "fetch",
@@ -41,12 +41,48 @@ function mockBackend(
       const url = String(input);
       if (url.endsWith("/api/hmer/status")) return json(status);
       if (url.endsWith("/api/hmer/recognize") && init?.method === "POST") {
-        return recognize();
+        return recognize(init);
       }
       throw new Error(`Unexpected fetch: ${url}`);
     }),
   );
 }
+
+/** Enough of a 2D context for the ink pad to preview and export: jsdom has
+ *  no canvas, and setup.js makes getContext return null. */
+function mockCanvas() {
+  const context = {
+    setTransform: vi.fn(),
+    clearRect: vi.fn(),
+    fillRect: vi.fn(),
+    beginPath: vi.fn(),
+    moveTo: vi.fn(),
+    lineTo: vi.fn(),
+    arc: vi.fn(),
+    fill: vi.fn(),
+    stroke: vi.fn(),
+    getImageData: vi.fn((_x: number, _y: number, w: number, h: number) => ({
+      data: new Uint8ClampedArray(w * h * 4),
+      width: w,
+      height: h,
+    })),
+    putImageData: vi.fn(),
+  };
+  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(
+    () => context as unknown as RenderingContext,
+  );
+  vi.spyOn(HTMLCanvasElement.prototype, "toBlob").mockImplementation(function toBlob(callback) {
+    callback(new Blob(["png"], { type: "image/png" }));
+  });
+}
+
+const RESULT = {
+  filename: "abc_ve-tay.png",
+  latex: "x ^ { 2 }",
+  score: -0.2,
+  elapsed_ms: 5500,
+  device: "cuda:0",
+};
 
 function renderPage() {
   return render(
@@ -148,4 +184,68 @@ test("reports an empty beam as an outcome, not an error", async () => {
 
   expect(await screen.findByText(/không đưa ra giả thuyết nào/i)).toBeInTheDocument();
   expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+});
+
+test("switches between uploading and drawing, keeping the upload path intact", async () => {
+  mockCanvas();
+  mockBackend({ recognize: () => json(RESULT) });
+  const { container } = renderPage();
+  const uploadTab = await screen.findByRole("tab", { name: "Tải ảnh" });
+  const drawTab = screen.getByRole("tab", { name: "Vẽ tay" });
+
+  expect(uploadTab).toHaveAttribute("aria-selected", "true");
+  expect(screen.getByText(/Kéo thả ảnh công thức vào đây/i)).toBeVisible();
+  expect(screen.getByLabelText(/Khung vẽ công thức/i)).not.toBeVisible();
+
+  fireEvent.click(drawTab);
+  expect(drawTab).toHaveAttribute("aria-selected", "true");
+  expect(screen.getByLabelText(/Khung vẽ công thức/i)).toBeVisible();
+  expect(screen.getByText(/Kéo thả ảnh công thức vào đây/i)).not.toBeVisible();
+
+  fireEvent.click(uploadTab);
+  upload(container);
+  await waitFor(() =>
+    expect(container.querySelector(".hmer-code")).toHaveTextContent("x ^ { 2 }"),
+  );
+});
+
+test("moves between the two tabs with the arrow keys", async () => {
+  mockCanvas();
+  renderPage();
+  const uploadTab = await screen.findByRole("tab", { name: "Tải ảnh" });
+  const drawTab = screen.getByRole("tab", { name: "Vẽ tay" });
+
+  uploadTab.focus();
+  fireEvent.keyDown(uploadTab, { key: "ArrowRight" });
+  expect(drawTab).toHaveAttribute("aria-selected", "true");
+  expect(drawTab).toHaveFocus();
+
+  fireEvent.keyDown(drawTab, { key: "ArrowLeft" });
+  expect(uploadTab).toHaveAttribute("aria-selected", "true");
+  expect(uploadTab).toHaveFocus();
+});
+
+test("recognizes a drawing through the same endpoint as an upload", async () => {
+  mockCanvas();
+  let sent: FormDataEntryValue | null = null;
+  mockBackend({
+    recognize: (init) => {
+      sent = (init?.body as FormData).get("file");
+      return json(RESULT);
+    },
+  });
+  const { container } = renderPage();
+  fireEvent.click(await screen.findByRole("tab", { name: "Vẽ tay" }));
+
+  const pad = screen.getByLabelText(/Khung vẽ công thức/i);
+  fireEvent.pointerDown(pad, { pointerId: 1, pointerType: "mouse", button: 0, clientX: 40, clientY: 60 });
+  fireEvent.pointerMove(pad, { pointerId: 1, pointerType: "mouse", clientX: 140, clientY: 60 });
+  fireEvent.pointerUp(pad, { pointerId: 1, pointerType: "mouse", clientX: 140, clientY: 60 });
+  fireEvent.click(screen.getByRole("button", { name: "Nhận dạng" }));
+
+  await waitFor(() =>
+    expect(container.querySelector(".hmer-code")).toHaveTextContent("x ^ { 2 }"),
+  );
+  expect(sent).toBeInstanceOf(File);
+  expect((sent as unknown as File).name).toBe("ve-tay.png");
 });

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AppShell } from "../components/AppShell";
+import { InkCanvas } from "../components/hmer/InkCanvas";
 import { LatexPreview } from "../components/hmer/LatexPreview";
 import { useChatHistory } from "../hooks/useChatHistory";
 import {
@@ -14,6 +15,13 @@ import "../styles/hmer.css";
 
 const ACCEPT = "image/png,image/jpeg,image/bmp";
 
+type InputMode = "upload" | "draw";
+
+const INPUT_MODES: { id: InputMode; label: string }[] = [
+  { id: "upload", label: "Tải ảnh" },
+  { id: "draw", label: "Vẽ tay" },
+];
+
 export function HmerPage() {
   const accentColor = "var(--accent-hmer)";
   const { sessions, activeId, setActiveId, removeSession, clearAll } =
@@ -25,7 +33,19 @@ export function HmerPage() {
   const [error, setError] = useState("");
   const [dragging, setDragging] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [inputMode, setInputMode] = useState<InputMode>("upload");
   const fileRef = useRef<HTMLInputElement>(null);
+  const tabRefs = useRef<Record<InputMode, HTMLButtonElement | null>>({ upload: null, draw: null });
+
+  // ARIA tabs pattern: arrows move between tabs. With two, either arrow
+  // lands on the other one.
+  const onTabKeyDown = (event: React.KeyboardEvent) => {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    event.preventDefault();
+    const next: InputMode = inputMode === "upload" ? "draw" : "upload";
+    setInputMode(next);
+    tabRefs.current[next]?.focus();
+  };
 
   // Asked once on mount so the page can say "checkpoint missing" before the
   // user picks a file, instead of letting them find out by uploading.
@@ -108,7 +128,7 @@ export function HmerPage() {
         <header className="hmer-head">
           <h1 className="hmer-title">Công thức viết tay</h1>
           <p className="hmer-sub">
-            Tải lên ảnh <strong>một biểu thức</strong> toán viết tay, nhận lại LaTeX.
+            Tải ảnh lên hoặc vẽ tay <strong>một biểu thức</strong> toán, nhận lại LaTeX.
             Ảnh chụp cả trang nhiều dòng sẽ cho kết quả sai — hãy cắt từng biểu thức.
           </p>
         </header>
@@ -119,48 +139,87 @@ export function HmerPage() {
           </p>
         )}
 
+        <div className="hmer-tabs" role="tablist" aria-label="Cách nhập công thức" onKeyDown={onTabKeyDown}>
+          {INPUT_MODES.map((mode) => (
+            <button
+              key={mode.id}
+              ref={(el) => {
+                tabRefs.current[mode.id] = el;
+              }}
+              type="button"
+              role="tab"
+              id={`hmer-tab-${mode.id}`}
+              className="hmer-tab"
+              aria-selected={inputMode === mode.id}
+              aria-controls={`hmer-panel-${mode.id}`}
+              tabIndex={inputMode === mode.id ? 0 : -1}
+              onClick={() => setInputMode(mode.id)}
+            >
+              {mode.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Both panels stay mounted and are only hidden, so a half-finished
+            drawing survives a look at the upload tab and back. */}
         <div
-          className={`hmer-drop${dragging ? " is-dragging" : ""}${busy ? " is-busy" : ""}`}
-          onDragOver={(e) => {
-            e.preventDefault();
-            setDragging(true);
-          }}
-          onDragLeave={() => setDragging(false)}
-          onDrop={onDrop}
-          onClick={() => fileRef.current?.click()}
-          role="button"
-          tabIndex={0}
-          aria-label="Chọn ảnh công thức"
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              fileRef.current?.click();
-            }
-          }}
+          role="tabpanel"
+          id="hmer-panel-draw"
+          aria-labelledby="hmer-tab-draw"
+          hidden={inputMode !== "draw"}
         >
-          <input
-            ref={fileRef}
-            type="file"
-            accept={ACCEPT}
-            hidden
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) void handleFile(file);
-              // Reset so picking the same file twice still fires onChange.
-              e.target.value = "";
+          <InkCanvas busy={busy} onSubmit={(file) => void handleFile(file)} />
+        </div>
+
+        <div
+          role="tabpanel"
+          id="hmer-panel-upload"
+          aria-labelledby="hmer-tab-upload"
+          hidden={inputMode !== "upload"}
+        >
+          <div
+            className={`hmer-drop${dragging ? " is-dragging" : ""}${busy ? " is-busy" : ""}`}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDragging(true);
             }}
-          />
-          {busy ? (
-            <span className="hmer-busy">
-              <span className="hmer-spinner" aria-hidden="true" />
-              Đang nhận dạng…
-            </span>
-          ) : (
-            <>
-              <span className="hmer-drop-main">Kéo thả ảnh công thức vào đây</span>
-              <span className="hmer-drop-sub">hoặc bấm để chọn — PNG, JPG, BMP</span>
-            </>
-          )}
+            onDragLeave={() => setDragging(false)}
+            onDrop={onDrop}
+            onClick={() => fileRef.current?.click()}
+            role="button"
+            tabIndex={0}
+            aria-label="Chọn ảnh công thức"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                fileRef.current?.click();
+              }
+            }}
+          >
+            <input
+              ref={fileRef}
+              type="file"
+              accept={ACCEPT}
+              hidden
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) void handleFile(file);
+                // Reset so picking the same file twice still fires onChange.
+                e.target.value = "";
+              }}
+            />
+            {busy ? (
+              <span className="hmer-busy">
+                <span className="hmer-spinner" aria-hidden="true" />
+                Đang nhận dạng…
+              </span>
+            ) : (
+              <>
+                <span className="hmer-drop-main">Kéo thả ảnh công thức vào đây</span>
+                <span className="hmer-drop-sub">hoặc bấm để chọn — PNG, JPG, BMP</span>
+              </>
+            )}
+          </div>
         </div>
 
         {error && (

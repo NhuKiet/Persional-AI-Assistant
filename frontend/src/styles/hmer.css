@@ -77,6 +77,99 @@
   animation: spin 0.7s linear infinite;
 }
 
+/* ── Input tabs ────────────────────────────────────────────── */
+
+.hmer-tabs {
+  display: inline-flex;
+  align-self: flex-start;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 12px;
+  background: var(--bg2);
+}
+
+.hmer-tab {
+  padding: 7px 16px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text2);
+  font-size: 13.5px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.hmer-tab:hover { color: var(--text); }
+
+.hmer-tab[aria-selected="true"] {
+  background: color-mix(in srgb, var(--accent-hmer) 16%, var(--bg3));
+  color: var(--text);
+  box-shadow: var(--shadow-1);
+}
+
+.hmer-tab:focus-visible { outline: 2px solid var(--accent-hmer); outline-offset: 2px; }
+
+/* ── Ink pad ───────────────────────────────────────────────── */
+
+.hmer-ink { display: flex; flex-direction: column; gap: 10px; }
+
+.hmer-ink-pad-wrap { position: relative; }
+
+/* White in both themes: the pad stands for paper, and the export is black on
+   white like the training images, so the preview should look the same.
+   touch-action: none, or a finger stroke scrolls the page instead of drawing. */
+.hmer-ink-pad {
+  display: block;
+  width: 100%;
+  height: 220px;
+  border: 2px solid var(--border2);
+  border-radius: 14px;
+  background: #fff;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.hmer-ink-hint {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #8c8990;   /* fixed, like the pad: theme tokens assume a themed background */
+  font-size: 15px;
+  pointer-events: none;
+}
+
+.hmer-ink-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+.hmer-ink-note { font-size: 12.5px; color: var(--text3); }
+
+.hmer-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  border: 1px solid var(--border2);
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text2);
+  font-size: 13.5px;
+  cursor: pointer;
+}
+
+.hmer-btn:hover:not(:disabled) { border-color: var(--accent-hmer); color: var(--text); }
+
+.hmer-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.hmer-btn-primary {
+  border-color: var(--accent-hmer);
+  background: color-mix(in srgb, var(--accent-hmer) 18%, transparent);
+  color: var(--text);
+  font-weight: 500;
+}
+
+.hmer-btn:focus-visible { outline: 2px solid var(--accent-hmer); outline-offset: 2px; }
+
 /* ── Result ────────────────────────────────────────────────── */
 
 .hmer-result {
