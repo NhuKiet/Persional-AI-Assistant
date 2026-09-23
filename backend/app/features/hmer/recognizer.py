@@ -1,7 +1,8 @@
 """SwinCoMER inference: handwritten maths image in, LaTeX out.
 
 The model lives in a separate repository (CapstoneProject_SP25AI12) and is
-installed as the `comer` package via `pip install -e <repo>/SwinCoMER`. Its
+installed as the `comer` package (README, HMER section — not a plain
+`pip install -e`, which drags in the capstone's dev pins). Its
 weights are a checkpoint file that is deliberately not in either repository.
 
 Both of those can be absent on a given machine, and neither is worth crashing
@@ -121,9 +122,13 @@ class HmerRecognizer:
             from comer.datamodule import vocab
             from comer.lit_comer_swin import LitCoMER
         except ImportError as exc:
+            # The usual cause on a machine that had it working: a plain
+            # `uv sync`, which removes packages absent from uv.lock — and
+            # `comer` is deliberately not in it. Say so, or the operator
+            # hunts for a broken install that is merely uninstalled.
             raise RecognizerUnavailable(
-                "Chưa cài package 'comer'. Chạy: "
-                "pip install -e <CapstoneProject_SP25AI12>/SwinCoMER"
+                f"Chưa cài package 'comer' hoặc thiếu dependency của nó ({exc.name or exc}). "
+                "Xem README, mục HMER; nếu vừa chạy `uv sync` thì phải thêm --inexact"
             ) from exc
 
         device = self._resolve_device(torch)

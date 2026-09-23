@@ -16,7 +16,7 @@
 - **Baseline before this work (2026-09-23):** backend **598 passed, 17 skipped, 0 failed**; frontend **279 tests in 40 files passed**; `npm run typecheck` clean. Any existing test that has to change is evidence of an unintended break. Investigate before editing it.
 - Recognition output (`latex`, `score`) for a given image must not change. The explanation pass is read-only.
 - Existing tests in `tests/test_hmer.py` never import `comer`. New unit tests keep that property; real-model tests are opt-in (`skipif`) and never run in CI.
-- `pyproject.toml` and `uv.lock` do not change (spec §12 Q1). After installing `comer`, always sync with `uv sync --dev --inexact`.
+- `comer` stays out of `uv.lock` (spec §12 Q1). The only lockfile change is the Windows CUDA torch source (spec §12 D1a), made in T1. After installing `comer`, always sync with `uv sync --dev --inexact`.
 - No retraining (spec §12 Q2). The checkpoint is `C:/Users/longt/Downloads/CoMER/checkpoints/ComerSwin-epoch=02-val_ExpRate=0.4713.ckpt`, and `mode: "columns"` is the only mode that runs against a real model.
 - New frontend files are `.ts`/`.tsx`. UI copy is Vietnamese; code and comments are English. Colours come from theme tokens.
 - Commit after each task on branch `feat/hmer-attention-canvas`. Never use `--no-verify`. Do not push.
@@ -65,20 +65,20 @@ T1 ──► T5 spikes ──► T6 attention.py ──► T7 API ──► T8 A
 **Description:** Install `comer` into KiNg's venv without its declared dependencies, add the runtime imports it needs with pins, point `.env` at the 0.4713 checkpoint, and recognize `SwinCoMER/example/UN19_1041_em_595.bmp` through the real endpoint. Document the procedure in README, including why `--inexact` is required. Measure the CPU wall time: it decides D1.
 
 **Acceptance criteria:**
-- [ ] `GET /api/hmer/status` reports `loaded: true`, `last_error: null` after one recognition, and the sample's LaTeX matches `SwinCoMER/example/example.ipynb`.
-- [ ] `torch` is still `2.13.0+cpu` after all installs (`timm==1.0.29`; `torchvision` pinned to the release paired with torch 2.13.0).
-- [ ] CPU wall time for the sample, both first load and warm, is recorded in spec §13.
+- [x] CPU wall time recorded in spec §13.1: 415 s warm, with output matching ground truth. This triggered D1, resolved as D1a (CUDA torch via lockfile) and D1b (lazy `editdistance` import in the capstone repo).
+- [x] `GET /api/hmer/status` reports `loaded: true`, `last_error: null` after one recognition, and the sample's LaTeX matches its CROHME 2019 ground truth (spec §3, criterion 2).
+- [x] torch is `2.14.0+cu126` with CUDA available and torchvision `0.29.0`, and GPU wall time (first and warm) is recorded in spec §13.2.
 
 **Verification:**
-- [ ] `curl -F "file=@C:/Users/longt/Music/CapstoneProject_SP25AI12/SwinCoMER/example/UN19_1041_em_595.bmp" http://localhost:8000/api/hmer/recognize`
-- [ ] `PYTHONIOENCODING=utf-8 .venv/Scripts/python.exe -m pytest -q` → 598 passed, 17 skipped.
-- [ ] `uv sync --dev --inexact` afterwards leaves `import comer` working.
+- [x] `curl -F "file=@…/UN19_1041_em_595.bmp" http://localhost:8001/api/hmer/recognize` → 200 and ground truth, on a check instance on port 8001 (`.claude/launch.json` → `backend-check`, Supabase off so no news refresh), leaving the owner's server on 8000 alone.
+- [x] `PYTHONIOENCODING=utf-8 .venv/Scripts/python.exe -m pytest -q` → 598 passed, 17 skipped, after fixing two tests that read the developer's `.env` (spec §13.2).
+- [x] `uv sync --dev --inexact` and `uv run` both leave `import comer` working.
 
 **Dependencies:** None
-**Files:** `README.md` (and local `.env`, which is gitignored)
+**Files:** `README.md`, `.env.example`, `backend/app/features/hmer/recognizer.py` (install hint), `pyproject.toml`, `uv.lock`, and local `.env` (gitignored). Outside this repo: `CapstoneProject_SP25AI12/SwinCoMER/comer/lit_comer_swin.py`, committed by the owner.
 **Scope:** S
 
-### Checkpoint D1 — human decision: is CPU fast enough?
+### Checkpoint D1 — human decision: is CPU fast enough? (resolved: no → spec §12 D1a, D1b)
 
 - [ ] Present T1's warm wall time. The encoder docstring measured 107 s at beam 2 and 407 s at beam 8 on CPU for legacy checkpoints; this checkpoint's `beam_size` is 8.
 - [ ] **If warm time ≤ 30 s:** continue on CPU.

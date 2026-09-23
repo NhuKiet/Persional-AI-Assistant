@@ -92,10 +92,10 @@ A phone photo (grey paper, shadows, ruled lines, margins, antialiasing) differs 
 
 **Goal:** `POST /api/hmer/recognize` returns a correct result for the bundled sample `SwinCoMER/example/UN19_1041_em_595.bmp`.
 
-1. **Install `comer` without its declared dependencies.** `setup.py` feeds `requirements.txt` into `install_requires`. That file pins `matplotlib==3.5.1` (KiNg pins 3.10.8) and `einops==0.3.0`, and it includes dev tools (flake8, black, jupyter). Install with `--no-deps`, then install the runtime imports explicitly.
-2. **Runtime imports:** pytorch-lightning, timm, einops, editdistance, torchmetrics, torchvision, albumentations, opencv (headless). `from comer.datamodule import vocab` runs `datamodule.py → dataset.py → transforms.py`, which imports `cv2` and `albumentations` at module level. So cv2 is needed even though KiNg never trains.
+1. **Install `comer` without its declared dependencies.** `setup.py` feeds `requirements.txt` into `install_requires`. That file pins `matplotlib==3.5.1` (KiNg pins 3.10.8) and `einops==0.3.0`, and it includes dev tools (flake8, black, jupyter). Install with `--no-deps`, and with the build constraint `setuptools<81` because `setup.py` imports `pkg_resources`. Then install the runtime imports explicitly.
+2. **Runtime imports:** pytorch-lightning, timm, einops, torchmetrics, torchvision, albumentations, opencv (headless). `from comer.datamodule import vocab` runs `datamodule.py → dataset.py → transforms.py`, which imports `cv2` and `albumentations` at module level. So cv2 is needed even though KiNg never trains. `editdistance` is **not** needed: it has no cp313 Windows wheel, so the capstone repo now imports it lazily inside `on_test_epoch_end`, the only place that uses it (decision D1b, §12).
 3. **Pin timm to 1.0.29**, the version in the capstone venv. The legacy path hands the backbone tensor unchanged to `Conv2d(in=8)`, which only works when timm emits NHWC. A timm that emits NCHW breaks the legacy checkpoint on its first forward pass.
-4. **Pin torchvision to the release paired with KiNg's torch 2.13.0.** Confirm afterwards that torch is still 2.13.0. An unpinned torchvision install can pull a new torch.
+4. **Torch comes from the lockfile.** On Windows that is now `2.14.0+cu126` (decision D1a, §12). Install `torchvision==0.29.0` from the same cu126 index with `--no-deps`, so it matches torch exactly and cannot pull a different torch.
 5. **Stop `uv sync` from removing it.** `uv sync` removes packages that are not in `uv.lock` by default. Because `comer` stays out of the lockfile (§12 Q1), local setup always uses `uv sync --dev --inexact`. A plain `uv sync --dev` silently uninstalls HMER, which `/api/hmer/status` then reports as the missing-package error.
 6. **Configure `.env`:** `HMER_CHECKPOINT=C:/Users/longt/Downloads/CoMER/checkpoints/ComerSwin-epoch=02-val_ExpRate=0.4713.ckpt`.
 
@@ -104,7 +104,7 @@ Known and unchanged: the first load downloads timm ImageNet weights and then ove
 **Success criteria**
 
 1. After one recognition, `GET /api/hmer/status` reports `loaded: true` and `last_error: null`.
-2. The sample image's output matches the result in `SwinCoMER/example/example.ipynb`.
+2. The sample image's output matches its CROHME 2019 ground truth in `data.zip` (`data/2019/caption.txt`). Not `example.ipynb`: that notebook runs the upstream DenseNet CoMER (`comer.lit_comer`, the 0.6365 checkpoint), not SwinCoMER.
 3. `uv run pytest -q` still passes. CI is unaffected: it never installs `comer`, and the HMER tests use fakes.
 4. Recognition wall time for the sample on this machine is recorded in §13, with the device. This is the baseline for the overhead criterion in §4.5.
 
@@ -222,9 +222,11 @@ cd frontend && npm run dev
 cd frontend && npm run typecheck && npm test && npm run build
 
 # hmer-runtime, local machine only (§12 Q1: not in the lockfile)
-uv pip install --no-deps -e C:/Users/longt/Music/CapstoneProject_SP25AI12/SwinCoMER
-uv pip install pytorch-lightning timm==1.0.29 einops editdistance torchmetrics albumentations opencv-python-headless "torchvision==<pair of torch 2.13.0>"
 uv sync --dev --inexact
+echo "setuptools<81" > /tmp/hmer-build.txt
+uv pip install --no-deps --build-constraint /tmp/hmer-build.txt -e C:/Users/longt/Music/CapstoneProject_SP25AI12/SwinCoMER
+uv pip install pytorch-lightning timm==1.0.29 einops torchmetrics albumentations opencv-python-headless
+uv pip install --no-deps --index-url https://download.pytorch.org/whl/cu126 torchvision==0.29.0
 ```
 
 ## 7. Project structure
@@ -289,7 +291,7 @@ def fold_to_image_grid(attn: "torch.Tensor", legacy: bool, cols: int) -> "torch.
 
 - **Always:** keep recognition output identical; let explanation failures degrade to `null`; run both test suites before committing; write UI copy in Vietnamese.
 - **Ask first:** any change in the capstone repository; renaming or removing any existing response field.
-- **Decided, not to be reopened during implementation:** no change to `pyproject.toml` / `uv.lock` (Q1); no retraining (Q2).
+- **Decided, not to be reopened during implementation:** `comer` stays out of `uv.lock` (Q1); the Windows torch source is the only lockfile change (D1a); no retraining (Q2).
 - **Never:** commit checkpoints or `data.zip`; present the map as an explanation of *why* in UI copy; hard-code the grid size in the UI.
 
 ## 11. Non-goals
@@ -310,6 +312,46 @@ Resolved with the user on 2026-09-23.
 - **Q2. Retrain a corrected checkpoint? → No. Use `ComerSwin-epoch=02-val_ExpRate=0.4713.ckpt`.** `mode: "columns"` (8 vertical bands, §2.3) is therefore the only mode users will see. The API stays grid-agnostic because that costs one branch. The `"grid"` branch is covered by unit tests only, never against a real model, and the spec says so rather than implying it was verified.
 - **Q3. Keep token probabilities? → Yes**, as specified in §4.2 and §4.4.
 
+Resolved at plan checkpoint D1, after measuring 415 s per image on CPU (§13.1):
+
+- **D1a. GPU on the Windows host → CUDA torch through the lockfile.** `pyproject.toml` gains a `sys_platform == 'win32'` source for torch on the cu126 index (driver 560.94 supports at most CUDA 12.6), and `uv.lock` is regenerated. uv resolved Windows torch to `2.14.0+cu126`. Linux (CI, Docker) keeps `2.4.1+cu121`, and macOS keeps `2.13.0` from PyPI. This is the only lockfile change in this work; `comer` itself stays out of it (Q1). A manual `uv pip install` of CUDA torch was rejected because the next sync would put the locked CPU build back. Side effect: on Windows the BGE reranker also runs on the GPU and shares the 4 GB with HMER.
+- **D1b. `editdistance` → lazy import in the capstone repo.** One import moves from the top of `comer/lit_comer_swin.py` into `on_test_epoch_end`. The owner commits it in that repo. KiNg carries no workaround.
+
 ## 13. Results
 
 *Filled in during implementation: §3 baseline timing, S1 and S2 outcomes, §5.3.2 measurements, §5.3.3 match counts.*
+
+### 13.1 Runtime baseline on CPU (T1, 2026-09-23)
+
+Real `HmerRecognizer`, `device="cpu"`, torch `2.13.0+cpu`, sample `UN19_1041_em_595.bmp` (249×144):
+
+| Measure | Value |
+|---|---|
+| Checkpoint load (includes timm pretrained download) | 34.9 s |
+| First recognition | 445.2 s |
+| Warm recognition | 415.3 s |
+| Encoder mode | legacy (`legacy_hw_as_channels = True`), beam size 8 |
+| Output | `x ^ { 2 } = \sum \limits _ { a = 1 } ^ { 3 } x _ { a } ^ { 2 }` — **matches ground truth**; score −0.1907 |
+
+The runtime is correct but, at about 7 minutes per image, far over D1's 30 s threshold.
+
+Two findings from installing into KiNg's venv:
+
+- **KiNg's venv is CPython 3.13**, and the capstone venv is 3.11. `editdistance` has no cp313 Windows wheel, and building it needs a C++ compiler. `comer/lit_comer_swin.py` imports it at module top, although only `on_test_epoch_end` uses it (test metrics). The measurement above stubbed it in a throwaway script.
+- `comer`'s `setup.py` imports `pkg_resources`, which recent setuptools no longer ships. The editable install needs a build constraint `setuptools<81`.
+
+### 13.2 Runtime on GPU after D1a/D1b (T1, 2026-09-23)
+
+torch `2.14.0+cu126`, torchvision `0.29.0+cu126`, timm `1.0.29`, RTX 3050 Ti Laptop (4 GB). No `editdistance` stub: `editdistance` is never imported, so D1b holds.
+
+| Measure | Direct `HmerRecognizer` | `POST /api/hmer/recognize` (port 8001) |
+|---|---|---|
+| Load | 30.9 s | included in first request |
+| First recognition | 6.00 s | 14.0 s wall (with load) |
+| Warm recognition | 5.48 s, 5.29 s | 7.0 s wall (`elapsed_ms` 5804–6781) |
+| Peak VRAM (HMER alone) | 1235 MiB | — |
+| Output | identical to CPU: same LaTeX, score −0.1907, **matches ground truth** | same; `/api/hmer/status` → `loaded: true`, `device: cuda`, `last_error: null` |
+
+About 75× faster than CPU. Not measured: VRAM with the BGE reranker loaded in the same process (D1a's side effect). The reranker loads lazily on the first research query, not at boot.
+
+Suite on the new torch: 598 passed, 17 skipped, the same as the baseline. Two HMER tests had read the developer's `.env` (`checkpoint=None` means "use settings", not "unconfigured"); they now clear the setting explicitly, with assertions unchanged.

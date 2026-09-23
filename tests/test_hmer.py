@@ -92,7 +92,18 @@ def test_save_prefixes_so_same_name_does_not_overwrite(tmp_path):
 
 # ── Recognizer availability ─────────────────────────────────────────────
 
-def test_status_reports_unconfigured_checkpoint():
+@pytest.fixture
+def unconfigured(monkeypatch):
+    """`checkpoint=None` means "read settings", not "unconfigured" — so a test
+    that wants the unconfigured state must also clear the setting, or it reads
+    whatever the developer's own .env holds and fails only on machines where
+    HMER is set up."""
+    from backend.app.core.config import settings
+
+    monkeypatch.setattr(settings, "HMER_CHECKPOINT", None)
+
+
+def test_status_reports_unconfigured_checkpoint(unconfigured):
     status = HmerRecognizer(checkpoint=None).status()
 
     assert status["configured"] is False
@@ -107,7 +118,7 @@ def test_status_reports_missing_checkpoint_file(tmp_path):
     assert status["checkpoint_exists"] is False
 
 
-def test_ensure_loaded_without_checkpoint_disables_capability():
+def test_ensure_loaded_without_checkpoint_disables_capability(unconfigured):
     recognizer = HmerRecognizer(checkpoint=None)
 
     with pytest.raises(RecognizerUnavailable, match="HMER_CHECKPOINT"):

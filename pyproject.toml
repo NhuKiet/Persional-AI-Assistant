@@ -65,14 +65,25 @@ package = false
 
 # Container chạy Linux (Docker) và có GPU NVIDIA (RTX 3050) — build torch bản
 # CUDA cho platform đó thay vì bản CPU-only mặc định trên PyPI, để reranker
-# (FlagEmbedding) chạy trên GPU. Máy dev khác (macOS/Windows host) vẫn dùng
-# torch CPU bình thường từ PyPI.
+# (FlagEmbedding) chạy trên GPU. macOS vẫn dùng torch CPU từ PyPI.
+#
+# Windows host cũng lấy bản CUDA (cu126 — driver 560.x hỗ trợ tối đa CUDA
+# 12.6): SwinCoMER (HMER) chạy CPU mất ~415 s/ảnh, không dùng được. Hệ quả
+# phụ: reranker trên Windows cũng lên GPU, chung 4GB VRAM với HMER — xem
+# asyncio.Lock trong hmer/service.py. Số đo: docs/superpowers/specs/
+# 2026-09-23-hmer-attention-and-ink-canvas-design.md §13.1.
 [tool.uv.sources]
 torch = [
     { index = "pytorch-cu121", marker = "sys_platform == 'linux'" },
+    { index = "pytorch-cu126", marker = "sys_platform == 'win32'" },
 ]
 
 [[tool.uv.index]]
 name = "pytorch-cu121"
 url = "https://download.pytorch.org/whl/cu121"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
 explicit = true

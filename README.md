@@ -248,6 +248,54 @@ npm run dev --prefix frontend
 Giao diện chạy ở `http://localhost:5173`. Backend tự chấp nhận CORS từ mọi cổng
 `localhost` / `127.0.0.1` nên đổi port cũng không sao.
 
+### 7. (Tuỳ chọn) Bật nhận dạng công thức viết tay — HMER
+
+`/hmer` dùng mô hình SwinCoMER ở repo riêng `CapstoneProject_SP25AI12`. Cả package
+lẫn checkpoint đều **không** nằm trong repo này và **không** có trong `uv.lock` —
+thiếu chúng thì app vẫn chạy, chỉ riêng HMER báo `disabled`.
+
+**Cài package model, không kéo dependency của repo capstone.** `requirements.txt`
+bên đó ghim `matplotlib==3.5.1` (KiNg dùng 3.10.8) và kèm tool dev; `setup.py`
+cần `pkg_resources` nên phải ép setuptools cũ khi build:
+
+```bash
+echo "setuptools<81" > /tmp/hmer-build.txt
+```
+
+```bash
+uv pip install --no-deps --build-constraint /tmp/hmer-build.txt -e <đường-dẫn>/CapstoneProject_SP25AI12/SwinCoMER
+```
+
+**Cài các thư viện mà model import khi chạy:**
+
+```bash
+uv pip install pytorch-lightning timm==1.0.29 einops torchmetrics albumentations opencv-python-headless
+```
+
+`timm` phải là 1.0.29: checkpoint hiện có chạy encoder ở chế độ "legacy", chỉ đúng
+khi timm trả feature map dạng NHWC. `torchvision` phải khớp đúng bản torch trong
+`uv.lock` — trên Windows là `2.14.0+cu126`:
+
+```bash
+uv pip install --no-deps --index-url https://download.pytorch.org/whl/cu126 torchvision==0.29.0
+```
+
+**Trỏ tới checkpoint** trong `.env` — chỉ bản `0.4713` khớp `dictionary.txt` của
+model; bản `0.4245` vẫn nạp được nhưng ra token sai mà không báo lỗi:
+
+```env
+HMER_CHECKPOINT=<đường-dẫn>/ComerSwin-epoch=02-val_ExpRate=0.4713.ckpt
+```
+
+> [!IMPORTANT]
+> Từ đây luôn đồng bộ bằng `uv sync --dev --inexact`. `uv sync --dev` thường sẽ gỡ
+> mọi package không có trong `uv.lock` — tức toàn bộ phần vừa cài — và
+> `/api/hmer/status` sẽ báo thiếu package.
+
+Lần nạp model đầu tiên cần mạng (timm tải trọng số ImageNet rồi ghi đè bằng
+checkpoint). Trên CPU mỗi ảnh mất ~7 phút, nên máy Windows dùng torch bản CUDA
+(khai báo trong `pyproject.toml`).
+
 ---
 
 ## 🐳 Chạy bằng Docker Compose
