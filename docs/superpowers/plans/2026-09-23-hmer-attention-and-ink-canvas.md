@@ -93,12 +93,12 @@ T1 ──► T5 spikes ──► T6 attention.py ──► T7 API ──► T8 A
 **Description:** `hmerInk.ts` turns vector strokes into the layout of a training-like image (spec §5.2 steps 1–3): the bbox expanded by `PEN_PX / 2`, scale `TRAIN_STROKE_PX / PEN_PX` (22 / 4), and a uniform shrink when the longer side exceeds 2200 px. Returns `null` for empty input. No DOM.
 
 **Acceptance criteria:**
-- [ ] Cases pass: empty → `null`; single dot → a square of the stroke width; one horizontal stroke → height equals the output stroke width; an oversize drawing → longer side exactly 2200 with a proportionally thinner stroke.
-- [ ] Exported constants: `PEN_PX`, `TRAIN_STROKE_PX`, `MAX_EXPORT_PX`, each with a comment citing spec §2.4.
+- [x] Cases pass: empty → `null`; single dot → a square of the stroke width; one horizontal stroke → height equals the output stroke width; an oversize drawing → longer side exactly 2200 with a proportionally thinner stroke. Also covered: zero margin, independence from where on the canvas the drawing sits, the height cap, a non-default pen width, and a 250 000-point drawing. The bbox uses a single loop because `Math.min(...points)` throws a `RangeError` at that size (checked in Node).
+- [x] Exported constants: `PEN_PX`, `TRAIN_STROKE_PX`, `MAX_EXPORT_PX`, each with a comment citing spec §2.4.
 
 **Verification:**
-- [ ] `cd frontend && npx vitest run src/lib/hmerInk.test.ts`
-- [ ] `npm run typecheck`
+- [x] `cd frontend && npx vitest run src/lib/hmerInk.test.ts` → 9 passed.
+- [x] `npm run typecheck` clean; `npm test` → 288 passed in 41 files (279 + 9); `npm run build` ok.
 
 **Dependencies:** None
 **Files:** `frontend/src/lib/hmerInk.ts`, `frontend/src/lib/hmerInk.test.ts`
