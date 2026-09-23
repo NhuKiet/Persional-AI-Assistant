@@ -10,6 +10,13 @@
  *  CHỦ Ý không đưa số điện thoại, ngày sinh và địa chỉ trong CV lên đây: trang
  *  chủ là trang công khai, bot quét được. Chỉ email + GitHub, đủ để liên hệ
  *  công việc.
+ *
+ *  Bản tiếng Việt KHÔNG dịch sát bản tiếng Anh. Hai thứ tiếng có quy ước khác
+ *  nhau ở trang liên hệ: "Open to ... roles" là cách nói bình thường trong
+ *  tiếng Anh, nhưng dịch thẳng thành "Mở cho cơ hội..." thì vừa không phải
+ *  tiếng Việt, vừa sai vai — nghe như người đang có việc, ngồi chờ được mời
+ *  chứ không phải người chủ động đi xin việc. Câu tiếng Việt phải được viết
+ *  lại từ đầu theo giọng tự nhiên, đừng dịch.
  */
 
 export type Lang = "vi" | "en";
@@ -184,8 +191,8 @@ export const PORTFOLIO_PAGES: PortfolioPage[] = [
     tab: { vi: "Liên hệ", en: "Contact" },
     title: { vi: "Liên hệ", en: "Get in touch" },
     body: {
-      vi: "Mở cho cơ hội kỹ sư AI — LLM, RAG, computer vision, hoặc đưa mô hình ra sản phẩm chạy thật.",
-      en: "Open to AI engineering roles — LLM, RAG, computer vision, or taking models from research into production.",
+      vi: "Tôi đang tìm vị trí kỹ sư AI — LLM, RAG, computer vision, hoặc đưa mô hình từ nghiên cứu ra sản phẩm chạy thật. Rất mong được trao đổi thêm.",
+      en: "I am looking for an AI engineering role — LLM, RAG, computer vision, or taking models from research into production. I would be glad to talk.",
     },
     links: [
       { label: "buinhukiet03@gmail.com", href: "mailto:buinhukiet03@gmail.com" },
