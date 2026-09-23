@@ -203,10 +203,6 @@ export const CORE_FEATURES: { k: Bi; v: Bi }[] = [
     v: { vi: "7 nguồn song song, tổng hợp có trích dẫn", en: "7 sources in parallel, cited synthesis" },
   },
   {
-    k: { vi: "Lập trình", en: "Coding" },
-    v: { vi: "Lên kế hoạch → viết → chạy thử → tự sửa", en: "Plan → code → execute → self-debug" },
-  },
-  {
     k: { vi: "Tài liệu", en: "Documents" },
     v: { vi: "Hỏi đáp trực tiếp trên PDF, ghim ngữ cảnh", en: "Chat over PDFs, pin context" },
   },
