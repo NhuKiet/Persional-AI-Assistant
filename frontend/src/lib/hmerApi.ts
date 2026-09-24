@@ -17,6 +17,24 @@ export interface HmerResult {
   device: string;
 }
 
+/** Occlusion evidence over a rows × cols grid of the uploaded image. Cell
+ *  (r, c) covers [c/cols, (c+1)/cols] × [r/rows, (r+1)/rows] of the image.
+ *  weights[i] sums to 1, or is all zero when no_evidence[i]: hiding any
+ *  single cell barely moved the model's belief in token i. */
+export interface EvidenceMap {
+  rows: number;
+  cols: number;
+  weights: number[][];
+  no_evidence: boolean[];
+}
+
+export interface HmerExplanation {
+  tokens: string[];
+  token_probs: number[];
+  evidence: EvidenceMap;
+  elapsed_ms: number;
+}
+
 export const hmerImageUrl = (filename: string): string =>
   `${API}/api/hmer/images/${encodeURIComponent(filename)}`;
 
@@ -44,6 +62,18 @@ export async function fetchHmerStatus(): Promise<HmerStatus> {
   return response.json();
 }
 
+/** The backend puts an actionable reason in `detail` (400 bad input, 503
+ *  model unavailable). Surface it rather than the bare status. */
+async function errorDetail(response: Response, fallback: string): Promise<string> {
+  try {
+    const body = await response.json();
+    if (body?.detail) return String(body.detail);
+  } catch {
+    // Non-JSON error body — keep the fallback.
+  }
+  return `${fallback} (${response.status})`;
+}
+
 export async function recognizeImage(file: File): Promise<HmerResult> {
   const form = new FormData();
   form.append("file", file);
@@ -53,18 +83,24 @@ export async function recognizeImage(file: File): Promise<HmerResult> {
     body: form,
   });
 
-  if (!response.ok) {
-    // The backend puts an actionable reason in `detail` for both 400 (bad
-    // upload) and 503 (model unavailable). Surface it rather than the status.
-    let detail = `Nhận dạng thất bại (${response.status})`;
-    try {
-      const body = await response.json();
-      if (body?.detail) detail = String(body.detail);
-    } catch {
-      // Non-JSON error body — keep the status-code message.
-    }
-    throw new Error(detail);
-  }
+  if (!response.ok) throw new Error(await errorDetail(response, "Nhận dạng thất bại"));
+  return response.json();
+}
 
+/** Occlusion evidence for an image already recognized. A separate call so
+ *  the LaTeX never waits for the ~65 extra forward passes it takes. */
+export async function explainImage(
+  filename: string,
+  latex: string,
+  signal?: AbortSignal,
+): Promise<HmerExplanation> {
+  const response = await fetch(`${API}/api/hmer/explain`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ filename, latex }),
+    signal,
+  });
+
+  if (!response.ok) throw new Error(await errorDetail(response, "Không tính được vùng mô hình dựa vào"));
   return response.json();
 }

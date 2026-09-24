@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AppShell } from "../components/AppShell";
+import { EvidenceView, type EvidenceStatus } from "../components/hmer/EvidenceView";
 import { InkCanvas } from "../components/hmer/InkCanvas";
 import { LatexPreview } from "../components/hmer/LatexPreview";
 import { useChatHistory } from "../hooks/useChatHistory";
 import {
   describeStatus,
+  explainImage,
   fetchHmerStatus,
   hmerImageUrl,
   recognizeImage,
+  type HmerExplanation,
   type HmerResult,
   type HmerStatus,
 } from "../lib/hmerApi";
@@ -34,6 +37,10 @@ export function HmerPage() {
   const [dragging, setDragging] = useState(false);
   const [copied, setCopied] = useState(false);
   const [inputMode, setInputMode] = useState<InputMode>("upload");
+  const [explanation, setExplanation] = useState<HmerExplanation | null>(null);
+  const [evidenceStatus, setEvidenceStatus] = useState<EvidenceStatus>("none");
+  const [evidenceError, setEvidenceError] = useState("");
+  const explainAbort = useRef<AbortController | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const tabRefs = useRef<Record<InputMode, HTMLButtonElement | null>>({ upload: null, draw: null });
 
@@ -65,13 +72,47 @@ export function HmerPage() {
     };
   }, []);
 
+  /** Drop any map in flight: a late answer for the previous image must not
+   *  land on the next one. */
+  const resetEvidence = useCallback(() => {
+    explainAbort.current?.abort();
+    explainAbort.current = null;
+    setExplanation(null);
+    setEvidenceError("");
+    setEvidenceStatus("none");
+  }, []);
+
+  useEffect(() => () => explainAbort.current?.abort(), []);
+
+  /** Asked right after recognition rather than inside it, so the LaTeX shows
+   *  as soon as it exists and the ~1.5 s map arrives on its own. */
+  const explain = useCallback(async (recognized: HmerResult) => {
+    if (!recognized.latex.trim()) return;
+    const controller = new AbortController();
+    explainAbort.current = controller;
+    setEvidenceStatus("loading");
+    try {
+      const answer = await explainImage(recognized.filename, recognized.latex, controller.signal);
+      if (controller.signal.aborted) return;
+      setExplanation(answer);
+      setEvidenceStatus("ready");
+    } catch (err) {
+      if (controller.signal.aborted) return;
+      setEvidenceError(err instanceof Error ? err.message : String(err));
+      setEvidenceStatus("error");
+    }
+  }, []);
+
   const handleFile = useCallback(async (file: File) => {
     setBusy(true);
     setError("");
     setResult(null);
     setCopied(false);
+    resetEvidence();
+    let recognized: HmerResult | null = null;
     try {
-      setResult(await recognizeImage(file));
+      recognized = await recognizeImage(file);
+      setResult(recognized);
       // Recognition succeeding proves the model loaded, so refresh the banner
       // rather than leaving a stale "not loaded" line under a live result.
       void fetchHmerStatus().then(setStatus).catch(() => undefined);
@@ -80,7 +121,8 @@ export function HmerPage() {
     } finally {
       setBusy(false);
     }
-  }, []);
+    if (recognized) void explain(recognized);
+  }, [explain, resetEvidence]);
 
   const onDrop = useCallback(
     (event: React.DragEvent) => {
@@ -119,6 +161,7 @@ export function HmerPage() {
       onNewChat={() => {
         setResult(null);
         setError("");
+        resetEvidence();
         setActiveId(null);
       }}
       toolLabel="Công thức viết tay"
@@ -232,10 +275,14 @@ export function HmerPage() {
           <section className="hmer-result">
             <div className="hmer-panel">
               <h2 className="hmer-panel-title">Ảnh đã nhận</h2>
-              <img
-                className="hmer-thumb"
-                src={hmerImageUrl(result.filename)}
+              {/* Keyed by file so the chosen token resets with each new image. */}
+              <EvidenceView
+                key={result.filename}
+                imageUrl={hmerImageUrl(result.filename)}
                 alt="Ảnh công thức đã tải lên"
+                status={evidenceStatus}
+                explanation={explanation}
+                error={evidenceError}
               />
             </div>
 

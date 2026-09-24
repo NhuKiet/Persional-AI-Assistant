@@ -245,13 +245,20 @@ Also found while picking samples: §2.4 had measured the wrong training images (
 - `EvidenceView` draws the `rows × cols` overlay and the token strip (hover/focus, ← / →), with the no-evidence hint, the failure note and the caption from spec §4.4.
 
 **Acceptance criteria:**
-- [ ] Hovering or focusing token *i* sets cell opacities from `weights[i]`, and arrow keys move focus and the overlay together.
-- [ ] A no-evidence token shows its hint and an empty overlay. An explain failure shows its note, and the LaTeX panel is unaffected.
-- [ ] Recognition success triggers exactly one explain call, with the returned filename and LaTeX. No grid size is hard-coded (a test renders 2 × 3).
+- [x] Hovering or focusing token *i* sets cell opacities from `weights[i]`, and arrow keys move focus and the overlay together.
+- [x] A no-evidence token shows its hint and an empty overlay. An explain failure shows its note, and the LaTeX panel is unaffected.
+- [x] Recognition success triggers exactly one explain call, with the returned filename and LaTeX. An empty beam triggers none. No grid size is hard-coded (a test renders 2 × 3). A new recognition aborts any explain still in flight.
 
 **Verification:**
-- [ ] `cd frontend && npx vitest run src/components/hmer src/pages/HmerPage.test.tsx`
-- [ ] `npm run typecheck && npm test && npm run build`
+- [x] `cd frontend && npx vitest run src/components/hmer src/pages/HmerPage.test.tsx` → 27 passed.
+- [x] `npm run typecheck && npm test && npm run build` → 309 passed in 43 files; build ok.
+- [x] Browser pane, real backend:
+  - The capstone sample: LaTeX at 5.05 s, map at 6.48 s, 27 chips (12 flagged). Hovering `3` lights the upper limit above Σ, and hovering `1` lights the lower limit below it.
+  - The owner's drawing: hovering `3` lights the drawn 3, and the image fits the panel at 615 px.
+  - All requests 200 (including the explain preflight).
+- Two fixes came out of the browser check:
+  - `mix-blend-mode: multiply` made the overlay invisible on the sample, which is white ink on black. The overlay is now plain translucency, capped at 0.6.
+  - A percentage `min-width` on the img was ignored, because it resolved against a parent that shrink-wraps the img. The size now lives on the frame (`fit-content`, min 360 px), so small scans scale up with the aspect ratio intact (checked: 360 × 208, ratio 1.729 = natural, grid aligned).
 
 **Dependencies:** T8 (Checkpoint C), T3 (shared files)
 **Files:** `lib/hmerApi.ts`, `components/hmer/EvidenceView.tsx`, `components/hmer/EvidenceView.test.tsx`, `pages/HmerPage.tsx`, `styles/hmer.css`

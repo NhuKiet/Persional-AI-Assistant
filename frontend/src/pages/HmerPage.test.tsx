@@ -29,12 +29,32 @@ function json(body: unknown, status = 200) {
   });
 }
 
-/** Routes status and recognize independently so each test states only what
- *  it cares about. */
+const EXPLANATION = {
+  tokens: ["x", "^", "{", "2", "}"],
+  token_probs: [0.9, 1, 1, 0.8, 1],
+  evidence: {
+    rows: 1,
+    cols: 2,
+    weights: [[1, 0], [0, 0], [0, 0], [0, 1], [0, 0]],
+    no_evidence: [false, true, true, false, true],
+  },
+  elapsed_ms: 1500,
+};
+
+/** Routes status, recognize and explain independently so each test states
+ *  only what it cares about. Explain request bodies are recorded. */
 function mockBackend(
-  { status = STATUS_READY, recognize = () => json({}) }:
-  { status?: HmerStatus; recognize?: (init?: RequestInit) => Response } = {},
+  {
+    status = STATUS_READY,
+    recognize = () => json({}),
+    explain = () => json(EXPLANATION),
+  }: {
+    status?: HmerStatus;
+    recognize?: (init?: RequestInit) => Response;
+    explain?: () => Response;
+  } = {},
 ) {
+  const explainCalls: unknown[] = [];
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -43,9 +63,14 @@ function mockBackend(
       if (url.endsWith("/api/hmer/recognize") && init?.method === "POST") {
         return recognize(init);
       }
+      if (url.endsWith("/api/hmer/explain") && init?.method === "POST") {
+        explainCalls.push(JSON.parse(String(init.body)));
+        return explain();
+      }
       throw new Error(`Unexpected fetch: ${url}`);
     }),
   );
+  return { explainCalls };
 }
 
 /** Enough of a 2D context for the ink pad to preview and export: jsdom has
@@ -248,4 +273,44 @@ test("recognizes a drawing through the same endpoint as an upload", async () => 
   );
   expect(sent).toBeInstanceOf(File);
   expect((sent as unknown as File).name).toBe("ve-tay.png");
+});
+
+test("asks for the evidence map once, with the filename and LaTeX recognize returned", async () => {
+  const { explainCalls } = mockBackend({ recognize: () => json(RESULT) });
+  const { container } = renderPage();
+  await screen.findByText(/Kéo thả ảnh công thức vào đây/i);
+
+  upload(container);
+
+  // The chips only exist once the map has arrived.
+  expect(await screen.findByRole("toolbar", { name: /Các ký hiệu/ })).toBeInTheDocument();
+  expect(explainCalls).toEqual([{ filename: RESULT.filename, latex: RESULT.latex }]);
+});
+
+test("does not ask for a map when the model produced no LaTeX", async () => {
+  const { explainCalls } = mockBackend({
+    recognize: () => json({ filename: "a.png", latex: "", score: 0, elapsed_ms: 90, device: "cpu" }),
+  });
+  const { container } = renderPage();
+  await screen.findByText(/Kéo thả ảnh công thức vào đây/i);
+
+  upload(container);
+
+  await screen.findByText(/không đưa ra giả thuyết nào/i);
+  expect(explainCalls).toEqual([]);
+});
+
+test("keeps the LaTeX when the evidence map fails", async () => {
+  mockBackend({
+    recognize: () => json(RESULT),
+    explain: () => json({ detail: "CUDA out of memory" }, 500),
+  });
+  const { container } = renderPage();
+  await screen.findByText(/Kéo thả ảnh công thức vào đây/i);
+
+  upload(container);
+
+  expect(await screen.findByText(/Không tính được vùng mô hình dựa vào/)).toHaveTextContent(/CUDA/);
+  expect(container.querySelector(".hmer-code")).toHaveTextContent("x ^ { 2 }");
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
 });

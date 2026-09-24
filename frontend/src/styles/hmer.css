@@ -172,9 +172,11 @@
 
 /* ── Result ────────────────────────────────────────────────── */
 
+/* Stacked: the image carries the evidence map, the page's headline, and a
+   260 px side column was too small to read a 4 × 16 grid on. */
 .hmer-result {
   display: grid;
-  grid-template-columns: minmax(0, 260px) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
   align-items: start;
 }
@@ -204,6 +206,96 @@
   border-radius: 8px;
   background: #fff;   /* the source is a scan of white paper */
   object-fit: contain;
+}
+
+/* ── Evidence map ──────────────────────────────────────────── */
+
+.hmer-evidence { display: flex; flex-direction: column; gap: 10px; }
+
+/* The frame is exactly the image box, so the overlay's inset: 0 lines up:
+   evidence cells are fractions of the image, not of the panel. It takes the
+   image's width, but at least 360 px (or the panel, if narrower): small
+   scans (CROHME's are ~250 px wide) scale up so a 4 × 16 grid is readable.
+   The size lives on the frame, not the img — a percentage min-width on the
+   img would resolve against a parent that shrink-wraps it, i.e. against
+   itself, and browsers then ignore it. */
+.hmer-evidence-frame {
+  position: relative;
+  align-self: center;
+  width: fit-content;
+  min-width: min(100%, 360px);
+  max-width: 100%;
+  line-height: 0;
+}
+
+/* Width only, height auto: the aspect ratio can never break, so the overlay
+   can never drift off the ink. */
+.hmer-evidence-frame .hmer-thumb {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* Plain translucency, not a blend mode: multiply vanishes on white-on-black
+   scans (CROHME ships some inverted), screen vanishes on black-on-white.
+   The container caps the strongest cell at 0.6 so the ink always shows
+   through; the blur turns hard cells into something that reads as a region. */
+.hmer-evidence-grid {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  border-radius: 8px;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0.6;
+  filter: blur(6px);
+}
+
+.hmer-evidence-cell {
+  background: var(--accent-hmer);
+  transition: opacity 0.18s ease;
+}
+
+.hmer-evidence-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--text2);
+}
+
+.hmer-tokens { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.hmer-token {
+  padding: 4px 8px;
+  border: 1px solid var(--border2);
+  border-radius: 7px;
+  background: var(--bg3);
+  color: var(--text);
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 13px;
+  line-height: 1.3;
+  cursor: pointer;
+}
+
+.hmer-token:hover,
+.hmer-token.is-active {
+  border-color: var(--accent-hmer);
+  background: color-mix(in srgb, var(--accent-hmer) 16%, var(--bg3));
+}
+
+.hmer-token:focus-visible { outline: 2px solid var(--accent-hmer); outline-offset: 2px; }
+
+/* No single cell decides this token (braces, scripts): shown, but visibly
+   not claiming a region. */
+.hmer-token.is-flat { color: var(--text3); border-style: dashed; }
+
+.hmer-evidence-hint,
+.hmer-evidence-caption { margin: 0; font-size: 12.5px; color: var(--text3); }
+
+@media (prefers-reduced-motion: reduce) {
+  .hmer-evidence-cell { transition: none; }
 }
 
 /* KaTeX sizes itself to the expression; a long one must scroll inside the
