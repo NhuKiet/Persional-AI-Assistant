@@ -68,7 +68,9 @@ Consequences:
 
 ### 2.4 Training images, measured
 
-Random samples from the CROHME `train/` images in `data.zip`:
+> **Correction (2026-09-24, §13.5).** The table below measured `data/train/image/*.bmp`, the CROHME renders. Those are **not** what the model trained on: `LatexDataset` loads the train split as `.png` only. The 206 877 PNGs it did train on are digital ink: RGB, antialiased, strokes 2.8–4 px, margins ~8 px, median 800 × 375 (aspect 2.34). A held-out A/B then showed the model reads the canvas's CROHME-style export as well as the as-trained format (36 vs 35 exact of 100). What matters is that the ink fills the frame, not stroke width or binarisation, so §5.2 stands. The table is kept because the canvas export targets it and the CROHME 2014/16/19 test sets use this format.
+
+Random samples from the CROHME `.bmp` images in `data.zip`'s `train/` (see the correction above):
 
 | Property | Value |
 |---|---|
