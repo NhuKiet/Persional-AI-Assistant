@@ -130,13 +130,16 @@ T1 ──► T5 spikes ──► T6 attention.py ──► T7 API ──► T8 A
 **Description:** Add `tools/hmer_ink_check.py`, which measures gray levels, ink-to-edge margin, and median stroke width by distance transform (the spec §2.4 method) for an image path. Run it on canvas exports. Then run the spec §5.4 experiment: draw the 10 fixed expressions once, recognize the normalised export and a raw export (visible canvas `toDataURL`, sent through `recognizeImage` from browser JS, with no product code for "raw"), and count exact matches.
 
 **Acceptance criteria:**
-- [ ] Every normalised export has 2 gray levels, ink touching all four edges (±1 px), and a median stroke width of 16–24 px.
-- [ ] Normalised exact matches ≥ raw exact matches over the 10 expressions. If not, stop: the §5.2 export needs rethinking before Phase 3 builds on the canvas.
-- [ ] Both counts and the per-expression outputs are recorded in spec §13.
+- [x] Every normalised export has 2 gray levels, ink touching all four edges (±1 px), and a median stroke width of 16–24 px. Five of five real exports pass (spec §13.3).
+- [~] Normalised exact matches ≥ raw exact matches. **CROHME 2019, n=100: 50 vs 0.** The owner's mouse drawings, n=4: 3 vs 4, i.e. the literal criterion fails by one item. A thickening probe showed that item is not an export problem (thicker strokes made it worse). Spec §13.3 recommends keeping §5.2 as designed. **The decision is left to the owner at Checkpoint B.**
+- [x] Both counts and the per-expression outputs are recorded in spec §13.3 and `assets/2026-09-24-canvas-ab.json`.
 
 **Verification:**
-- [ ] `.venv/Scripts/python.exe tools/hmer_ink_check.py data/hmer/<file>.png`
-- [ ] Spec §13 updated.
+- [x] `.venv/Scripts/python.exe tools/hmer_ink_check.py data/hmer/<file>.png`
+- [x] `PYTHONIOENCODING=utf-8 .venv/Scripts/python.exe tools/hmer_canvas_ab.py --crohme 100 --image PATH=GT … --out …` (208 recognitions through the running backend; uploads deleted afterwards).
+- [x] Spec §13.3 updated.
+
+Deviation from the plan: the owner drew four expressions of their own, not the ten fixed §5.4 ones. The statistical comparison therefore used CROHME ink with ground truth, and the owner's drawings serve as the mouse-drawn check.
 
 **Dependencies:** T1, T3, D1
 **Files:** `tools/hmer_ink_check.py`, the spec

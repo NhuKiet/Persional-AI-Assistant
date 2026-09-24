@@ -356,4 +356,31 @@ About 75× faster than CPU.
 
 **D1a's side effect, measured 2026-09-24: both models do not fit on the 4 GB card.** The reranker is loaded at boot by `reranker_selfcheck`, not lazily as assumed above, and on CUDA torch it goes to the GPU: 3016 MiB used before HMER loads, 3908/4096 after. Windows does not raise out-of-memory. It pages VRAM out to system RAM, and two recognitions of the sample hit the 180 s and 60 s client timeouts without completing. Fix: a new `RERANKER_DEVICE` setting (`auto`/`cuda`/`cpu`, default `auto`, so Docker and Linux are unchanged), set to `cpu` in this machine's `.env`. That restores the reranker's pre-D1a placement. With it, the reranker logs "loaded on CPU", recognition takes **4.7 s** with a ground-truth match, and GPU use sits at 354 MiB between requests.
 
+### 13.3 Canvas export, measured (T4, 2026-09-24)
+
+**Format (§5.3 criterion 2).** Measured with `tools/hmer_ink_check.py` (§2.4 method) on five real exports: the owner's four mouse drawings and one pointer-event polyline.
+
+| Export | Size | Grey levels | Margins L/T/R/B | Stroke |
+|---|---|---|---|---|
+| `2x+4=7` (mouse) | 2200 × 435 | 2 | 0/0/0/0 | 16.0 px |
+| `7a+3=8` (mouse) | 2200 × 493 | 2 | 0/0/0/0 | 16.0 px |
+| `7a+3=4` (mouse) | 2200 × 528 | 2 | 0/0/0/0 | 16.0 px |
+| `7a+3=6` (mouse) | 2200 × 490 | 2 | 0/0/0/0 | 16.0 px |
+| `x+1` (polyline, T3) | 913 × 391 | 2 | 0/0/0/1 | 22.0 px |
+
+All pass. All four mouse drawings hit the 2200 px cap: the owner wrote ~550 CSS px wide and ~120 px tall, about half the pad rather than the hinted third, so the uniform shrink put strokes at 16 px, the bottom of the training IQR. They are also wide: aspect 4.2–5.1 against a training median of 2.25.
+
+**Does normalising earn its place (§5.3 criterion 3)?** `tools/hmer_canvas_ab.py` recognizes the same ink in two formats through the running backend: *normalised* (training format) and *raw* (the same ink as the pad shows it: strokes scaled to the pen's 5 device px, antialiased, centred on the 1065 × 275 device-px pad, white background — the generous version of a raw export). Instead of the ten fixed §5.4 expressions, the sources were 100 random CROHME 2019 test expressions with ground truth, plus the owner's four drawings with ground truth read from the images. Full results: `docs/superpowers/plans/assets/2026-09-24-canvas-ab.json`.
+
+| Ink | n | Normalised exact | Raw exact | Normalised mean token distance | Raw mean token distance |
+|---|---|---|---|---|---|
+| CROHME 2019 test | 100 | **50** | **0** | 3.86 | 24.69 |
+| Owner's mouse drawings | 4 | 3 | 4 | 0.25 | 0.00 |
+
+- **CROHME: raw fails completely.** CROHME ink scaled to pen width sits at about the hinted third of the pad, and the model cannot read it. It falls back to outputs it memorized: the 2×2 identity matrix 33 times, a `z^{z^{z…}}` tower 27 times, a binomial 16 times, whatever the input. Normalised gets 50/100, in line with the checkpoint's validation ExpRate of 0.47.
+- **Owner's drawings: raw 4/4, normalised 3/4.** Raw can read them because the owner filled half the pad. The one difference is `7 a + 3 = 8`, which normalised read as `7 w + 3 = 8` (score −1.41).
+- **Is the normalised miss a stroke-width problem? No.** Thickening the four normalised exports by dilation made things worse: at 22 px the miss became `7 _ { w } + 3 = 8`; at 28 px every drawing broke, one into a zero matrix. The 16 px export was the best of the three. So the miss is not caused by the export, and at n=4 one flip is noise.
+
+**Verdict.** Criterion 3 as literally written, normalised ≥ raw on drawn expressions, fails on the owner's four drawings by one item. The evidence says the export is right anyway. Raw works only when the user happens to fill the pad, and collapses to memorized outputs otherwise. Normalised is independent of where and how large the ink sits, matches the model's measured accuracy on real handwriting, and the one drawn miss is not fixed by any stroke width. Keep §5.2 as designed. Also recorded: the model is sensitive to stroke width *above* the training range (28 px broke all four drawings), which supports capping at the training median rather than growing strokes with writing size.
+
 Suite on the new torch: 598 passed, 17 skipped, the same as the baseline. Two HMER tests had read the developer's `.env` (`checkpoint=None` means "use settings", not "unconfigured"); they now clear the setting explicitly, with assertions unchanged.
