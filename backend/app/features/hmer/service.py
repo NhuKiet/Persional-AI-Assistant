@@ -4,13 +4,15 @@ from pathlib import Path
 
 from backend.app.core.config import settings
 from backend.app.features.hmer.recognizer import (
+    Explanation,
     HmerRecognizer,
     Recognition,
     RecognizerUnavailable,
+    UnknownTokens,
 )
 from backend.app.features.hmer.repository import HmerRepository
 
-__all__ = ["HmerService", "RecognizerUnavailable"]
+__all__ = ["HmerService", "RecognizerUnavailable", "UnknownTokens"]
 
 logger = logging.getLogger(__name__)
 
@@ -67,3 +69,33 @@ class HmerService:
             recognition.device,
         )
         return path.name, recognition
+
+    async def explain(self, filename: str, latex: str) -> Explanation:
+        """Occlusion evidence for a stored image and the LaTeX it was read as.
+
+        Stateless on purpose: the caller sends the LaTeX back rather than the
+        service remembering it, so any (image, LaTeX) pair can be explained.
+
+        Raises ValueError for a bad filename or empty LaTeX, FileNotFoundError
+        for a missing image, UnknownTokens for tokens outside the vocabulary.
+        """
+        path = self._repository.resolve(filename)
+        if not path.is_file():
+            raise FileNotFoundError(filename)
+        tokens = latex.split()
+        if not tokens:
+            raise ValueError("LaTeX rỗng — không có gì để giải thích")
+        content = path.read_bytes()
+
+        # Same lock as recognition: 65 forward passes on the same 4 GB GPU
+        # must not overlap a beam search, or Windows pages VRAM to RAM.
+        async with self._lock:
+            explanation = await asyncio.to_thread(self._recognizer.explain, content, tokens)
+
+        logger.info(
+            "HMER explained %s (%d tokens) in %dms",
+            path.name,
+            len(tokens),
+            explanation.elapsed_ms,
+        )
+        return explanation

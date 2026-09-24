@@ -17,7 +17,7 @@
 - Recognition output (`latex`, `score`) for a given image must not change. The explanation pass is read-only.
 - Existing tests in `tests/test_hmer.py` never import `comer`. New unit tests keep that property; real-model tests are opt-in (`skipif`) and never run in CI.
 - `comer` stays out of `uv.lock` (spec §12 Q1). The only lockfile change is the Windows CUDA torch source (spec §12 D1a), made in T1. After installing `comer`, always sync with `uv sync --dev --inexact`.
-- No retraining (spec §12 Q2). The checkpoint is `C:/Users/longt/Downloads/CoMER/checkpoints/ComerSwin-epoch=02-val_ExpRate=0.4713.ckpt`, The map is occlusion-based (spec §12 D2), so it does not depend on the legacy encoder layout.
+- No retraining (spec §12 Q2). The checkpoint is `C:/Users/longt/Downloads/CoMER/checkpoints/ComerSwin-epoch=02-val_ExpRate=0.4713.ckpt`. The map is occlusion-based (spec §12 D2), so it does not depend on the legacy encoder layout.
 - New frontend files are `.ts`/`.tsx`. UI copy is Vietnamese; code and comments are English. Colours come from theme tokens.
 - Commit after each task on branch `feat/hmer-attention-canvas`. Never use `--no-verify`. Do not push.
 
@@ -202,14 +202,14 @@ Also found while picking samples: §2.4 had measured the wrong training images (
 **Description:** `HmerRecognizer.explain(image_bytes, tokens)` runs the baseline pass and the 64 occluded teacher-forced passes in chunks of `EXPLAIN_BATCH`. `HmerService.explain(filename, latex)` loads the stored image, validates tokens against the vocabulary, and runs under the same lock as recognition. Router and schemas follow spec §4.3; the route is added to the contract list.
 
 **Acceptance criteria:**
-- [ ] Response matches spec §4.3 with its invariants. 400 for a bad filename, empty LaTeX, or an unknown token; 404 for a missing image; 503 when the model is unavailable (unit tests with a fake recognizer).
-- [ ] `/api/hmer/recognize` and its tests are unchanged.
-- [ ] Opt-in real-model test (skipped unless `HMER_CHECKPOINT` is set and `comer` imports): the sample returns 26 tokens with 64 weights each.
+- [x] Response matches spec §4.3 with its invariants. 400 for a bad filename, empty LaTeX, or an unknown token; 404 for a missing image; 503 when the model is unavailable (unit tests with a fake recognizer). Also tested with a controllable fake model, where token *i* reads ink in one known cell: explain puts each token's peak exactly on that cell, flags every token on a blank image, and runs 1 baseline pass plus 8 chunks of 8.
+- [x] `/api/hmer/recognize` and its tests are unchanged. Live: same LaTeX and score (−0.1907) as before.
+- [x] Opt-in real-model test (skipped unless `HMER_CHECKPOINT` is set and `comer` imports): the sample returns 27 tokens with 64 weights each. It had been miscounted as 26 in the docs; now corrected.
 
 **Verification:**
-- [ ] `.venv/Scripts/python.exe -m pytest tests/test_hmer.py tests/test_hmer_occlusion.py tests/contract -q`
-- [ ] Full backend suite.
-- [ ] `curl -X POST …/api/hmer/explain` on the sample against the running backend.
+- [x] `.venv/Scripts/python.exe -m pytest tests/test_hmer.py tests/test_hmer_occlusion.py tests/contract -q`
+- [x] Full backend suite: 628 passed, 17 skipped. With `HMER_CHECKPOINT` unset, as in CI: `test_hmer.py` 30 passed, 1 skipped.
+- [x] Live `POST /api/hmer/explain` on the sample: HTTP 200 in 1.56 s (`elapsed_ms`), 4 × 16. The 2D layout is right: the Σ upper limit `3` peaks in row 0, the lower limit `a = 1` in row 3, and superscript `2` sits one row above its `x`. Braces and Σ itself are flagged as no-evidence.
 
 **Dependencies:** T6
 **Files:** `recognizer.py`, `service.py`, `schemas.py`, `router.py`, `tests/test_hmer.py`, `tests/contract/test_api_contracts.py`
@@ -217,7 +217,7 @@ Also found while picking samples: §2.4 had measured the wrong training images (
 
 ### Task 8: The map follows the ink on the real model (gate)
 
-**Description:** `tools/hmer_evidence_check.py` productises the §13.4 probe against `HmerRecognizer.explain`. On the §13.4 training samples it checks the progression, the right-shift and the blank image. It also measures explain latency on the 26-token sample, and fixes `MIN_TOTAL_DROP` from the observed distribution of per-token total drops.
+**Description:** `tools/hmer_evidence_check.py` productises the §13.4 probe against `HmerRecognizer.explain`. On the §13.4 training samples it checks the progression, the right-shift and the blank image. It also measures explain latency on the 27-token sample, and fixes `MIN_TOTAL_DROP` from the observed distribution of per-token total drops.
 
 **Acceptance criteria:**
 - [ ] Spec §4.5.1: mean Spearman ρ ≥ 0.8; mean centre shift ≥ 0.3 of the width; blank image → every token flagged. **If any check fails, stop before building UI.**

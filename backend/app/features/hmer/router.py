@@ -4,7 +4,13 @@ from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
 from backend.app.core.config import settings
-from backend.app.features.hmer.schemas import RecognizeResponse, StatusResponse
+from backend.app.features.hmer.schemas import (
+    EvidenceMap,
+    ExplainRequest,
+    ExplainResponse,
+    RecognizeResponse,
+    StatusResponse,
+)
 from backend.app.features.hmer.service import HmerService, RecognizerUnavailable
 
 logger = logging.getLogger(__name__)
@@ -67,6 +73,42 @@ async def recognize(file: UploadFile = File(...)):
         score=recognition.score,
         elapsed_ms=recognition.elapsed_ms,
         device=recognition.device,
+    )
+
+
+@router.post("/api/hmer/explain", response_model=ExplainResponse)
+async def explain(request: ExplainRequest):
+    """Which regions of the image each token of `latex` rests on.
+
+    A separate call from recognize so the LaTeX never waits for the ~65
+    extra forward passes this takes.
+    """
+    try:
+        explanation = await _service.explain(request.filename, request.latex)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Không tìm thấy ảnh") from exc
+    except ValueError as exc:
+        # Bad filename, empty LaTeX, or tokens outside the vocabulary
+        # (UnknownTokens is a ValueError): all things the caller can fix.
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RecognizerUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("HMER explanation failed for %s", request.filename)
+        raise HTTPException(
+            status_code=500, detail=f"Không tính được vùng mô hình dựa vào: {exc}"
+        ) from exc
+
+    return ExplainResponse(
+        tokens=explanation.tokens,
+        token_probs=explanation.token_probs,
+        evidence=EvidenceMap(
+            rows=explanation.rows,
+            cols=explanation.cols,
+            weights=explanation.weights,
+            no_evidence=explanation.no_evidence,
+        ),
+        elapsed_ms=explanation.elapsed_ms,
     )
 
 

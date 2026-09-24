@@ -62,6 +62,9 @@ PUBLIC_ROUTES = {
     # khi model không nạp được — lý do nằm trong body, không phải trong mã lỗi.
     ("GET", "/api/hmer/status"),
     ("POST", "/api/hmer/recognize"),
+    # Occlusion evidence map, separate from recognize so the LaTeX never
+    # waits for its ~65 extra forward passes.
+    ("POST", "/api/hmer/explain"),
     ("GET", "/api/hmer/images"),
     ("GET", "/api/hmer/images/{filename}"),
     ("DELETE", "/api/hmer/images/{filename}"),

@@ -23,7 +23,7 @@ from backend.app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["HmerRecognizer", "Recognition", "RecognizerUnavailable"]
+__all__ = ["Explanation", "HmerRecognizer", "Recognition", "RecognizerUnavailable", "UnknownTokens"]
 
 # The training pipeline (SwinCoMER/comer/datamodule/transforms.py) is:
 #   PIL.convert("L") -> np.array -> A.Resize(256, 256) -> ToTensorV2()
@@ -41,6 +41,32 @@ class Recognition:
     score: float
     elapsed_ms: int
     device: str
+
+
+@dataclass(frozen=True)
+class Explanation:
+    """Occlusion evidence for one (image, token sequence) pair.
+
+    weights[i] is token i's evidence over the rows × cols grid, row-major,
+    summing to 1 — or all zero when no_evidence[i], i.e. hiding any single
+    cell barely changes the model's belief in that token.
+    """
+
+    tokens: list[str]
+    token_probs: list[float]
+    rows: int
+    cols: int
+    weights: list[list[float]]
+    no_evidence: list[bool]
+    elapsed_ms: int
+
+
+class UnknownTokens(ValueError):
+    """The LaTeX to explain holds tokens this checkpoint's vocabulary lacks.
+
+    Teacher forcing feeds the tokens back in as ids, so there is no way to
+    explain a token the model could never have emitted.
+    """
 
 
 class RecognizerUnavailable(RuntimeError):
@@ -235,3 +261,78 @@ class HmerRecognizer:
 
         capabilities.ok(capabilities.HMER)
         return Recognition(latex, score, elapsed_ms, str(device))
+
+    # ── Explanation ─────────────────────────────────────────────────────
+
+    def _token_log_probs(self, imgs, ids: list[int]):
+        """Teacher-forced l2r log-probability of each token, per image.
+
+        Returns [batch, tokens]. The joint search scores its returned sequence
+        with this same l2r pass, so these are the model's own numbers, not an
+        approximation (design spec §2.5).
+        """
+        import torch
+
+        comer = self._model.comer_model
+        batch = imgs.shape[0]
+        mask = torch.zeros((batch, imgs.shape[2], imgs.shape[3]), dtype=torch.bool, device=imgs.device)
+        feature, feature_mask = comer.encoder(imgs, mask)
+        tgt = torch.tensor([[self._vocab.SOS_IDX, *ids]], device=imgs.device).repeat(batch, 1)
+        logits = comer.decoder(feature, feature_mask, tgt)
+        # Row i predicts token i; the last row predicts <eos> and is dropped.
+        log_probs = logits[:, :-1].log_softmax(-1)
+        index = torch.tensor(ids, device=imgs.device)[None, :, None].expand(batch, -1, 1)
+        return log_probs.gather(-1, index).squeeze(-1)
+
+    def explain(self, image_bytes: bytes, tokens: list[str]) -> Explanation:
+        """Which cells of the image each token rests on (occlusion.py).
+
+        One baseline pass, then one pass per hidden cell, in small batches:
+        on the 4 GB card a batch of 32 crossed into VRAM paging and ran 11×
+        slower (spec §13.4).
+        """
+        self.ensure_loaded()
+
+        import torch
+
+        from backend.app.features.hmer import occlusion
+
+        unknown = [t for t in tokens if t not in self._vocab.word2idx]
+        if unknown:
+            raise UnknownTokens(
+                "Token không có trong từ vựng của mô hình: " + " ".join(dict.fromkeys(unknown))
+            )
+        ids = [self._vocab.word2idx[t] for t in tokens]
+
+        started = time.perf_counter()
+        device = next(self._model.parameters()).device
+        img = self._to_tensor(image_bytes).to(device)
+
+        try:
+            with torch.no_grad():
+                lp0 = self._token_log_probs(img, ids)[0]
+                cells = occlusion.occlusion_batch(
+                    img, occlusion.ROWS, occlusion.COLS, occlusion.background_value(img)
+                )
+                lp_cells = torch.cat([
+                    self._token_log_probs(chunk, ids)
+                    for chunk in torch.split(cells, occlusion.EXPLAIN_BATCH)
+                ])
+            weights, flagged = occlusion.evidence(lp0, lp_cells, occlusion.MIN_TOTAL_DROP)
+        except Exception as exc:  # noqa: BLE001 - reported, not swallowed
+            capabilities.failed(capabilities.HMER, f"{type(exc).__name__}: {exc}")
+            raise
+        finally:
+            if device.type == "cuda":
+                torch.cuda.empty_cache()
+
+        capabilities.ok(capabilities.HMER)
+        return Explanation(
+            tokens=list(tokens),
+            token_probs=[round(float(p), 4) for p in lp0.exp()],
+            rows=occlusion.ROWS,
+            cols=occlusion.COLS,
+            weights=[[round(float(w), 4) for w in row] for row in weights],
+            no_evidence=[bool(f) for f in flagged],
+            elapsed_ms=int((time.perf_counter() - started) * 1000),
+        )

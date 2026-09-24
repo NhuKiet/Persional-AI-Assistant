@@ -22,9 +22,11 @@ from PIL import Image
 
 from backend.app.core import capabilities
 from backend.app.features.hmer.recognizer import (
+    Explanation,
     HmerRecognizer,
     Recognition,
     RecognizerUnavailable,
+    UnknownTokens,
 )
 from backend.app.features.hmer.repository import HmerRepository
 from backend.app.features.hmer.service import HmerService
@@ -39,10 +41,13 @@ def _png_bytes(size=(64, 32)) -> bytes:
 class _StubRecognizer:
     """Stands in for the real model so the slice can be tested without one."""
 
-    def __init__(self, result=None, error=None):
+    def __init__(self, result=None, error=None, explanation=None, explain_error=None):
         self._result = result
         self._error = error
+        self._explanation = explanation
+        self._explain_error = explain_error
         self.calls = 0
+        self.explain_calls = []
 
     def status(self):
         return {
@@ -59,6 +64,12 @@ class _StubRecognizer:
         if self._error:
             raise self._error
         return self._result
+
+    def explain(self, image_bytes, tokens):
+        self.explain_calls.append((image_bytes, tokens))
+        if self._explain_error:
+            raise self._explain_error
+        return self._explanation
 
 
 # ── Repository ──────────────────────────────────────────────────────────
@@ -256,3 +267,257 @@ def test_recognize_reports_503_when_model_unavailable(client, monkeypatch):
 
     assert response.status_code == 503
     assert "checkpoint" in response.json()["detail"]
+
+
+# ── Explain: occlusion evidence ─────────────────────────────────────────
+
+class _InkReadingModel:
+    """A fake SwinCoMER whose token i is sure of itself exactly when there is
+    ink in one known cell, so the evidence explain() reports can be checked
+    against where the ink really is.
+
+    Stands in for model.comer_model (encoder, decoder) and parameters().
+    """
+
+    def __init__(self, cells):
+        import torch
+
+        self._torch = torch
+        self._cells = cells              # token index -> (row, col) it reads
+        self.forward_batches = []
+        self.comer_model = self
+        self.encoder = self._encode
+        self.decoder = self._decode
+
+    def parameters(self):
+        return iter([self._torch.zeros(1)])
+
+    def _encode(self, imgs, mask):
+        return imgs, mask
+
+    def _decode(self, feature, mask, tgt):
+        from backend.app.features.hmer.occlusion import COLS, ROWS, cell_bounds
+
+        torch = self._torch
+        batch, steps = tgt.shape
+        self.forward_batches.append(batch)
+        logits = torch.zeros(batch, steps, 16)
+        ys, xs = cell_bounds(256, ROWS), cell_bounds(256, COLS)
+        for i, (r, c) in enumerate(self._cells):
+            region = feature[:, 0, ys[r][0]:ys[r][1], xs[c][0]:xs[c][1]]
+            ink = (region < 128).float().mean(dim=(1, 2))      # [batch]
+            logits[:, i, tgt[0, i + 1]] = 6.0 * ink
+        return logits
+
+
+class _FakeVocab:
+    SOS_IDX = 1
+
+    def __init__(self, words):
+        self.word2idx = {w: i + 3 for i, w in enumerate(words)}
+
+
+def _ink_png(cells):
+    """256 x 256 white image with a dark block filling each (row, col) cell."""
+    from backend.app.features.hmer.occlusion import COLS, ROWS, cell_bounds
+
+    image = Image.new("L", (256, 256), 250)
+    ys, xs = cell_bounds(256, ROWS), cell_bounds(256, COLS)
+    for r, c in cells:
+        image.paste(30, (xs[c][0], ys[r][0], xs[c][1], ys[r][1]))
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG")
+    return buffer.getvalue()
+
+
+def _fake_recognizer(cells, words):
+    recognizer = HmerRecognizer(checkpoint="unused.ckpt")
+    recognizer._model = _InkReadingModel(cells)
+    recognizer._vocab = _FakeVocab(words)
+    recognizer._device = "cpu"
+    return recognizer
+
+
+def test_explain_puts_each_tokens_evidence_on_the_ink_it_reads():
+    pytest.importorskip("torch")
+    from backend.app.features.hmer.occlusion import COLS, EXPLAIN_BATCH, ROWS
+
+    cells = [(1, 2), (1, 7), (0, 12), (3, 15)]
+    recognizer = _fake_recognizer(cells, ["x", "+", "1", "y"])
+
+    result = recognizer.explain(_ink_png(cells), ["x", "+", "1", "y"])
+
+    assert (result.rows, result.cols) == (ROWS, COLS)
+    assert len(result.tokens) == len(result.token_probs) == len(result.weights) == len(result.no_evidence) == 4
+    for i, (r, c) in enumerate(cells):
+        assert len(result.weights[i]) == ROWS * COLS
+        assert result.weights[i].index(max(result.weights[i])) == r * COLS + c, f"token {i}"
+        assert sum(result.weights[i]) == pytest.approx(1.0, abs=1e-3)
+    assert not any(result.no_evidence)
+    # 1 baseline pass, then the 64 occluded copies in chunks of EXPLAIN_BATCH.
+    batches = recognizer._model.forward_batches
+    assert batches[0] == 1
+    assert batches[1:] == [EXPLAIN_BATCH] * (ROWS * COLS // EXPLAIN_BATCH)
+
+
+def test_explain_flags_every_token_on_a_blank_image():
+    """Nothing to hide means nothing to point at, not a noise map."""
+    pytest.importorskip("torch")
+    recognizer = _fake_recognizer([(1, 2), (2, 9)], ["a", "b"])
+
+    result = recognizer.explain(_png_bytes((256, 256)), ["a", "b"])
+
+    assert result.no_evidence == [True, True]
+    assert all(w == 0 for row in result.weights for w in row)
+
+
+def test_explain_rejects_tokens_outside_the_vocabulary():
+    pytest.importorskip("torch")
+    recognizer = _fake_recognizer([(0, 0)], ["x"])
+
+    with pytest.raises(UnknownTokens, match="zp"):
+        recognizer.explain(_png_bytes((256, 256)), ["x", "zp"])
+
+
+def _explanation(tokens=("1", "+", "1")):
+    n = len(tokens)
+    return Explanation(
+        tokens=list(tokens),
+        token_probs=[0.9] * n,
+        rows=4,
+        cols=16,
+        weights=[[1.0] + [0.0] * 63 for _ in range(n)],
+        no_evidence=[False] * n,
+        elapsed_ms=2100,
+    )
+
+
+def test_service_explain_reads_the_stored_image_and_splits_the_latex(tmp_path):
+    stub = _StubRecognizer(explanation=_explanation())
+    repository = HmerRepository(tmp_path)
+    stored = repository.save("bai1.png", b"stored-bytes")
+    service = HmerService(recognizer=stub, repository=repository)
+
+    asyncio.run(service.explain(stored.name, "1 + 1"))
+
+    assert stub.explain_calls == [(b"stored-bytes", ["1", "+", "1"])]
+
+
+def test_service_explain_waits_for_the_same_lock_as_recognition(tmp_path):
+    """One model on one 4 GB GPU: an explain racing a recognition would
+    fight it for VRAM, and on Windows that means paging, not an error."""
+    stub = _StubRecognizer(explanation=_explanation())
+    repository = HmerRepository(tmp_path)
+    stored = repository.save("bai1.png", b"img")
+    service = HmerService(recognizer=stub, repository=repository)
+
+    async def scenario():
+        await service._lock.acquire()
+        task = asyncio.create_task(service.explain(stored.name, "1 + 1"))
+        await asyncio.sleep(0.05)
+        assert stub.explain_calls == []
+        service._lock.release()
+        await task
+
+    asyncio.run(scenario())
+    assert len(stub.explain_calls) == 1
+
+
+@pytest.fixture
+def explain_client(tmp_path, monkeypatch):
+    from backend.app.features.hmer import router as router_module
+
+    stub = _StubRecognizer(explanation=_explanation())
+    repository = HmerRepository(tmp_path)
+    stored = repository.save("bai1.png", _png_bytes())
+    monkeypatch.setattr(router_module, "_service", HmerService(recognizer=stub, repository=repository))
+
+    app = FastAPI()
+    app.include_router(router_module.router)
+    return TestClient(app), stored.name, stub
+
+
+def test_explain_endpoint_returns_the_evidence_map(explain_client):
+    client, stored, _ = explain_client
+
+    response = client.post("/api/hmer/explain", json={"filename": stored, "latex": "1 + 1"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["tokens"] == ["1", "+", "1"]
+    assert len(body["token_probs"]) == 3
+    assert body["evidence"]["rows"] == 4 and body["evidence"]["cols"] == 16
+    assert len(body["evidence"]["weights"]) == len(body["evidence"]["no_evidence"]) == 3
+    assert all(len(row) == 64 for row in body["evidence"]["weights"])
+    assert body["elapsed_ms"] == 2100
+
+
+@pytest.mark.parametrize(
+    ("payload", "status"),
+    [
+        ({"filename": "../escape.png", "latex": "1"}, 400),
+        ({"filename": "missing.png", "latex": "1"}, 404),
+    ],
+)
+def test_explain_endpoint_rejects_bad_files(explain_client, payload, status):
+    client, _, _ = explain_client
+    assert client.post("/api/hmer/explain", json=payload).status_code == status
+
+
+def test_explain_endpoint_rejects_empty_latex(explain_client):
+    client, stored, stub = explain_client
+
+    response = client.post("/api/hmer/explain", json={"filename": stored, "latex": "   "})
+
+    assert response.status_code == 400
+    assert stub.explain_calls == []
+
+
+def test_explain_endpoint_reports_unknown_tokens_as_400(explain_client):
+    client, stored, stub = explain_client
+    stub._explain_error = UnknownTokens("Token không có trong từ vựng của mô hình: zp")
+
+    response = client.post("/api/hmer/explain", json={"filename": stored, "latex": "zp"})
+
+    assert response.status_code == 400
+    assert "zp" in response.json()["detail"]
+
+
+def test_explain_endpoint_reports_503_when_model_unavailable(explain_client):
+    client, stored, stub = explain_client
+    stub._explain_error = RecognizerUnavailable("Không tìm thấy checkpoint")
+
+    response = client.post("/api/hmer/explain", json={"filename": stored, "latex": "1"})
+
+    assert response.status_code == 503
+    assert "checkpoint" in response.json()["detail"]
+
+
+# ── Real model (opt-in) ─────────────────────────────────────────────────
+
+_SAMPLE = r"C:/Users/longt/Music/CapstoneProject_SP25AI12/SwinCoMER/example/UN19_1041_em_595.bmp"
+_SAMPLE_GT = r"x ^ { 2 } = \sum \limits _ { a = 1 } ^ { 3 } x _ { a } ^ { 2 }"
+
+
+def _real_model_available() -> bool:
+    import importlib.util
+    from pathlib import Path
+
+    from backend.app.core.config import settings
+
+    return bool(settings.HMER_CHECKPOINT) and importlib.util.find_spec("comer") is not None and Path(_SAMPLE).is_file()
+
+
+@pytest.mark.skipif(not _real_model_available(), reason="needs HMER_CHECKPOINT, the comer package and the capstone sample")
+def test_real_model_explains_the_sample():
+    from pathlib import Path
+
+    recognizer = HmerRecognizer()
+    tokens = _SAMPLE_GT.split()
+
+    result = recognizer.explain(Path(_SAMPLE).read_bytes(), tokens)
+
+    assert result.tokens == tokens
+    assert len(result.weights) == len(result.token_probs) == len(tokens)
+    assert all(len(row) == result.rows * result.cols for row in result.weights)
+    assert min(result.token_probs) > 0.1, "ground truth on its own image should not look implausible"

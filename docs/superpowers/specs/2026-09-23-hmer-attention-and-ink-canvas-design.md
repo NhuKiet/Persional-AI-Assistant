@@ -184,7 +184,7 @@ class ExplainResponse(BaseModel):
    - with the ink shifted into the right half, centres move right by ≥ 0.3 of the width on average;
    - on a blank image, every token is flagged no-evidence.
    **If any check fails, stop before building UI.**
-2. Explaining the sample (26 tokens) takes under 5 s on this GPU, in batches that stay below the paging cliff.
+2. Explaining the sample (27 tokens) takes under 5 s on this GPU, in batches that stay below the paging cliff.
 3. The `/api/hmer/recognize` response and its timing are unchanged.
 4. The invariants and error codes in §4.3 hold (unit tests).
 5. Keyboard: every token can be reached with Tab and the arrow keys, and the overlay follows focus.
@@ -428,7 +428,7 @@ Mean total-variation distance between a token's map on the image and on the mirr
 
 All four samples behave the same way. Occlusion spans the ink and follows it; attention does not.
 
-**Occlusion cost on GPU** (64 cells, 26-token sample): 2.1 s at batch 16 (peak 1271 MiB), 3.0 s at batch 8 (747 MiB). Batch 32 took 33 s (2319 MiB): VRAM paging again (§13.2).
+**Occlusion cost on GPU** (64 cells, 27-token sample): 2.1 s at batch 16 (peak 1271 MiB), 3.0 s at batch 8 (747 MiB). Batch 32 took 33 s (2319 MiB): VRAM paging again (§13.2).
 
 **Gate outcome: stop before T6.** An attention overlay built on this checkpoint would sweep left to right over any input, blank or mirrored included. It would be a demo that misleads, and the first mirrored upload would expose it. The options are for the owner to decide.
 
