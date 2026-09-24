@@ -268,7 +268,9 @@
 .hmer-tokens { display: flex; flex-wrap: wrap; gap: 6px; }
 
 .hmer-token {
-  padding: 4px 8px;
+  position: relative;
+  overflow: hidden;
+  padding: 4px 8px 6px;
   border: 1px solid var(--border2);
   border-radius: 7px;
   background: var(--bg3);
@@ -291,8 +293,26 @@
    not claiming a region. */
 .hmer-token.is-flat { color: var(--text3); border-style: dashed; }
 
+/* Confidence as a length along the chip's bottom edge: comparable across
+   chips at a glance, without a number that reads as calibrated. */
+.hmer-token-bar {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--accent-hmer);
+  opacity: 0.75;
+}
+
 .hmer-evidence-hint,
 .hmer-evidence-caption { margin: 0; font-size: 12.5px; color: var(--text3); }
+
+.hmer-evidence-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
 
 @media (prefers-reduced-motion: reduce) {
   .hmer-evidence-cell { transition: none; }

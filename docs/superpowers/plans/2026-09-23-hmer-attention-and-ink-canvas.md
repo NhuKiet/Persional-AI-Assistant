@@ -269,13 +269,14 @@ Also found while picking samples: §2.4 had measured the wrong training images (
 **Description:** Add a thin bar under each token chip proportional to `token_probs[i]`, with the value in the accessible name. "Phát lại" steps through tokens at about 400 ms each, stops on hover or focus, and is disabled under `prefers-reduced-motion`.
 
 **Acceptance criteria:**
-- [ ] Bar widths follow `token_probs`, and accessible names include the value.
-- [ ] Playback advances on a fake timer and stops on hover or focus.
-- [ ] With reduced motion matched, the button is disabled and no transitions run.
+- [x] Bar widths follow `token_probs`, and accessible names include the value (for example "x, xác suất 0.95"; flagged chips add ", không có vùng riêng").
+- [x] Playback advances on a fake timer and stops on hover or focus. It walks only tokens with evidence, so flagged braces do not flash an empty map mid-sweep.
+- [x] With reduced motion matched, the button is disabled, and CSS drops the cell transition.
 
 **Verification:**
-- [ ] `cd frontend && npx vitest run src/components/hmer/EvidenceView.test.tsx`
-- [ ] `npm run typecheck && npm test && npm run build`
+- [x] `cd frontend && npx vitest run src/components/hmer/EvidenceView.test.tsx` → 11 passed.
+- [x] `npm run typecheck && npm test && npm run build` → 313 passed in 43 files; build ok.
+- [x] Browser pane, owner's `7a+3=6`: playback went 7 → a → + → 3 → = → 6 at ~400 ms steps, showing "Dừng" while running and "Phát lại" after. Bars at 83 / 95 / 100 / 100 / 100 / 77 %.
 
 **Dependencies:** T9
 **Files:** `components/hmer/EvidenceView.tsx`, `components/hmer/EvidenceView.test.tsx`, `styles/hmer.css`
