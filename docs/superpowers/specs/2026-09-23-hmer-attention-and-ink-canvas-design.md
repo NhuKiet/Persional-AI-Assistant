@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-23, revised 2026-09-24 (§4 rewritten: occlusion instead of attention, decision D2)
 
-**Status:** §3 and §5 implemented. §4 revised after spike S1 and awaiting the owner's review. Implementation plan: `docs/superpowers/plans/2026-09-23-hmer-attention-and-ink-canvas.md`. The file names keep "attention" for history.
+**Status:** Implemented on branch `feat/hmer-attention-canvas` (2026-09-24): §3 runtime, §5 ink canvas, §4 evidence map. Results in §13. Implementation plan: `docs/superpowers/plans/2026-09-23-hmer-attention-and-ink-canvas.md`. The file names keep "attention" for history.
 
 **Scope:** Two additions to `/hmer`: (1) for each LaTeX token the model emits, show which regions of the image it depends on; (2) let the user draw an expression instead of uploading a photo. Plus the prerequisite neither can skip: getting SwinCoMER to actually run inside KiNg on this machine. Backend changes stay inside `backend/app/features/hmer/`. Frontend changes stay inside the HMER page and `components/hmer/`. Nothing changes in the capstone repository.
 
@@ -463,6 +463,24 @@ Only 15 of 100 differ at all in token distance (9 favour as_trained, 6 favour cr
 
 - In the `‖x‖ = ‖Φ(x)‖` sample, 7 of 14 symbols have no single-cell evidence. They are the repeated bars: hiding one of a pair leaves the other to carry the token. This is expected occlusion behaviour, reported rather than hidden.
 - `MIN_TOTAL_DROP = 0.05` is confirmed. Per-token total drops (nats) at p10/25/50/75/90 are 0.03/0.79/4.12/9.06/14.8 for symbols and 0.00/0.00/0.001/0.17/2.42 for structural tokens (the latter taken from the capstone sample). The threshold flags about half the structural tokens and about one symbol in ten.
-- Live, the endpoint showed the 2D layout the legacy attention never could (§13.4, T7 note in the plan). On `x² = Σ_{a=1}^{3} x_a²`, the upper limit `3` peaks in the top row, the lower limit `a = 1` in the bottom row, and each superscript sits a row above its base. Together with §13.3, where the same ink failed 100/100 once it was small inside a large margin, this says the property that matters is that **the ink fills the frame**. Stroke width, binarisation and colour barely matter within this range.
+- Live, the endpoint showed the 2D layout the legacy attention never could (§13.4, T7 note in the plan). On `x² = Σ_{a=1}^{3} x_a²`, the upper limit `3` peaks in the top row, the lower limit `a = 1` in the bottom row, and each superscript sits a row above its base.
+
+### 13.7 End to end in the browser (T9–T11, 2026-09-24)
+
+Frontend on 5173 against the real backend on 8000, in the in-app browser.
+
+- **Flow.** Recognition shows the LaTeX first, and the map follows about 1.4 s later (capstone sample: LaTeX at 5.05 s, map at 6.48 s). Hovering the chips with a real mouse lights the Σ limits in the top and bottom rows. Real arrow keys move focus between chips, and a flagged chip shows its hint. Playback walks 7 → a → + → 3 → = → 6 at 400 ms steps.
+- **The map explains misreads.** Two code-drawn expressions were misread, and in both the evidence located the cause:
+  - `2+3` became a `\begin{matrix} 2 \\ 7 …`; the misread `7` (p = 0.31) rests on the upper arc and diagonal of the drawn 2.
+  - `1+1` became `| f |`; the `f` rests on the vertical stroke of the plus.
+  The owner's real mouse drawings were read correctly (3 of 4, §13.3). Ruler-straight synthetic strokes are not handwriting.
+- **Shift through the UI.** The capstone sample was padded on the left and uploaded through the page, then both images were explained with the ground-truth tokens. Centres moved to near their ideal: `1` 0.66 → 0.84 (ideal 0.83), `3` 0.58 → 0.78 (ideal 0.79), and `x` and `=` moved right too, slightly past ideal. The padded image was itself *read* worse (`x^2 = x^2 \sum … _{n=1}`), consistent with §13.3/§13.5: the ink must fill the frame.
+- **Mobile (375 × 812).** Touch drawing works (`touch-action: none`), with no horizontal overflow; the pad is 343 × 220 and the evidence frame 311 × 191. Dark theme renders chips and captions from theme tokens, and the pad stays white.
+- **Fixed during the checks.**
+  - `mix-blend-mode: multiply` made the overlay invisible on white-on-black scans (the capstone sample is one); plain translucency is used instead.
+  - A percentage `min-width` on the image was ignored because it resolved against itself; the frame now carries the size, and the aspect ratio is verified equal to natural.
+- **Noticed, out of scope:** on mobile the app's sidebar opens over the content by default (`AppShell`).
+
+Final suites: backend 628 passed / 17 skipped (627 / 18 with `HMER_CHECKPOINT` unset, as in CI); frontend 313 passed in 43 files; typecheck and build clean. Together with §13.3, where the same ink failed 100/100 once it was small inside a large margin, this says the property that matters is that **the ink fills the frame**. Stroke width, binarisation and colour barely matter within this range.
 
 Suite on the new torch: 598 passed, 17 skipped, the same as the baseline. Two HMER tests had read the developer's `.env` (`checkpoint=None` means "use settings", not "unconfigured"); they now clear the setting explicitly, with assertions unchanged.

@@ -6,8 +6,9 @@
 
 <p align="center">
   <em>Một trợ lý AI cá nhân chạy trên trình duyệt: trò chuyện, nghiên cứu sâu đa nguồn,
-  sinh &amp; chạy code Python trong sandbox, đọc PDF, và điểm tin AI hằng ngày —
-  tất cả trong một lõi xử lý duy nhất.</em>
+  sinh &amp; chạy code Python trong sandbox, đọc PDF, nhận dạng công thức toán viết tay
+  (kèm bản đồ vùng mô hình dựa vào), và điểm tin AI hằng ngày — tất cả trong một lõi
+  xử lý duy nhất.</em>
 </p>
 
 <p align="center">
@@ -97,6 +98,27 @@ WebGL không khởi tạo được.
 - **Ghim ngữ cảnh**: bôi đen đoạn text hoặc khoanh vùng ảnh trên trang để hỏi riêng về
   phần đó (vùng ảnh đi qua model vision).
 - Tóm tắt nhanh toàn tài liệu bằng một nút.
+
+### Công thức viết tay (`/hmer`)
+
+- Ảnh **một biểu thức** toán viết tay → LaTeX, bằng mô hình **SwinCoMER** (encoder
+  Swin Transformer V2 + decoder CoMER) từ đồ án tốt nghiệp; chạy GPU ~5 s/ảnh.
+- **Tải ảnh** hoặc **vẽ tay** trên canvas (chuột, bút, cảm ứng). Nét vẽ lưu dạng vector
+  rồi được dựng lại khi gửi đi: cắt sát mực, nét dày cố định, đen trên trắng. Mô hình
+  chỉ đọc được mực lấp đầy khung ảnh; gửi nguyên khung vẽ có lề rộng thì 0/100 biểu
+  thức đúng, dựng lại thì 50/100.
+- **Vùng mô hình dựa vào**: với mỗi ký hiệu LaTeX, che lần lượt từng ô của lưới 4×16
+  trên ảnh và đo mô hình bớt chắc bao nhiêu (occlusion sensitivity). Rê chuột / Tab
+  qua dải ký hiệu để xem vùng sáng, **Phát lại** để xem mô hình "đọc" cả biểu thức;
+  thanh dưới mỗi ký hiệu là xác suất của nó. Dùng để tìm ra *vì sao* một ký hiệu bị
+  đọc sai — ví dụ vùng của một chữ `7` đọc nhầm nằm trên nửa trên của chữ `2`.
+- Vì sao là occlusion chứ không phải attention: trên checkpoint hiện có, bản đồ
+  cross-attention quét trái→phải theo bước giải mã **bất kể ảnh** — ảnh lật hay ảnh
+  trắng cũng cho cùng đường chéo — còn occlusion dịch theo khi mực dịch. Số đo và
+  phương pháp: `docs/superpowers/specs/2026-09-23-hmer-attention-and-ink-canvas-design.md`
+  §13.4–13.6.
+
+Cài đặt: xem [mục 7 của phần cài đặt](#7-tuỳ-chọn-bật-nhận-dạng-công-thức-viết-tay--hmer).
 
 ### Điểm tin AI (`/news`)
 

@@ -287,13 +287,13 @@ Also found while picking samples: §2.4 had measured the wrong training images (
 **Description:** Drive the real flow in the in-app browser: draw → Nhận dạng → the map arrives → hover tokens → Phát lại → keyboard-only pass. Also upload the mirrored sample and check the map mirrors, which is the demo-proof version of T8. Check both themes and the mobile preset, and take screenshots as proof. Add HMER to README's feature list, and fill the remaining §13 entries.
 
 **Acceptance criteria:**
-- [ ] Full flow works with zero console errors, in both themes and on the mobile preset.
-- [ ] README describes `/hmer`: upload, draw, evidence map with its meaning, and setup (from T1).
-- [ ] Spec §13 complete, and spec status set to implemented.
+- [x] Full flow works in both themes and on the mobile preset (spec §13.7). The console shows only `ERR_CONNECTION_REFUSED` entries left from earlier backend restarts in the same tab. Every request in the final flows returned 200, including the explain preflight.
+- [x] README describes `/hmer`: upload, draw, evidence map with its meaning, and why it is occlusion rather than attention. The tagline mentions it, and setup is §7 (from T1).
+- [x] Spec §13 complete (§13.1–13.7), and spec status set to implemented.
 
 **Verification:**
-- [ ] Browser-pane screenshots: the map on a drawing, and on the mirrored sample.
-- [ ] Final run: backend and frontend suites, typecheck and build.
+- [x] Browser-pane screenshots taken (in the session, not saved to the repo): the map on the capstone sample (Σ limits), on the owner's drawing, on the misread `2+3` (the `7`), and on mobile in the dark theme. **Deviation:** the mirrored-sample check was replaced by a shifted-sample check through the UI, because a mirrored expression is not read as the same tokens, so there is nothing to compare. Result in spec §13.7.
+- [x] Final run: backend 628 passed / 17 skipped (627 / 18 as CI); frontend 313 passed; typecheck and build clean.
 
 **Dependencies:** T4, T10
 **Files:** `README.md`, the spec
@@ -301,7 +301,11 @@ Also found while picking samples: §2.4 had measured the wrong training images (
 
 ### Checkpoint: Complete
 
-- [ ] Every spec success criterion (§3, §4.5, §5.3) is checked off or explicitly recorded as not met, with the reason.
+- [x] Every spec success criterion (§3, §4.5, §5.3) is checked off or explicitly recorded as not met, with the reason:
+  - §3 all met;
+  - §4.5 all met (criterion 1's shift threshold was corrected before measuring, §4.5.1);
+  - §5.3.1, .2 and .4 met;
+  - §5.3.3 literally not met on the owner's four drawings (3 vs 4, one item), with the evidence that the export is right recorded in §13.3 and §13.5.
 - [ ] Review with human; decide on merging `feat/hmer-attention-canvas`.
 
 ---
