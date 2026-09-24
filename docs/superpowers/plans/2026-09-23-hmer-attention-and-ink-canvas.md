@@ -185,13 +185,13 @@ Also found while picking samples: §2.4 had measured the wrong training images (
 - Constants `ROWS = 4`, `COLS = 16`, `EXPLAIN_BATCH = 8`, `MIN_TOTAL_DROP = 0.05`, each commented with its reason and spec reference.
 
 **Acceptance criteria:**
-- [ ] Each occluded copy differs from the input in exactly its own cell. The cells tile 256 × 256 with no gaps or overlaps, including for grid sizes that do not divide 256.
-- [ ] `evidence` clamps rises to 0, and each row sums to 1. A token below `min_total` gets all zeros and a flag, never a normalised noise vector.
-- [ ] No import of `comer`, and `torch` is imported inside functions, as in `recognizer.py`.
+- [x] Each occluded copy differs from the input in exactly its own cell. The cells tile 256 × 256 with no gaps or overlaps, including for grid sizes that do not divide 256 (10 × 7 with a 3 × 4 grid, 7 into 4, and others).
+- [x] `evidence` clamps rises to 0, and each row sums to 1. A token below `min_total` gets all zeros and a flag, never a normalised noise vector.
+- [x] No import of `comer`, and `torch` is imported inside functions, as in `recognizer.py`. Also: the background value is the median, so ink does not shift it, and the input tensor is never modified.
 
 **Verification:**
-- [ ] `.venv/Scripts/python.exe -m pytest tests/test_hmer_occlusion.py -q`
-- [ ] `.venv/Scripts/python.exe -m pytest -q` → 603 + new passed, 17 skipped.
+- [x] `.venv/Scripts/python.exe -m pytest tests/test_hmer_occlusion.py -q` → 13 passed.
+- [x] `.venv/Scripts/python.exe -m pytest -q` → 616 passed, 17 skipped; feature-boundary tests pass.
 
 **Dependencies:** T5 (gate)
 **Files:** `backend/app/features/hmer/occlusion.py`, `tests/test_hmer_occlusion.py`
