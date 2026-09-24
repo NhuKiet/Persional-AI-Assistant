@@ -160,9 +160,11 @@ Deviation from the plan: the owner drew four expressions of their own, not the t
 **Description:** `tools/hmer_attention_spike.py` loads the checkpoint and, for 5 wide expressions from `data.zip` (`train/`, with their captions), runs a teacher-forced pass on the **ground-truth** tokens with hooks on every decoder layer's cross-attention. It folds legacy positions `(8 × 768)` to 8 columns and prints each token's column distribution per layer (averaged over heads). Using ground truth instead of beam search keeps this to one forward pass per image, fast even on CPU, and removes misreads as a confounder.
 
 **Acceptance criteria:**
-- [ ] **S1:** across the 5 samples, the first token's attention mass centres left of the last token's in at least one layer. Record the verdict in §13. **If it fails, stop and revise spec §2.3** (the surviving axis may be rows).
-- [ ] **S2:** choose `ATTENTION_LAYERS`, a single layer or a mean over layers, as the aggregation with the clearest left-to-right progression, and record why in §13.
-- [ ] **Gate:** if no layer shows progression, even at 8-band resolution, stop and discuss with the human before T6. A UI built over noise would be a demo that misleads.
+- [x] **S1:** across the 5 samples, the first token's attention mass centres left of the last token's in at least one layer. **Passes as written, but vacuously:** mirrored and blank images give the same progression (ρ ≈ 1.00), so the maps do not depend on the image (spec §13.4).
+- [—] **S2:** not chosen. No aggregation carries content.
+- [x] **Gate: triggered. Stopped before T6.** A translation control confirmed it: attention stays put when the ink moves, while occlusion sensitivity moves with the ink (spec §13.4). Options go to the owner.
+
+Also found while picking samples: §2.4 had measured the wrong training images (the `.bmp`, not the `.png` the model trained on). A held-out A/B showed no accuracy difference between the formats (36 vs 35 of 100), so the canvas export stands (spec §13.5).
 
 **Verification:**
 - [ ] `PYTHONPATH=. PYTHONIOENCODING=utf-8 .venv/Scripts/python.exe tools/hmer_attention_spike.py`

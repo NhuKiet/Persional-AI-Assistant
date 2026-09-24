@@ -383,4 +383,44 @@ All pass. All four mouse drawings hit the 2200 px cap: the owner wrote ~550 CSS 
 
 **Verdict.** Criterion 3 as literally written, normalised ≥ raw on drawn expressions, fails on the owner's four drawings by one item. The evidence says the export is right anyway. Raw works only when the user happens to fill the pad, and collapses to memorized outputs otherwise. Normalised is independent of where and how large the ink sits, matches the model's measured accuracy on real handwriting, and the one drawn miss is not fixed by any stroke width. Keep §5.2 as designed. Also recorded: the model is sensitive to stroke width *above* the training range (28 px broke all four drawings), which supports capping at the training median rather than growing strokes with writing size.
 
+### 13.4 Spikes S1/S2: the legacy attention does not look at the image (T5, 2026-09-24)
+
+`tools/hmer_attention_spike.py`, CPU, teacher forcing on ground truth. Five single-line training expressions (PNG, aspect ≥ 3) and two of the owner's drawings, each under three conditions with the same tokens: the image, the image mirrored, and a blank image. Results: `docs/superpowers/plans/assets/2026-09-24-attention-spike.{json,png}`.
+
+**S1 passes as written, and that pass means nothing.** Every layer shows a left-to-right progression; layers 1–3 and the mean have Spearman ρ ≈ 1.00 on every sample. But the controls show the same progression:
+
+| Mean ρ over the 5 training samples | layer0 | layer1 | layer2 | layer3 | mean |
+|---|---|---|---|---|---|
+| image | 0.63 | 1.00 | 0.98 | 1.00 | 1.00 |
+| mirrored | 0.28 | 1.00 | 0.96 | 1.00 | 1.00 |
+| blank | 0.46 | 1.00 | 0.93 | 0.99 | 0.98 |
+
+Mean total-variation distance between a token's map on the image and on the mirrored image is 0.024 in layer 1. That is smaller than the distance between two *different* real images at the same step (0.062). Meanwhile token probabilities do react to the pixels (the owner's `7a+3=6`: 0.92 on the image, 0.00 mirrored, 0.01 blank), so the model reads the ink through the values it attends to, not through *where* it attends. The column distribution tracks the decoder step and is content-independent. Every layer's first and last token centres land in the same places whatever the image (layer 3: 2.2 → 4.8 of 0–7 on all samples).
+
+**Translation control, attention vs occlusion.** A probe (`assets/2026-09-24-occlusion-probe.json`, script kept out of the repo) moved the ink into the right half by padding the left with background, and compared the attention centres with **occlusion sensitivity**: hide one cell of a 4 × 16 grid at a time, and record how much each token's log-probability drops.
+
+| `1 ≤ j < l ≤ n`, token centre x (0–1) | original | ink shifted right |
+|---|---|---|
+| occlusion | 0.06, 0.17, 0.28, 0.43, 0.50, 0.70, 0.91 | 0.64–0.90 — moves with the ink |
+| attention (layer 1) | 0.45 → 0.54 | 0.47 → 0.54 — does not move |
+
+All four samples behave the same way. Occlusion spans the ink and follows it; attention does not.
+
+**Occlusion cost on GPU** (64 cells, 26-token sample): 2.1 s at batch 16 (peak 1271 MiB), 3.0 s at batch 8 (747 MiB). Batch 32 took 33 s (2319 MiB): VRAM paging again (§13.2).
+
+**Gate outcome: stop before T6.** An attention overlay built on this checkpoint would sweep left to right over any input, blank or mirrored included. It would be a demo that misleads, and the first mirrored upload would expose it. The options are for the owner to decide.
+
+### 13.5 Export format vs the real training format (2026-09-24)
+
+While picking T5 samples, `data/train/image` turned out to hold 206 877 `.png` and 8 834 `.bmp`, and the dataset code reads only the `.png`. §2.4 had measured the `.bmp`. Measured on 200 of the PNGs: RGB, 211 grey levels, margins ~8 px, strokes 2.8/4.0/4.0 px (quartiles), 800 × 375 median. That is digital ink, blue on off-white.
+
+`tools/hmer_format_ab.py` took 100 held-out handwritten expressions (`data/test`, never used for training or validation) and recognized each in two formats through the backend. *as_trained* is the original PNG. *crohme_22* is the same ink as the canvas export renders it: cropped, strokes 22 px (capped at 2200 px), binarised. Results: `docs/superpowers/plans/assets/2026-09-24-format-ab.json`.
+
+| n = 100 | Exact | Within 1 token | Mean token distance |
+|---|---|---|---|
+| as_trained | 35 | 45 | 4.1 |
+| crohme_22 (current export) | 36 | 43 | 4.5 |
+
+Only 15 of 100 differ at all in token distance (9 favour as_trained, 6 favour crohme_22), and 1 vs 2 are exact in one arm only. No meaningful difference, so the export does not need redoing. Together with §13.3, where the same ink failed 100/100 once it was small inside a large margin, this says the property that matters is that **the ink fills the frame**. Stroke width, binarisation and colour barely matter within this range.
+
 Suite on the new torch: 598 passed, 17 skipped, the same as the baseline. Two HMER tests had read the developer's `.env` (`checkpoint=None` means "use settings", not "unconfigured"); they now clear the setting explicitly, with assertions unchanged.
