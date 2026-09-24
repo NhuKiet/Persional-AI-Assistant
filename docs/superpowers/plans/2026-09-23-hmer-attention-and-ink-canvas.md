@@ -2,9 +2,9 @@
 
 > **For agentic workers:** implement task by task with TDD (`test-driven-development`, `incremental-implementation`). Steps use checkbox (`- [ ]`) syntax for tracking. The task list lives in this document (repo convention), not in `tasks/todo.md`.
 
-**Goal:** On `/hmer`, let the user draw an expression and see, for each LaTeX token the model emits, where on the image the decoder was looking.
+**Goal:** On `/hmer`, let the user draw an expression and see, for each LaTeX token the model emits, which regions of the image it depends on.
 
-**Architecture:** Backend: a new pure/tensor module `hmer/attention.py`, used by `HmerRecognizer` for one teacher-forced pass after the beam search. The recognize response gains three additive fields. Frontend: a pure export-layout module, an `InkCanvas` component, and an `AttentionView` component, all wired into `HmerPage`. The capstone repository is not modified.
+**Architecture:** Backend: a new tensor module `hmer/occlusion.py`, used by `HmerRecognizer.explain()` for a baseline and 64 occluded teacher-forced passes, served by a separate `POST /api/hmer/explain` so recognition is untouched. Frontend: a pure export-layout module, an `InkCanvas` component, and an `EvidenceView` component, all wired into `HmerPage`. The capstone repository is not modified.
 
 **Tech Stack:** Python 3.11 · FastAPI · PyTorch 2.13 · pytest 8.3.4 · React 18 · TypeScript · Vitest + React Testing Library.
 
@@ -17,28 +17,29 @@
 - Recognition output (`latex`, `score`) for a given image must not change. The explanation pass is read-only.
 - Existing tests in `tests/test_hmer.py` never import `comer`. New unit tests keep that property; real-model tests are opt-in (`skipif`) and never run in CI.
 - `comer` stays out of `uv.lock` (spec §12 Q1). The only lockfile change is the Windows CUDA torch source (spec §12 D1a), made in T1. After installing `comer`, always sync with `uv sync --dev --inexact`.
-- No retraining (spec §12 Q2). The checkpoint is `C:/Users/longt/Downloads/CoMER/checkpoints/ComerSwin-epoch=02-val_ExpRate=0.4713.ckpt`, and `mode: "columns"` is the only mode that runs against a real model.
+- No retraining (spec §12 Q2). The checkpoint is `C:/Users/longt/Downloads/CoMER/checkpoints/ComerSwin-epoch=02-val_ExpRate=0.4713.ckpt`, The map is occlusion-based (spec §12 D2), so it does not depend on the legacy encoder layout.
 - New frontend files are `.ts`/`.tsx`. UI copy is Vietnamese; code and comments are English. Colours come from theme tokens.
 - Commit after each task on branch `feat/hmer-attention-canvas`. Never use `--no-verify`. Do not push.
 
 ## File Structure
 
 **Created:**
-- `backend/app/features/hmer/attention.py`: grid folding, cross-attention hook capture, token alignment, token probabilities. Tensor code only, no model loading.
-- `tests/test_hmer_attention.py`
+- `backend/app/features/hmer/occlusion.py`: occluded batch and evidence weights. Tensor code only, no model loading.
+- `tests/test_hmer_occlusion.py`
 - `frontend/src/lib/hmerInk.ts` + `hmerInk.test.ts`: pure export layout (bbox, scale, size cap).
 - `frontend/src/components/hmer/InkCanvas.tsx` + `.test.tsx`
-- `frontend/src/components/hmer/AttentionView.tsx` + `.test.tsx`
+- `frontend/src/components/hmer/EvidenceView.tsx` + `.test.tsx`
 - `tools/hmer_ink_check.py`: measures gray levels, margin and stroke width of stored images (spec §2.4 method).
-- `tools/hmer_attention_spike.py`: S1/S2 spikes on ground-truth sequences.
+- `tools/hmer_attention_spike.py`: S1/S2 spikes on ground-truth sequences (done).
+- `tools/hmer_canvas_ab.py`, `tools/hmer_format_ab.py`: export-format experiments (done).
+- `tools/hmer_evidence_check.py`: real-model check of the occlusion map (T8).
 
 **Modified:**
-- `backend/app/features/hmer/recognizer.py`, `schemas.py`, `router.py`, `tests/test_hmer.py`
+- `backend/app/features/hmer/recognizer.py`, `service.py`, `schemas.py`, `router.py`, `tests/test_hmer.py`, `tests/contract/test_api_contracts.py`
 - `frontend/src/lib/hmerApi.ts`, `pages/HmerPage.tsx`, `pages/HmerPage.test.tsx`, `styles/hmer.css`
-- `README.md`: HMER setup (T1) and feature description (T10). README does not mention HMER today.
+- `README.md`: HMER setup (T1) and feature description (T11). README does not mention HMER today.
 - The spec's §13 Results, filled in as tasks produce numbers.
 
-`HmerService` is unchanged: it already passes the `Recognition` through.
 
 ## Dependency Graph
 
@@ -47,13 +48,13 @@ T1 runtime ──► D1 (human: CPU fast enough?) ──┬──► T4 canvas m
                                               │
 T2 ink layout ──► T3 InkCanvas + tab ─────────┘
                                    │
-T1 ──► T5 spikes ──► T6 attention.py ──► T7 API ──► T8 AttentionView ──► T9 playback + bars ──► T10 E2E
+T1 ──► T5 spikes (gate: attention rejected) ──► T6 occlusion.py ──► T7 /explain ──► T8 real-model check (gate) ──► T9 EvidenceView ──► T10 playback + bars ──► T11 E2E
                                                         ▲
                                   T3 (both touch HmerPage.tsx: sequential)
 ```
 
 - **Parallel:** T2–T3 (frontend, disjoint files) can run while T1, T5 and T6 run (backend).
-- **Sequential:** T3 before T8, because both edit `HmerPage.tsx` and `hmer.css`.
+- **Sequential:** T3 before T9, because both edit `HmerPage.tsx` and `hmer.css`.
 - **Riskiest first:** T1 (does the model run here, and how fast?) and T5 (does the legacy map carry any signal?) come before any UI that depends on them.
 
 ---
@@ -153,7 +154,7 @@ Deviation from the plan: the owner drew four expressions of their own, not the t
 
 ---
 
-## Phase 3: Attention
+## Phase 3: Evidence map (T5 gate → occlusion, spec §12 D2)
 
 ### Task 5: Spikes S1 and S2 on ground-truth sequences
 
@@ -174,99 +175,119 @@ Also found while picking samples: §2.4 had measured the wrong training images (
 **Files:** `tools/hmer_attention_spike.py`, the spec
 **Scope:** S
 
-### Task 6: `hmer/attention.py`, tested without the model
+> **Replanned 2026-09-24 after the T5 gate** (spec §12 D2). T6 onwards compute the map by occlusion (spec §4) instead of cross-attention. The superseded tasks are in git history (`3993531`).
 
-**Description:** Pure and tensor pieces, each unit-tested with fakes:
-- `fold_to_image_grid(attn, legacy, cols)`, as in spec §8;
-- `capture_cross_attention(layers, reduce)`, a context manager that registers a forward hook on each `layer.multihead_attn`, reduces immediately (head mean → fold → CPU), and removes every handle in `finally`;
-- `align_tokens(seq, idx2word)`, which maps unknown ids to `"<unk>"` so nothing shifts;
-- `token_probabilities(logits, seq)`, which drops the EOS row.
+### Task 6: `hmer/occlusion.py`, tested without the model
+
+**Description:** The tensor half of spec §4.1–4.2, with no model loading:
+- `occlusion_batch(img, rows, cols, fill)` returns `[rows*cols, C, H, W]`: copy *k* equals the input except cell *k*, which is filled.
+- `evidence(lp0, lp_cells, min_total)` returns `(weights [tokens, cells], flagged [tokens])`, as in the spec §8 snippet.
+- Constants `ROWS = 4`, `COLS = 16`, `EXPLAIN_BATCH = 8`, `MIN_TOTAL_DROP = 0.05`, each commented with its reason and spec reference.
 
 **Acceptance criteria:**
-- [ ] Legacy mass placed at `(j, c)` folds to column `j`; corrected input stays row-major; each row sums to 1.
-- [ ] No hook handles remain after the context exits normally **or** by an exception, verified on a fake `nn.Module` decoder.
-- [ ] n tokens → n rows and n probabilities, including with an unknown id.
+- [ ] Each occluded copy differs from the input in exactly its own cell. The cells tile 256 × 256 with no gaps or overlaps, including for grid sizes that do not divide 256.
+- [ ] `evidence` clamps rises to 0, and each row sums to 1. A token below `min_total` gets all zeros and a flag, never a normalised noise vector.
+- [ ] No import of `comer`, and `torch` is imported inside functions, as in `recognizer.py`.
 
 **Verification:**
-- [ ] `.venv/Scripts/python.exe -m pytest tests/test_hmer_attention.py -q`
-- [ ] `.venv/Scripts/python.exe -m pytest -q` → 598 + new passed, 17 skipped.
+- [ ] `.venv/Scripts/python.exe -m pytest tests/test_hmer_occlusion.py -q`
+- [ ] `.venv/Scripts/python.exe -m pytest -q` → 603 + new passed, 17 skipped.
 
-**Dependencies:** T5 (its axis verdict fixes the legacy fold)
-**Files:** `backend/app/features/hmer/attention.py`, `tests/test_hmer_attention.py`
+**Dependencies:** T5 (gate)
+**Files:** `backend/app/features/hmer/occlusion.py`, `tests/test_hmer_occlusion.py`
 **Scope:** S
 
-### Task 7: `/api/hmer/recognize` returns tokens, probabilities and attention
+### Task 7: `POST /api/hmer/explain`
 
-**Description:** After the beam search and under the same lock, `HmerRecognizer` runs one teacher-forced pass with `[SOS] + seq` using the T6 pieces and `ATTENTION_LAYERS`. `Recognition` and `RecognizeResponse` gain `tokens`, `token_probs` and `attention` (spec §4.3). An explanation failure is logged with `logger.exception` and yields `null`s. An empty hypothesis yields `tokens: []` and `attention: null`.
+**Description:** `HmerRecognizer.explain(image_bytes, tokens)` runs the baseline pass and the 64 occluded teacher-forced passes in chunks of `EXPLAIN_BATCH`. `HmerService.explain(filename, latex)` loads the stored image, validates tokens against the vocabulary, and runs under the same lock as recognition. Router and schemas follow spec §4.3; the route is added to the contract list.
 
 **Acceptance criteria:**
-- [ ] Response matches spec §4.3, including its invariants. Old fields are unchanged, and `latex`/`score` are identical when the explanation raises (unit test with a fake recognizer internals).
-- [ ] On the real sample: `mode: "columns"`, `rows: 1`, `cols: 8`, and `" ".join(tokens) == latex`.
-- [ ] Explanation overhead is under 10% of warm recognition time on this machine (recorded in §13).
+- [ ] Response matches spec §4.3 with its invariants. 400 for a bad filename, empty LaTeX, or an unknown token; 404 for a missing image; 503 when the model is unavailable (unit tests with a fake recognizer).
+- [ ] `/api/hmer/recognize` and its tests are unchanged.
+- [ ] Opt-in real-model test (skipped unless `HMER_CHECKPOINT` is set and `comer` imports): the sample returns 26 tokens with 64 weights each.
 
 **Verification:**
-- [ ] `.venv/Scripts/python.exe -m pytest tests/test_hmer.py tests/test_hmer_attention.py -q`
-- [ ] Opt-in: `HMER_CHECKPOINT=... .venv/Scripts/python.exe -m pytest tests/test_hmer.py -q -k real_model`
-- [ ] `curl` the sample and inspect the JSON.
+- [ ] `.venv/Scripts/python.exe -m pytest tests/test_hmer.py tests/test_hmer_occlusion.py tests/contract -q`
+- [ ] Full backend suite.
+- [ ] `curl -X POST …/api/hmer/explain` on the sample against the running backend.
 
-**Dependencies:** T6, D1
-**Files:** `backend/app/features/hmer/recognizer.py`, `schemas.py`, `router.py`, `tests/test_hmer.py`
+**Dependencies:** T6
+**Files:** `recognizer.py`, `service.py`, `schemas.py`, `router.py`, `tests/test_hmer.py`, `tests/contract/test_api_contracts.py`
 **Scope:** M
 
-### Checkpoint C: Attention API
+### Task 8: The map follows the ink on the real model (gate)
 
-- [ ] Backend suite passes (598 + new, 17 skipped plus the opt-in test when unset).
-- [ ] The real response for the sample looks sane: token masses progress left to right.
+**Description:** `tools/hmer_evidence_check.py` productises the §13.4 probe against `HmerRecognizer.explain`. On the §13.4 training samples it checks the progression, the right-shift and the blank image. It also measures explain latency on the 26-token sample, and fixes `MIN_TOTAL_DROP` from the observed distribution of per-token total drops.
+
+**Acceptance criteria:**
+- [ ] Spec §4.5.1: mean Spearman ρ ≥ 0.8; mean centre shift ≥ 0.3 of the width; blank image → every token flagged. **If any check fails, stop before building UI.**
+- [ ] Explain on the sample takes under 5 s on this GPU (spec §4.5.2).
+- [ ] Numbers recorded in spec §13 (new §13.6).
+
+**Verification:**
+- [ ] `PYTHONPATH=. PYTHONIOENCODING=utf-8 .venv/Scripts/python.exe tools/hmer_evidence_check.py --out docs/superpowers/plans/assets/…-evidence-check.json`
+
+**Dependencies:** T7
+**Files:** `tools/hmer_evidence_check.py`, the spec
+**Scope:** S
+
+### Checkpoint C: Evidence API
+
+- [ ] Backend suite passes.
+- [ ] T8's checks pass on the real model.
 - [ ] Review with human before the UI.
 
-### Task 8: AttentionView with overlay and token strip
+### Task 9: EvidenceView with overlay, token strip and auto-explain
 
-**Description:** `HmerResult` gains the optional fields. `AttentionView` replaces the "Ảnh đã nhận" panel content: a `rows × cols` CSS grid over the image (wrapper sized by the img, `inset: 0`, opacity = weight / max, `var(--accent-hmer)` tint, blur), plus a strip of token `<button>`s. Hover or focus makes a token active, and ← / → move between tokens. The `mode: "columns"` note and the `attention: null` note are as in spec §4.4.
+**Description:**
+- `hmerApi.ts` gains `explainImage(filename, latex)` and its types.
+- After a successful recognition, `HmerPage` calls it automatically. The LaTeX renders at once, and the image panel shows a loading note until the map arrives.
+- `EvidenceView` draws the `rows × cols` overlay and the token strip (hover/focus, ← / →), with the no-evidence hint, the failure note and the caption from spec §4.4.
 
 **Acceptance criteria:**
 - [ ] Hovering or focusing token *i* sets cell opacities from `weights[i]`, and arrow keys move focus and the overlay together.
-- [ ] The columns note shows for `mode: "columns"`; the null note shows and the image still renders for `attention: null`.
-- [ ] No grid size is hard-coded: a test renders `rows: 8, cols: 8` too.
+- [ ] A no-evidence token shows its hint and an empty overlay. An explain failure shows its note, and the LaTeX panel is unaffected.
+- [ ] Recognition success triggers exactly one explain call, with the returned filename and LaTeX. No grid size is hard-coded (a test renders 2 × 3).
 
 **Verification:**
-- [ ] `cd frontend && npx vitest run src/components/hmer/AttentionView.test.tsx src/pages/HmerPage.test.tsx`
+- [ ] `cd frontend && npx vitest run src/components/hmer src/pages/HmerPage.test.tsx`
 - [ ] `npm run typecheck && npm test && npm run build`
 
-**Dependencies:** T7 (contract), T3 (shared files)
-**Files:** `lib/hmerApi.ts`, `components/hmer/AttentionView.tsx`, `components/hmer/AttentionView.test.tsx`, `pages/HmerPage.tsx`, `styles/hmer.css`
+**Dependencies:** T8 (Checkpoint C), T3 (shared files)
+**Files:** `lib/hmerApi.ts`, `components/hmer/EvidenceView.tsx`, `components/hmer/EvidenceView.test.tsx`, `pages/HmerPage.tsx`, `styles/hmer.css`
 **Scope:** M
 
-### Task 9: Probability bars and "Phát lại" playback
+### Task 10: Probability bars and "Phát lại" playback
 
-**Description:** Add a thin bar under each token chip proportional to `token_probs[i]`, with the value in the accessible name ("x, xác suất 0.93"). The "Phát lại" button steps through tokens at about 400 ms each, stops on any hover or focus, and is disabled under `prefers-reduced-motion`.
+**Description:** Add a thin bar under each token chip proportional to `token_probs[i]`, with the value in the accessible name. "Phát lại" steps through tokens at about 400 ms each, stops on hover or focus, and is disabled under `prefers-reduced-motion`.
 
 **Acceptance criteria:**
-- [ ] Bar widths follow `token_probs`; accessible names include the value; `token_probs: null` shows no bars.
-- [ ] Playback advances the active token on a fake timer and stops on hover or focus.
+- [ ] Bar widths follow `token_probs`, and accessible names include the value.
+- [ ] Playback advances on a fake timer and stops on hover or focus.
 - [ ] With reduced motion matched, the button is disabled and no transitions run.
 
 **Verification:**
-- [ ] `cd frontend && npx vitest run src/components/hmer/AttentionView.test.tsx`
+- [ ] `cd frontend && npx vitest run src/components/hmer/EvidenceView.test.tsx`
 - [ ] `npm run typecheck && npm test && npm run build`
 
-**Dependencies:** T8
-**Files:** `components/hmer/AttentionView.tsx`, `components/hmer/AttentionView.test.tsx`, `styles/hmer.css`
+**Dependencies:** T9
+**Files:** `components/hmer/EvidenceView.tsx`, `components/hmer/EvidenceView.test.tsx`, `styles/hmer.css`
 **Scope:** S
 
-### Task 10: End-to-end in the browser, and close out
+### Task 11: End-to-end in the browser, and close out
 
-**Description:** Drive the real flow in the in-app browser: draw an expression → Nhận dạng → hover tokens → Phát lại → keyboard-only pass. Check both themes and the mobile preset (touch drawing). Take a screenshot as proof. Add HMER to README's feature list. Fill the remaining §13 entries and set the spec status to implemented.
+**Description:** Drive the real flow in the in-app browser: draw → Nhận dạng → the map arrives → hover tokens → Phát lại → keyboard-only pass. Also upload the mirrored sample and check the map mirrors, which is the demo-proof version of T8. Check both themes and the mobile preset, and take screenshots as proof. Add HMER to README's feature list, and fill the remaining §13 entries.
 
 **Acceptance criteria:**
-- [ ] Full flow works with zero console errors in both themes and on the mobile preset.
-- [ ] README describes `/hmer` (upload, draw, attention view, the columns-only limitation, and the setup from T1).
-- [ ] Spec §13 is complete.
+- [ ] Full flow works with zero console errors, in both themes and on the mobile preset.
+- [ ] README describes `/hmer`: upload, draw, evidence map with its meaning, and setup (from T1).
+- [ ] Spec §13 complete, and spec status set to implemented.
 
 **Verification:**
-- [ ] Browser pane screenshots of the attention view mid-playback.
-- [ ] Final run: backend 598 + new passed / 17 skipped; frontend all passing; typecheck and build clean.
+- [ ] Browser-pane screenshots: the map on a drawing, and on the mirrored sample.
+- [ ] Final run: backend and frontend suites, typecheck and build.
 
-**Dependencies:** T4, T9
+**Dependencies:** T4, T10
 **Files:** `README.md`, the spec
 **Scope:** S
 
@@ -284,8 +305,10 @@ Also found while picking samples: §2.4 had measured the wrong training images (
 | CPU inference takes minutes per image (docstring: 407 s at beam 8, legacy) | High: the demo is unusable, and T4 (20 recognitions) would take hours | D1 measures before anything depends on it. Spikes use teacher forcing (one forward pass). A GPU path needs approval because it swaps torch for the whole app. |
 | Installing comer's imports drags torch to another version | High: breaks the reranker and the suite | `--no-deps` for `comer`, explicit pins, and a check that torch is unchanged is an acceptance criterion in T1. |
 | `uv sync` without `--inexact` silently uninstalls `comer` | Medium | README warning (T1). `/api/hmer/status` already reports the missing package clearly. |
-| S1 fails (the surviving legacy axis is rows) | Medium | Gate in T5 before any code builds on it. The API already carries `rows`/`cols`, so only the fold and the spec change. |
-| Legacy 8-band maps carry no visible signal | Medium: the headline feature would mislead | T5 gate: stop and discuss before T6 rather than shipping a pretty overlay over noise. |
+| ~~Legacy attention maps carry no signal~~ | **Happened (T5):** attention is content-independent | Caught by the T5 gate with mirrored/blank/shift controls; replaced by occlusion (spec §12 D2). |
+| Occlusion maps are noisy or flat on real drawings | Medium: the demo would mislead | T8 gate: progression, shift and blank checks on the real model before any UI. |
+| Explain latency or VRAM | Medium | Chunks of 8 (747 MiB, ~3 s measured); a separate endpoint, so the LaTeX never waits; the same lock as recognition. |
+| Structural tokens (`{`, `}`, `^`) have no single-cell evidence | Low | Flagged as no-evidence with a hint, rather than normalising noise. |
 | First model load needs network (timm pretrained download) | Low | Run T1 online. This is already documented in `recognizer.py`. |
 | jsdom cannot rasterise canvas | Low | The layout is pure and unit-tested (T2); rasterisation and binarisation are verified by measurement in T4. |
-| Viewers read attention as "why" | Low | UI copy says "mô hình nhìn vào đâu" (spec §2.5), and the columns note explains the strips. |
+| Viewers read the map as "why" | Low | UI copy says "vùng mô hình dựa vào" and the caption explains occlusion (spec §4.4). |

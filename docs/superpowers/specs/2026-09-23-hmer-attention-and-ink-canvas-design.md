@@ -1,10 +1,10 @@
-# HMER: Attention Map and Ink Canvas
+# HMER: Evidence Map and Ink Canvas
 
-**Date:** 2026-09-23
+**Date:** 2026-09-23, revised 2026-09-24 (§4 rewritten: occlusion instead of attention, decision D2)
 
-**Status:** Approved design (open questions resolved in §12); implementation plan in `docs/superpowers/plans/2026-09-23-hmer-attention-and-ink-canvas.md`
+**Status:** §3 and §5 implemented. §4 revised after spike S1 and awaiting the owner's review. Implementation plan: `docs/superpowers/plans/2026-09-23-hmer-attention-and-ink-canvas.md`. The file names keep "attention" for history.
 
-**Scope:** Two additions to `/hmer`: (1) for each LaTeX token the model emits, show where on the image the decoder was looking; (2) let the user draw an expression instead of uploading a photo. Plus the prerequisite neither can skip: getting SwinCoMER to actually run inside KiNg on this machine. Backend changes stay inside `backend/app/features/hmer/`. Frontend changes stay inside the HMER page and `components/hmer/`. Nothing changes in the capstone repository.
+**Scope:** Two additions to `/hmer`: (1) for each LaTeX token the model emits, show which regions of the image it depends on; (2) let the user draw an expression instead of uploading a photo. Plus the prerequisite neither can skip: getting SwinCoMER to actually run inside KiNg on this machine. Backend changes stay inside `backend/app/features/hmer/`. Frontend changes stay inside the HMER page and `components/hmer/`. Nothing changes in the capstone repository.
 
 Does not change: the LaTeX or score returned for any given image, existing endpoint paths or fields, any other feature.
 
@@ -14,15 +14,15 @@ Does not change: the LaTeX or score returned for any given image, existing endpo
 |---|---|---|
 | `hmer-runtime` | SwinCoMER loads and recognizes inside KiNg's environment | — |
 | `hmer-ink-canvas` | Draw-to-recognize input whose export matches the training images | `hmer-runtime` (verification only; the code has no dependency) |
-| `hmer-attention` | Per-token cross-attention maps and token probabilities: API + overlay UI | `hmer-runtime` |
+| `hmer-evidence` (was `hmer-attention`) | Per-token occlusion evidence maps and token probabilities: API + overlay UI | `hmer-runtime` |
 
-Build order: `hmer-runtime` → `hmer-ink-canvas` → `hmer-attention`.
+Build order: `hmer-runtime` → `hmer-ink-canvas` → `hmer-evidence`.
 
-The canvas goes before the attention view even though the attention view is the headline: it is small, frontend-only, and it produces controlled inputs for developing the overlay. When you drew the expression yourself you know where every symbol is, so a wrong map is obvious.
+The canvas goes before the map view even though the map view is the headline: it is small, frontend-only, and it produces controlled inputs for developing the overlay. When you drew the expression yourself you know where every symbol is, so a wrong map is obvious.
 
 ## 1. Objective
 
-**Attention map.** Today the recognizer is a black box that returns a LaTeX string and an uncalibrated score. The only checkpoint that works (§2.2) has a validation ExpRate of 0.47, so roughly one expression in two has at least one wrong token, and the user cannot tell which one or why. A per-token map answers "what was the model looking at when it wrote this token". That is a debugging tool for misreads, and it is also the part of a portfolio demo that shows the model is understood, not just wrapped.
+**Evidence map.** Today the recognizer is a black box that returns a LaTeX string and an uncalibrated score. The only checkpoint that works (§2.2) has a validation ExpRate of 0.47, so roughly one expression in two has at least one wrong token, and the user cannot tell which one or why. A per-token map answers "which part of the image did the model depend on for this token". It was first planned from cross-attention, which turned out not to depend on the image (§13.4). That is a debugging tool for misreads, and it is also the part of a portfolio demo that shows the model is understood, not just wrapped.
 
 **Ink canvas.** Upload-only means the user needs a photo, and photos differ from the training data in every property we can measure (§2.4). A canvas records strokes as vectors, so the exported image can be rebuilt to match the training data by construction.
 
@@ -84,6 +84,8 @@ A phone photo (grey paper, shadows, ruled lines, margins, antialiasing) differs 
 
 ### 2.5 Attention is recoverable without touching the capstone repo
 
+> **Superseded for the map (§13.4):** attention can be recovered, but on this checkpoint it does not depend on the image. The faithfulness argument below still applies to the teacher-forced *token probabilities* that §4 uses.
+
 `TransformerDecoderLayer.multihead_attn` returns `(output, attention)`, with `attention` shaped `[(b·nhead), t, l]`: per head, after softmax, and after ARM when ARM exists. A forward hook on each `decoder.model.layers[i].multihead_attn` captures it.
 
 **Faithfulness.** The joint search (`comer/utils/generation_utils.py`, the block after the first beam search) rescores each hypothesis with the opposite-direction decoder using teacher forcing. A hypothesis from the l2r beam was already processed by the l2r decoder step by step, and the decoder recomputes the whole prefix with a causal mask each step, so row `i` is the same as under teacher forcing. A hypothesis from the r2l beam is processed by the l2r decoder during rescoring. Either way, one teacher-forced **l2r** pass over the returned sequence reproduces exactly the cross-attention the l2r decoder computed on it during the search. It is not an approximation. What it does not show is the r2l decoder's view.
@@ -110,75 +112,83 @@ Known and unchanged: the first load downloads timm ImageNet weights and then ove
 3. `uv run pytest -q` still passes. CI is unaffected: it never installs `comer`, and the HMER tests use fakes.
 4. Recognition wall time for the sample on this machine is recorded in §13, with the device. This is the baseline for the overhead criterion in §4.5.
 
-## 4. Module `hmer-attention`
+## 4. Module `hmer-evidence` (was `hmer-attention`)
 
-### 4.1 Spikes before any UI
+> **Rewritten 2026-09-24** after spike S1 (§13.4). The legacy checkpoint's cross-attention does not depend on the image, so the map is computed by **occlusion sensitivity** instead (decision D2, §12). The original attention design is in git history (`3993531`).
 
-- **S1, axis check.** Dump the raw legacy attention for 5 wide expressions from `data.zip`, using a teacher-forced pass on their **ground-truth** tokens. That is one forward pass per image, so it is fast even on CPU, and it keeps misreads from confounding the check. The first token's mass must sit in the leftmost bands and the last token's in the rightmost. If not, the column hypothesis in §2.3 is wrong: stop and revise this spec.
-- **S2, aggregation.** For the same samples, compare the per-layer maps (4 layers, each averaged over its 8 heads). Pick one aggregation, either a single layer or the mean of several, and record it as the constant `ATTENTION_LAYERS` in `recognizer.py` with the reason.
+### 4.1 Method: occlusion sensitivity
 
-Record both results in §13.
+For the recognized sequence (the tokens of the returned LaTeX, left to right):
+
+1. **Baseline.** One teacher-forced l2r pass over `[SOS] + tokens` gives each token's log-probability `lp0[i]`, and `token_probs[i] = exp(lp0[i])`. The joint search's own l2r pass computes the same numbers (§2.5, "Faithfulness").
+2. **Occlusion.** Split the 256 × 256 model input into a grid of `ROWS × COLS = 4 × 16`. For each of the 64 cells, fill that cell with the image's background value and redo the teacher-forced pass. The background value is the median of the 256 × 256 greyscale input, since ink is a small fraction of any expression image.
+3. **Evidence.** `drop[i, k] = max(0, lp0[i] − lp_k[i])`: how much less sure the model becomes of token *i* when cell *k* is hidden. Each token's weights are its drops normalised to sum to 1.
+4. **No localised evidence.** When a token's total drop is below `MIN_TOTAL_DROP`, its weights are all zero and it is flagged. `MIN_TOTAL_DROP` is fixed on the sample in T8, starting at 0.05 nats. It means that hiding any single cell barely moves the model's belief, which is expected for structural tokens like `{` and `}`, whose evidence is spread out or implied.
+
+**Why 4 × 16.** Expression images are wide (training median aspect 2.34; the owner's drawings 4–5), so columns need finer resolution than rows. Sixteen columns is about one symbol each in a 10–15-symbol expression, and four rows separate baseline, superscript, subscript and fraction parts. 64 cells plus the baseline is 65 passes, about 3 s on this GPU in batches of 8 (§13.4). Larger batches hit Windows VRAM paging.
+
+**What it means.** "Hiding this region makes the model less sure of this token." Unlike attention it is causal with respect to pixels (§13.4 shows it moves with the ink). It is coarse, limited by cell size, and conditional on the teacher-forced prefix. UI copy says "vùng mô hình dựa vào", never "vì sao".
 
 ### 4.2 Backend
 
-- In `HmerRecognizer.recognize`, after the beam search and under the same lock, run one teacher-forced pass `decoder(feature, mask, [SOS] + seq)` with hooks on each decoder layer's cross-attention.
-- **Hooks reduce immediately:** average over heads, fold to the image grid, move to CPU. Nothing holds the raw `8 × (n+1) × 6144` tensor per layer. Remove the handles in `finally`, because a hook left registered would fire on every later beam-search step.
-- **Row alignment:** row `i` (input `[SOS, t1..ti]`) is the step that emitted `t(i+1)`. The last row, which emits EOS, is dropped, so n tokens get n rows.
-- **Token probabilities:** `token_probs[i] = softmax(logits[i])[seq[i]]` from the same pass, at temperature 1. They are not calibrated, and the UI treats them as relative.
-- **Tokens** are built as `[vocab.idx2word.get(i, "<unk>") for i in seq]`, not with `indices2words`. The latter silently drops unknown ids, which would misalign tokens and rows.
-- **An explanation failure never fails recognition.** Log it with `logger.exception` and return `attention: null, token_probs: null`. The LaTeX and score are the same either way.
-- **Empty hypothesis:** `tokens: []`, `attention: null`.
-
-**Cost:** one encoder pass plus one decoder pass of length n+1. The beam search costs about n steps × 16 sequences (8 beams × 2 directions) plus rescoring, so the overhead should be small. §4.5 sets the limit.
+- **New `hmer/occlusion.py`.** Tensor code only, with no model loading, so it can be tested with fakes:
+  - `occlusion_batch(img, rows, cols, fill)` returns one copy of the input per cell, each with that cell filled.
+  - `evidence(lp0, lp_cells, min_total)` returns the per-token weights and no-evidence flags.
+- **`HmerRecognizer.explain(image_bytes, tokens)`.** Runs the baseline pass plus the 64 occluded passes in chunks of `EXPLAIN_BATCH = 8`, under `torch.no_grad`, with `empty_cache` in `finally` as `recognize` does.
+- **`HmerService.explain(filename, latex)`.** Loads the stored image through the repository, with the same filename validation as `/images/{filename}`. It splits `latex` into tokens, checks them against the vocabulary, and runs `explain` in `asyncio.to_thread` under the **same `asyncio.Lock`** as recognition.
+- **Recognition is untouched.** The `/api/hmer/recognize` response and its latency stay exactly as they are.
 
 ### 4.3 API contract
 
-Additive only. Existing fields keep their meaning.
+`POST /api/hmer/explain` with JSON body `{"filename": str, "latex": str}`:
 
 ```python
-class AttentionMap(BaseModel):
-    rows: int                    # 1 for legacy checkpoints (§2.3)
-    cols: int
-    mode: Literal["grid", "columns"]
-    weights: list[list[float]]   # per token: rows*cols floats, row-major, sums to 1, 4 dp
-
-
-class RecognizeResponse(BaseModel):
+class ExplainRequest(BaseModel):
     filename: str
     latex: str
-    score: float
+
+
+class EvidenceMap(BaseModel):
+    rows: int                    # 4
+    cols: int                    # 16
+    weights: list[list[float]]   # per token: rows*cols floats, row-major, sums to 1 or all 0, 4 dp
+    no_evidence: list[bool]      # per token: total drop below MIN_TOTAL_DROP
+
+
+class ExplainResponse(BaseModel):
+    tokens: list[str]
+    token_probs: list[float]
+    evidence: EvidenceMap
     elapsed_ms: int
-    device: str
-    tokens: list[str] = []
-    token_probs: list[float] | None = None
-    attention: AttentionMap | None = None
 ```
 
-- **Invariants:** when not null, `len(tokens) == len(token_probs) == len(attention.weights)`, and every `weights` row has `rows * cols` entries.
-- **Coordinates:** the 256×256 resize is a pure scale with no crop or pad, so cell `(r, c)` covers the fractional box `[c/cols, (c+1)/cols] × [r/rows, (r+1)/rows]` of the image **as uploaded**. The overlay needs no knowledge of the model's input size.
-- **Payload:** 8 floats per token for legacy, 64 for corrected; about 20 KB for a 40-token expression.
-- `HmerResult` in `frontend/src/lib/hmerApi.ts` gets the same optional fields.
+- **Errors:** 400 for a bad filename, an empty `latex`, or a token outside the vocabulary. 404 when the image is not found. 503 when the model is unavailable, with the same body as recognize.
+- **Invariants:** `len(tokens) == len(token_probs) == len(weights) == len(no_evidence)`, and every weights row has `rows * cols` entries.
+- **Coordinates:** cell `(r, c)` covers `[c/cols, (c+1)/cols] × [r/rows, (r+1)/rows]` of the image as uploaded, because the model's resize is a pure scale.
+- **Stateless:** the endpoint explains any (image, LaTeX) pair. The frontend sends the LaTeX it just received.
 
 ### 4.4 UI
 
-The "Ảnh đã nhận" panel becomes the attention view:
-
-- **Overlay.** A CSS grid of `rows × cols` cells over the image. The img sits in a wrapper sized by the img, and the overlay uses `inset: 0`. Each cell's opacity is its weight divided by the active token's maximum weight, tinted with `var(--accent-hmer)` and softened with a blur. No `<canvas>`, so it can be tested in jsdom.
-- **Token strip.** Under the image, one `<button>` per token, in monospace, showing the raw token as emitted (`\frac`, `{`, `^`, …). Hover or focus makes a token active, and ← / → move between tokens. A thin bar under each chip is proportional to its `token_prob`; the exact value is in the accessible name (for example "x, xác suất 0.93").
-- **"Phát lại" button.** Steps through the tokens at about 400 ms each, so a viewer sees the model read left to right without knowing to hover. It stops on any hover or focus and is disabled under `prefers-reduced-motion`.
-- **`mode: "columns"`.** A one-line note, "Checkpoint hiện tại chỉ định vị được theo chiều ngang (8 dải dọc).", so the vertical strips are not read as a bug.
-- **`attention: null`.** The image shows as it does today, with "Không lấy được bản đồ attention cho ảnh này."
-- The image background is always white (`.hmer-thumb`). The tint comes from the theme token, so both themes work.
+- **Loading.** After a recognition succeeds, the page calls explain automatically. The LaTeX shows at once, and the image shows "Đang tìm vùng mô hình dựa vào…" until the map arrives (about 3 s).
+- **Overlay.** A `rows × cols` CSS grid over the image (wrapper sized by the img, `inset: 0`). Each cell's opacity is its weight divided by the active token's maximum weight, tinted with `var(--accent-hmer)` and softened. No `<canvas>`, so it can be tested in jsdom.
+- **Token strip.** One `<button>` per token, in monospace. Hover or focus makes it active, and ← / → move between tokens. A thin bar under each chip shows `token_prob`, with the value in the accessible name.
+- **"Phát lại".** Steps through the tokens at about 400 ms each, stops on hover or focus, and is disabled under `prefers-reduced-motion`.
+- **No evidence.** A flagged token has a muted chip and an empty overlay, with the hint "Không vùng riêng lẻ nào quyết định ký hiệu này."
+- **Caption** under the image: "Vùng sáng: che đi thì mô hình bớt chắc về ký hiệu đang chọn."
+- **Explain failure.** The image shows as today with "Không tính được vùng mô hình dựa vào." The LaTeX result is unaffected.
 
 ### 4.5 Success criteria
 
-1. S1 confirms the axis, or this spec is revised before the UI is built.
-2. For the sample image, the invariants in §4.3 hold, and `" ".join(tokens) == latex` when there is no `<unk>`.
-3. The LaTeX and score are identical with and without the explanation pass. Checked by a unit test with fakes and by hand on the real model.
-4. The explanation adds less than 10% to recognition wall time on this machine, against the §3 baseline.
-5. No hook handles remain registered after `recognize`, whether it succeeded or raised (unit test).
-6. Keyboard: every token can be reached with Tab and the arrow keys, and the overlay follows focus.
-7. `uv run pytest -q`, `npm run typecheck`, `npm test` and `npm run build` pass.
+1. **The map follows the ink, checked on the real model.** Using `tools/hmer_evidence_check.py` on the §13.4 samples, with results in §13:
+   - symbol-token centres progress with the ink (mean Spearman ρ ≥ 0.8);
+   - with the ink shifted into the right half, centres move right by ≥ 0.3 of the width on average;
+   - on a blank image, every token is flagged no-evidence.
+   **If any check fails, stop before building UI.**
+2. Explaining the sample (26 tokens) takes under 5 s on this GPU, in batches that stay below the paging cliff.
+3. The `/api/hmer/recognize` response and its timing are unchanged.
+4. The invariants and error codes in §4.3 hold (unit tests).
+5. Keyboard: every token can be reached with Tab and the arrow keys, and the overlay follows focus.
+6. `uv run pytest -q`, `npm run typecheck`, `npm test` and `npm run build` pass.
 
 ## 5. Module `hmer-ink-canvas`
 
@@ -235,55 +245,60 @@ uv pip install --no-deps --index-url https://download.pytorch.org/whl/cu126 torc
 
 | File | Change |
 |---|---|
-| `backend/app/features/hmer/recognizer.py` | explanation pass, hook capture, grid folding; `Recognition` gains `tokens`, `token_probs`, `attention` |
-| `backend/app/features/hmer/schemas.py` | `AttentionMap`, new optional fields |
-| `backend/app/features/hmer/router.py` | pass the new fields through |
-| `tests/test_hmer.py` | new unit tests (§9) |
-| `frontend/src/lib/hmerApi.ts` | types for the new fields |
-| `frontend/src/lib/hmerInk.ts` + `.test.ts` | **new:** pure export layout |
-| `frontend/src/components/hmer/AttentionView.tsx` + `.test.tsx` | **new:** image overlay and token strip |
-| `frontend/src/components/hmer/InkCanvas.tsx` + `.test.tsx` | **new:** drawing surface and export |
-| `frontend/src/pages/HmerPage.tsx` + `.test.tsx` | input tabs; wire in both components |
-| `frontend/src/styles/hmer.css` | overlay, token strip, canvas |
-
-`HmerService` needs no change: it already passes the `Recognition` through.
+| `backend/app/features/hmer/occlusion.py` | **new:** occluded batch and evidence weights, tensor-only |
+| `tests/test_hmer_occlusion.py` | **new:** unit tests for the above, no model |
+| `backend/app/features/hmer/recognizer.py` | `explain()`: baseline and occluded teacher-forced passes |
+| `backend/app/features/hmer/service.py` | `explain()`: load stored image, validate tokens, same lock as recognition |
+| `backend/app/features/hmer/schemas.py` | `ExplainRequest`, `EvidenceMap`, `ExplainResponse` |
+| `backend/app/features/hmer/router.py` | `POST /api/hmer/explain` |
+| `tests/test_hmer.py`, `tests/contract/test_api_contracts.py` | endpoint tests; the new route |
+| `tools/hmer_evidence_check.py` | **new:** real-model check of §4.5.1 (progression, shift, blank) and latency |
+| `frontend/src/lib/hmerApi.ts` | `explainImage()` and types |
+| `frontend/src/lib/hmerInk.ts` + `.test.ts` | **done (T2):** pure export layout |
+| `frontend/src/components/hmer/EvidenceView.tsx` + `.test.tsx` | **new:** image overlay and token strip |
+| `frontend/src/components/hmer/InkCanvas.tsx` + `.test.tsx` | **done (T3):** drawing surface and export |
+| `frontend/src/pages/HmerPage.tsx` + `.test.tsx` | input tabs (done); auto-explain after recognition |
+| `frontend/src/styles/hmer.css` | overlay, token strip (canvas done) |
 
 ## 8. Code style
 
 Match what is there. Comments explain *why*, as in `recognizer.py`. Code and comments are in English, UI copy is in Vietnamese. New frontend files are `.ts`/`.tsx`. Colours come from theme tokens, icons are inline SVG, and no new UI libraries are added. Heavy imports (`torch`) stay inside functions so importing the module stays cheap.
 
 ```python
-def fold_to_image_grid(attn: "torch.Tensor", legacy: bool, cols: int) -> "torch.Tensor":
-    """Collapse decoder memory positions onto the image grid.
+def evidence(lp0: "torch.Tensor", lp_cells: "torch.Tensor", min_total: float):
+    """Per-token evidence weights from occlusion.
 
-    attn is [t, L], already averaged over heads. Returns [t, rows*cols] with
-    each row summing to 1.
+    lp0 is [tokens], the baseline log-probability of each token; lp_cells is
+    [cells, tokens], the same with one cell hidden. A drop means hiding that
+    cell made the model less sure; a rise is clamped away, since "hiding this
+    helped" is not evidence the token rests on that region.
 
-    Legacy checkpoints attend over (8 image columns x 768 channels), not over
-    space (see §2.3 of the design spec), so the channel axis is summed away
-    and only horizontal position survives. Corrected checkpoints attend over
-    the 2D grid directly, row-major.
+    Tokens whose total drop is below min_total get all-zero weights and a
+    flag: no single cell carries them, and normalising a near-zero vector
+    would paint noise as a confident map.
     """
-    if legacy:
-        attn = attn.view(attn.shape[0], cols, -1).sum(-1)
-    return attn / attn.sum(-1, keepdim=True)
+    drop = (lp0[None, :] - lp_cells).clamp(min=0).T          # [tokens, cells]
+    total = drop.sum(-1, keepdim=True)
+    flagged = total.squeeze(-1) < min_total
+    weights = torch.where(flagged[:, None], torch.zeros_like(drop), drop / total.clamp(min=1e-12))
+    return weights, flagged
 ```
 
 ## 9. Testing strategy
 
 **Backend (pytest).** Like the existing `tests/test_hmer.py`, these tests never import `comer`.
 
-- `fold_to_image_grid`: legacy mass placed at `(j, c)` lands in column `j`; corrected input stays row-major; every row sums to 1.
-- Hook capture on a fake decoder whose `layers[i].multihead_attn` returns `(out, attn)`: captured shapes are right, and handles are removed after both success and an exception.
-- Alignment: n tokens give n rows (the EOS row is dropped), and an unknown id becomes `<unk>` without shifting anything.
-- If the explanation raises, `recognize` returns the same LaTeX and score with `attention: null`.
-- Router: the response carries the new fields, and the old fields are unchanged.
-- **Real-model integration** is opt-in: `skipif` unless `HMER_CHECKPOINT` is set and `comer` imports. CI never runs it.
+- `occlusion_batch`: each copy differs from the input exactly in its own cell, which is filled; cells tile the image with no gaps or overlaps, including when 256 does not divide evenly.
+- `evidence`: drops are clamped at 0, rows sum to 1, and a token below `min_total` gets all zeros and a flag, never a normalised noise vector.
+- Service: tokens outside the vocabulary → 400; a missing image → 404; model unavailable → 503; the lock is shared with recognition.
+- Router: the `ExplainResponse` invariants hold. `/api/hmer/recognize` is byte-for-byte unchanged (existing tests).
+- **Real-model integration** is opt-in: `skipif` unless `HMER_CHECKPOINT` is set and `comer` imports. CI never runs it. The content checks of §4.5.1 live in `tools/hmer_evidence_check.py`, because they need data.zip.
 
 **Frontend (Vitest + React Testing Library).**
 
 - `hmerInk` layout cases from §5.3.1.
-- `AttentionView`: hovering or focusing a token sets cell opacities; arrow keys move between tokens; the columns note shows for `mode: "columns"`; the null note shows for `attention: null`; reduced motion disables playback.
+- `EvidenceView`: hovering or focusing a token sets cell opacities; arrow keys move between tokens; a no-evidence token shows its hint and an empty overlay; a failed explain shows its note while the LaTeX stays; reduced motion disables playback.
+- `HmerPage`: a successful recognition triggers explain with the returned filename and LaTeX.
 - `InkCanvas`: undo and clear update state, and "Nhận dạng" is disabled when empty. Pointer events are simulated; pixels are not asserted because jsdom has no canvas rasteriser.
 - `HmerPage`: switching tabs leaves the upload path working.
 
@@ -300,7 +315,8 @@ def fold_to_image_grid(attn: "torch.Tensor", legacy: bool, cols: int) -> "torch.
 
 - Retraining a corrected checkpoint (decided against, §12 Q2).
 - Hovering the KaTeX-rendered formula: KaTeX keeps no mapping back to source tokens, so hover lives on the token strip.
-- A per-layer or per-head selector.
+- Cross-attention maps: on this checkpoint they do not depend on the image (§13.4).
+- Finer occlusion grids, sliding windows, or gradient-based saliency. 4 × 16 with fixed cells is the measured, affordable version.
 - Preprocessing uploaded photos (binarise, crop, deskew). The export logic in §5.2 could be reused for this later, but not now.
 - HMER in the Docker image.
 - The r2l decoder's attention.
@@ -318,6 +334,10 @@ Resolved at plan checkpoint D1, after measuring 415 s per image on CPU (§13.1):
 
 - **D1a. GPU on the Windows host → CUDA torch through the lockfile.** `pyproject.toml` gains a `sys_platform == 'win32'` source for torch on the cu126 index (driver 560.94 supports at most CUDA 12.6), and `uv.lock` is regenerated. uv resolved Windows torch to `2.14.0+cu126`. Linux (CI, Docker) keeps `2.4.1+cu121`, and macOS keeps `2.13.0` from PyPI. This is the only lockfile change in this work; `comer` itself stays out of it (Q1). A manual `uv pip install` of CUDA torch was rejected because the next sync would put the locked CPU build back. Side effect: on Windows the BGE reranker also runs on the GPU and shares the 4 GB with HMER.
 - **D1b. `editdistance` → lazy import in the capstone repo.** One import moves from the top of `comer/lit_comer_swin.py` into `on_test_epoch_end`. The owner commits it in that repo. KiNg carries no workaround.
+
+Resolved at the T5 gate, 2026-09-24, after the attention spike (§13.4):
+
+- **D2. The map → occlusion sensitivity, not attention.** The owner chose this over keeping only token probabilities or shipping attention with a caveat. §4 was rewritten around it: a separate `/api/hmer/explain` endpoint, so recognition latency is unchanged, and a 4 × 16 grid, 2D, which the legacy attention could never be. Q2 still holds (no retraining); its note about `mode: "columns"` no longer applies.
 
 ## 13. Results
 
