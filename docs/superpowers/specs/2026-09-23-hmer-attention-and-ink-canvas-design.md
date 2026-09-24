@@ -352,6 +352,8 @@ torch `2.14.0+cu126`, torchvision `0.29.0+cu126`, timm `1.0.29`, RTX 3050 Ti Lap
 | Peak VRAM (HMER alone) | 1235 MiB | — |
 | Output | identical to CPU: same LaTeX, score −0.1907, **matches ground truth** | same; `/api/hmer/status` → `loaded: true`, `device: cuda`, `last_error: null` |
 
-About 75× faster than CPU. Not measured: VRAM with the BGE reranker loaded in the same process (D1a's side effect). The reranker loads lazily on the first research query, not at boot.
+About 75× faster than CPU.
+
+**D1a's side effect, measured 2026-09-24: both models do not fit on the 4 GB card.** The reranker is loaded at boot by `reranker_selfcheck`, not lazily as assumed above, and on CUDA torch it goes to the GPU: 3016 MiB used before HMER loads, 3908/4096 after. Windows does not raise out-of-memory. It pages VRAM out to system RAM, and two recognitions of the sample hit the 180 s and 60 s client timeouts without completing. Fix: a new `RERANKER_DEVICE` setting (`auto`/`cuda`/`cpu`, default `auto`, so Docker and Linux are unchanged), set to `cpu` in this machine's `.env`. That restores the reranker's pre-D1a placement. With it, the reranker logs "loaded on CPU", recognition takes **4.7 s** with a ground-truth match, and GPU use sits at 354 MiB between requests.
 
 Suite on the new torch: 598 passed, 17 skipped, the same as the baseline. Two HMER tests had read the developer's `.env` (`checkpoint=None` means "use settings", not "unconfigured"); they now clear the setting explicitly, with assertions unchanged.

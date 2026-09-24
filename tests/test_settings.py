@@ -70,3 +70,10 @@ def test_executor_mode_rejects_non_docker_values():
         Settings(_env_file=None, EXECUTOR_MODE="subprocess")
     with pytest.raises(ValueError):
         Settings(_env_file=None, EXECUTOR_MODE="host")
+
+
+def test_reranker_device_defaults_to_auto_and_rejects_unknown_values():
+    import pytest
+    assert Settings(_env_file=None).RERANKER_DEVICE == "auto"
+    with pytest.raises(ValueError):
+        Settings(_env_file=None, RERANKER_DEVICE="gpu")

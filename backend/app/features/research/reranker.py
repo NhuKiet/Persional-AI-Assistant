@@ -56,7 +56,15 @@ def _bge_reranker():
         try:
             import torch
             from sentence_transformers import CrossEncoder
-            use_cuda = torch.cuda.is_available()
+            # "cpu" wins even when CUDA exists: on a 4GB card shared with
+            # HMER, both models on the GPU made Windows page VRAM to system
+            # RAM and stall recognition for minutes (config.RERANKER_DEVICE).
+            if settings.RERANKER_DEVICE == "cpu":
+                use_cuda = False
+            elif settings.RERANKER_DEVICE == "cuda":
+                use_cuda = True
+            else:
+                use_cuda = torch.cuda.is_available()
             logger.info("Loading reranker: %s (GPU=%s)", settings.RERANKER_MODEL, use_cuda)
             _bge = CrossEncoder(
                 settings.RERANKER_MODEL,

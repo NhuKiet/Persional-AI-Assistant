@@ -44,6 +44,10 @@ class Settings(BaseSettings):
 
     # ── Embeddings + knowledge store ────────────────────────────────
     RERANKER_MODEL: str = "BAAI/bge-reranker-v2-m3"
+    # auto | cuda | cpu. Máy 4GB VRAM có cả HMER thì đặt "cpu": reranker
+    # (~1.9GB) và SwinCoMER (~1.2GB) cùng lên GPU thì Windows không báo OOM mà
+    # đẩy VRAM sang RAM — một lần nhận dạng từ 6 s thành hơn 3 phút.
+    RERANKER_DEVICE: str = "auto"
     KNOWLEDGE_THRESHOLD: float = 0.65
     KNOWLEDGE_CHUNK_SIZE: int = 500
     KNOWLEDGE_OVERLAP: int = 50
@@ -141,6 +145,16 @@ class Settings(BaseSettings):
         if v not in _VALID_HMER_DEVICES:
             raise ValueError(
                 f"HMER_DEVICE '{v}' không hợp lệ. "
+                f"Chọn một trong: {sorted(_VALID_HMER_DEVICES)}"
+            )
+        return v
+
+    @field_validator("RERANKER_DEVICE")
+    @classmethod
+    def _check_reranker_device(cls, v: str) -> str:
+        if v not in _VALID_HMER_DEVICES:
+            raise ValueError(
+                f"RERANKER_DEVICE '{v}' không hợp lệ. "
                 f"Chọn một trong: {sorted(_VALID_HMER_DEVICES)}"
             )
         return v

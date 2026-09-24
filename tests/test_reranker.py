@@ -1,3 +1,4 @@
+import pytest
 import types
 
 import backend.app.features.research.reranker as rr
@@ -133,3 +134,33 @@ def test_bge_scores_are_clamped_into_unit_range(monkeypatch):
         predict=lambda pairs: [1.4, -0.3, 0.62]
     ))
     assert rr._bge_scores("q", ["a", "b", "c"]) == [1.0, 0.0, 0.62]
+
+
+@pytest.mark.parametrize(
+    ("setting", "cuda_available", "expected"),
+    [("auto", True, "cuda"), ("auto", False, "cpu"), ("cpu", True, "cpu"), ("cuda", True, "cuda")],
+)
+def test_bge_reranker_honours_reranker_device(monkeypatch, setting, cuda_available, expected):
+    """On a 4 GB card the reranker and SwinCoMER cannot both live on the GPU:
+    Windows pages VRAM out to system RAM instead of raising out-of-memory, and
+    one recognition went from 6 s to over 3 minutes. RERANKER_DEVICE=cpu must
+    keep the reranker off the GPU even though CUDA is available."""
+    import sys
+
+    import torch
+
+    loaded = {}
+
+    class FakeCrossEncoder:
+        def __init__(self, model, max_length, device):
+            loaded["device"] = device
+
+    monkeypatch.setitem(sys.modules, "sentence_transformers", types.SimpleNamespace(CrossEncoder=FakeCrossEncoder))
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: cuda_available)
+    monkeypatch.setattr(rr.settings, "RERANKER_DEVICE", setting)
+    monkeypatch.setattr(rr, "_bge", None)
+    monkeypatch.setattr(rr, "_bge_tried", False)
+
+    rr._bge_reranker()
+
+    assert loaded["device"] == expected
