@@ -220,12 +220,12 @@ Also found while picking samples: §2.4 had measured the wrong training images (
 **Description:** `tools/hmer_evidence_check.py` productises the §13.4 probe against `HmerRecognizer.explain`. On the §13.4 training samples it checks the progression, the right-shift and the blank image. It also measures explain latency on the 27-token sample, and fixes `MIN_TOTAL_DROP` from the observed distribution of per-token total drops.
 
 **Acceptance criteria:**
-- [ ] Spec §4.5.1: mean Spearman ρ ≥ 0.8; mean centre shift ≥ 0.3 of the width; blank image → every token flagged. **If any check fails, stop before building UI.**
-- [ ] Explain on the sample takes under 5 s on this GPU (spec §4.5.2).
-- [ ] Numbers recorded in spec §13 (new §13.6).
+- [x] Spec §4.5.1: mean Spearman ρ **0.986** (≥ 0.8); mean **shift ratio 1.11** (≥ 0.7); blank image → every token flagged, 7/7. The shift criterion was corrected before the run, because "≥ 0.3 of the width" was unreachable even for a perfect map (spec §4.5.1).
+- [x] Explain on the 27-token sample takes **1.49 s** warm (spec §4.5.2).
+- [x] Numbers recorded in spec §13.6. `MIN_TOTAL_DROP = 0.05` is kept on the observed drop distributions.
 
 **Verification:**
-- [ ] `PYTHONPATH=. PYTHONIOENCODING=utf-8 .venv/Scripts/python.exe tools/hmer_evidence_check.py --out docs/superpowers/plans/assets/…-evidence-check.json`
+- [x] `PYTHONPATH=. PYTHONIOENCODING=utf-8 .venv/Scripts/python.exe tools/hmer_evidence_check.py --image … --out docs/superpowers/plans/assets/2026-09-24-evidence-check.json`
 
 **Dependencies:** T7
 **Files:** `tools/hmer_evidence_check.py`, the spec

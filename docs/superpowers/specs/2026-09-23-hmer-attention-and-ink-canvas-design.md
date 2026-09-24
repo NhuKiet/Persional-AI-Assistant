@@ -181,7 +181,7 @@ class ExplainResponse(BaseModel):
 
 1. **The map follows the ink, checked on the real model.** Using `tools/hmer_evidence_check.py` on the §13.4 samples, with results in §13:
    - symbol-token centres progress with the ink (mean Spearman ρ ≥ 0.8);
-   - with the ink shifted into the right half, centres move right by ≥ 0.3 of the width on average;
+   - with the ink shifted into the right half, the **shift ratio** is ≥ 0.7. That is observed shift divided by the ideal shift `0.5 − x/2`: 1.0 moves exactly with the ink, and 0 stays put, as attention did. *Corrected before T8 ran.* The original "≥ 0.3 of the width" was unreachable, because padding the left by one image width moves a token at x to 0.5 + x/2, an ideal shift averaging about 0.25. The §13.4 probe exposed this: 0.29 observed against 0.275 ideal;
    - on a blank image, every token is flagged no-evidence.
    **If any check fails, stop before building UI.**
 2. Explaining the sample (27 tokens) takes under 5 s on this GPU, in batches that stay below the paging cliff.
@@ -443,6 +443,26 @@ While picking T5 samples, `data/train/image` turned out to hold 206 877 `.png` a
 | as_trained | 35 | 45 | 4.1 |
 | crohme_22 (current export) | 36 | 43 | 4.5 |
 
-Only 15 of 100 differ at all in token distance (9 favour as_trained, 6 favour crohme_22), and 1 vs 2 are exact in one arm only. No meaningful difference, so the export does not need redoing. Together with §13.3, where the same ink failed 100/100 once it was small inside a large margin, this says the property that matters is that **the ink fills the frame**. Stroke width, binarisation and colour barely matter within this range.
+Only 15 of 100 differ at all in token distance (9 favour as_trained, 6 favour crohme_22), and 1 vs 2 are exact in one arm only. No meaningful difference, so the export does not need redoing.
+
+### 13.6 Evidence gate on the real model (T8, 2026-09-24)
+
+`tools/hmer_evidence_check.py` runs `HmerRecognizer.explain` in-process, the same code as the endpoint, on the five §13.4 training samples plus two of the owner's drawings. Each is explained three times: as is, with the ink shifted into the right half, and as a blank image. Results: `docs/superpowers/plans/assets/2026-09-24-evidence-check.json`.
+
+| Sample | p mean | ρ | Shift ratio | Symbols with evidence | Blank all flagged |
+|---|---|---|---|---|---|
+| `( 1 + r ) \beta = 1` | 0.99 | 0.96 | 1.15 | 7/8 | yes |
+| `\phi ( a ) ( h ) \in G` | 0.90 | 0.98 | 1.04 | 9/9 | yes |
+| `1 \le j < l \le n` | 0.69 | 1.00 | 1.08 | 7/7 | yes |
+| `a \wedge ( a \vee b ) = a` | 0.70 | 0.98 | 1.04 | 9/9 | yes |
+| `\| \| x \| \| = \| \| \Phi ( x ) \| \|` | 0.96 | 1.00 | 1.22 | 7/14 | yes |
+| owner: `2 x + 4 = 7` | 0.99 | 1.00 | 0.93 | 6/6 | yes |
+| owner: `7 a + 3 = 6` | 0.92 | 1.00 | 1.07 | 6/6 | yes |
+
+**Gate: all four checks pass.** Mean ρ over the training samples is **0.986** (≥ 0.8), mean shift ratio **1.11** (≥ 0.7), every token is flagged on every blank image, and the 27-token sample explains in **1.49 s** warm, three runs out of three (< 5 s).
+
+- In the `‖x‖ = ‖Φ(x)‖` sample, 7 of 14 symbols have no single-cell evidence. They are the repeated bars: hiding one of a pair leaves the other to carry the token. This is expected occlusion behaviour, reported rather than hidden.
+- `MIN_TOTAL_DROP = 0.05` is confirmed. Per-token total drops (nats) at p10/25/50/75/90 are 0.03/0.79/4.12/9.06/14.8 for symbols and 0.00/0.00/0.001/0.17/2.42 for structural tokens (the latter taken from the capstone sample). The threshold flags about half the structural tokens and about one symbol in ten.
+- Live, the endpoint showed the 2D layout the legacy attention never could (§13.4, T7 note in the plan). On `x² = Σ_{a=1}^{3} x_a²`, the upper limit `3` peaks in the top row, the lower limit `a = 1` in the bottom row, and each superscript sits a row above its base. Together with §13.3, where the same ink failed 100/100 once it was small inside a large margin, this says the property that matters is that **the ink fills the frame**. Stroke width, binarisation and colour barely matter within this range.
 
 Suite on the new torch: 598 passed, 17 skipped, the same as the baseline. Two HMER tests had read the developer's `.env` (`checkpoint=None` means "use settings", not "unconfigured"); they now clear the setting explicitly, with assertions unchanged.
