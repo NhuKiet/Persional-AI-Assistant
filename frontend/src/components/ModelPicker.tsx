@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { API } from "../lib/api";
+import { API, apiFetch } from "../lib/api";
 import type { ModelSelection } from "../types";
 
 export interface ModelOption extends ModelSelection {
@@ -11,7 +11,7 @@ export function useModels() {
   const [def, setDef] = useState<ModelSelection | null>(null);
 
   useEffect(() => {
-    fetch(`${API}/api/models`)
+    apiFetch(`${API}/api/models`)
       .then((r) => r.json())
       .then((d) => {
         setModels(d.models || []);

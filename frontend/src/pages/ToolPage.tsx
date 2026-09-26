@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo } from "react";
 import ModelPicker from "../components/ModelPicker";
+import { ChatTranscript } from "../components/ChatTranscript";
 import { InputBar } from "../components/InputBar";
-import { Message } from "../components/Message";
 import { AppShell } from "../components/AppShell";
 import { ToolIcon } from "../components/ToolIcon";
 import { shuffle, SUGGESTIONS } from "../config/tools";
@@ -17,15 +17,12 @@ interface ToolPageProps {
 
 export function ToolPage({ tool }: ToolPageProps) {
   const [sessionId, setSessionId] = useState(() => SESSION_ID());
-  const { messages, streaming, send, clear, stop, setMessages } = useChat(tool.id, sessionId);
+  const { messages, streaming, send, regenerate, editLast, clear, stop, setMessages } = useChat(tool.id, sessionId);
   const { sessions, activeId, setActiveId, addSession, removeSession, clearAll } = useChatHistory(tool.id);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [model, setModel] = useState<ModelSelection | null>(null);
   const [notice, setNotice] = useState("");
-  const bottomRef = useRef<HTMLDivElement>(null);
   const suggestions = useMemo(() => shuffle(SUGGESTIONS[tool.id] || []), [tool.id]);
-
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
   const handleSend = useCallback((text: string) => {
     setNotice("");
@@ -80,8 +77,14 @@ export function ToolPage({ tool }: ToolPageProps) {
               {notice}
             </div>
           )}
-          <div className="chat-area chat-active tool-chat">
-            {messages.length === 0 && (
+          <ChatTranscript
+            className="chat-area chat-active tool-chat"
+            messages={messages}
+            streaming={streaming}
+            accentColor={tool.color}
+            onRegenerate={() => regenerate(model)}
+            onEdit={(text) => editLast(text, model)}
+            before={messages.length === 0 && (
               <div className="tool-suggestions">
                 <p className="tool-suggestions-label">Thử ngay</p>
                 {suggestions.map(s => (
@@ -91,8 +94,7 @@ export function ToolPage({ tool }: ToolPageProps) {
                 ))}
               </div>
             )}
-            <div className="messages">{messages.map(m => <Message key={m.id} msg={m} accentColor={tool.color} />)}<div ref={bottomRef} /></div>
-          </div>
+          />
           <div className="input-wrap"><InputBar onSend={handleSend} streaming={streaming} onStop={stop} placeholder={`${tool.label}…`} accentColor={tool.color}
             tools={<ModelPicker tool={tool.id} value={model} onChange={setModel} />} /></div>
         </div>

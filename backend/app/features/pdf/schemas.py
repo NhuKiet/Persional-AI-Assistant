@@ -17,6 +17,16 @@ class PDFSummarizeRequest(BaseModel):
     model: str | None = None
 
 
+class PDFSuggestRequest(BaseModel):
+    filename: str
+    provider: str | None = None
+    model: str | None = None
+
+
+class PDFSuggestResponse(BaseModel):
+    questions: list[str]
+
+
 class SessionHistoryResponse(BaseModel):
     """Response shape for GET /api/<feature>/sessions/{session_id}."""
 

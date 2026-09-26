@@ -1,10 +1,10 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import ModelPicker from "../components/ModelPicker";
 import TimeWeatherWidget from "../components/TimeWeatherWidget";
 import mainlogo from "../assets/mainlogo.png";
 import { AppShell } from "../components/AppShell";
+import { ChatTranscript } from "../components/ChatTranscript";
 import { InputBar } from "../components/InputBar";
-import { Message } from "../components/Message";
 import { ToolDock } from "../components/ToolDock";
 import { shuffle, SUGGESTIONS, toolPath } from "../config/tools";
 import { ACCENT } from "../config/theme";
@@ -16,7 +16,7 @@ import type { ChatMessage, ModelSelection } from "../types";
 
 export function HomePage() {
   const [sessionId, setSessionId] = useState(() => SESSION_ID());
-  const { messages, streaming, send, clear, stop, setMessages } = useChat("chat", sessionId);
+  const { messages, streaming, send, regenerate, editLast, clear, stop, setMessages } = useChat("chat", sessionId);
   const { sessions, activeId, setActiveId, addSession, removeSession, clearAll } = useChatHistory("chat");
   const navigate = useNavigate();
   const location = useLocation();
@@ -24,10 +24,7 @@ export function HomePage() {
   const [model, setModel] = useState<ModelSelection | null>(null);
   const [notice, setNotice] = useState("");
   const chatActive = messages.length > 0;
-  const bottomRef  = useRef<HTMLDivElement>(null);
   const suggestions = useMemo(() => shuffle(SUGGESTIONS.home), []);
-
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
   const handleSend = useCallback((text: string, context = "") => {
     setNotice("");
@@ -110,12 +107,14 @@ export function HomePage() {
 
           {/* Messages */}
           {chatActive && (
-            <div className="chat-area chat-active">
-              <div className="messages">
-                {messages.map(m => <Message key={m.id} msg={m} accentColor={ACCENT} />)}
-                <div ref={bottomRef} />
-              </div>
-            </div>
+            <ChatTranscript
+              className="chat-area chat-active"
+              messages={messages}
+              streaming={streaming}
+              accentColor={ACCENT}
+              onRegenerate={() => regenerate(model)}
+              onEdit={(text) => editLast(text, model)}
+            />
           )}
 
           {!chatActive && <TimeWeatherWidget />}

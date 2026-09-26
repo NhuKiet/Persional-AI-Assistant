@@ -10,7 +10,34 @@
 }
 
 .hmer-head { display: flex; flex-direction: column; gap: 6px; }
-.hmer-title { margin: 0; font-size: 26px; font-weight: 600; color: var(--text); }
+/* Tiêu đề kèm icon của tool trong một ô kính nhỏ — cùng icon với nút mở tính
+   năng ở dock trang chat (ToolIcon "hmer"), để người dùng nhận ra mình vừa
+   vào đúng chỗ đã bấm. */
+.hmer-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  font-family: var(--display);
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+.hmer-title-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: 14px;
+  color: var(--accent-hmer);
+  background:
+    radial-gradient(90% 90% at 30% 20%, color-mix(in srgb, var(--accent-hmer) 26%, transparent), transparent 70%),
+    var(--secondary-glass-surface);
+  border: 1px solid color-mix(in srgb, var(--accent-hmer) 40%, var(--secondary-glass-edge));
+  box-shadow: var(--secondary-glass-shadow);
+}
 .hmer-sub { margin: 0; font-size: 14px; line-height: 1.6; color: var(--text2); }
 
 /* Operator-facing, not an error: a missing checkpoint is a deployment state,
@@ -18,7 +45,7 @@
 .hmer-status {
   margin: 0;
   padding: 10px 14px;
-  border-radius: 10px;
+  border-radius: 12px;
   border-left: 3px solid var(--accent-hmer);
   background: color-mix(in srgb, var(--accent-hmer) 10%, transparent);
   color: var(--text2);
@@ -29,7 +56,7 @@
 .hmer-error {
   margin: 0;
   padding: 10px 14px;
-  border-radius: 10px;
+  border-radius: 12px;
   border-left: 3px solid var(--danger);
   background: color-mix(in srgb, var(--danger) 10%, transparent);
   color: var(--text);
@@ -47,9 +74,12 @@
   gap: 6px;
   min-height: 190px;
   padding: 24px;
-  border: 2px dashed var(--border2);
-  border-radius: 14px;
-  background: var(--bg2);
+  border: 1.5px dashed var(--border2);
+  border-radius: var(--r-lg);
+  background: var(--secondary-glass-surface);
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
+  box-shadow: var(--secondary-glass-shadow);
   cursor: pointer;
   text-align: center;
   transition: border-color 0.15s ease, background 0.15s ease;
@@ -59,7 +89,9 @@
 .hmer-drop:focus-visible,
 .hmer-drop.is-dragging {
   border-color: var(--accent-hmer);
-  background: color-mix(in srgb, var(--accent-hmer) 8%, var(--bg2));
+  background:
+    radial-gradient(70% 90% at 50% 0%, color-mix(in srgb, var(--accent-hmer) 16%, transparent), transparent 72%),
+    var(--secondary-glass-surface);
 }
 
 .hmer-drop.is-busy { cursor: progress; }
@@ -84,14 +116,18 @@
   align-self: flex-start;
   gap: 4px;
   padding: 4px;
-  border-radius: 12px;
-  background: var(--bg2);
+  border-radius: 999px;
+  background: var(--secondary-glass-surface);
+  border: 1px solid var(--secondary-glass-edge);
+  box-shadow: var(--secondary-glass-shadow);
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
 }
 
 .hmer-tab {
-  padding: 7px 16px;
+  padding: 7px 18px;
   border: 0;
-  border-radius: 9px;
+  border-radius: 999px;
   background: transparent;
   color: var(--text2);
   font-size: 13.5px;
@@ -122,9 +158,10 @@
   display: block;
   width: 100%;
   height: 220px;
-  border: 2px solid var(--border2);
-  border-radius: 14px;
+  border: 1px solid var(--secondary-glass-edge);
+  border-radius: var(--r-lg);
   background: #fff;
+  box-shadow: var(--secondary-glass-shadow);
   cursor: crosshair;
   touch-action: none;
 }
@@ -148,10 +185,10 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 7px 14px;
+  padding: 8px 16px;
   border: 1px solid var(--border2);
-  border-radius: 9px;
-  background: transparent;
+  border-radius: 999px;
+  background: var(--bg2);
   color: var(--text2);
   font-size: 13.5px;
   cursor: pointer;
@@ -185,10 +222,13 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 16px;
-  border-radius: 12px;
-  background: var(--bg2);
-  box-shadow: var(--shadow-1);
+  padding: 20px;
+  border-radius: var(--r-lg);
+  background: var(--secondary-glass-surface);
+  border: 1px solid var(--secondary-glass-edge);
+  box-shadow: var(--secondary-glass-shadow);
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
   min-width: 0;
 }
 
@@ -272,7 +312,7 @@
   overflow: hidden;
   padding: 4px 8px 6px;
   border: 1px solid var(--border2);
-  border-radius: 7px;
+  border-radius: 9px;
   background: var(--bg3);
   color: var(--text);
   font-family: var(--mono, ui-monospace, monospace);
@@ -304,6 +344,11 @@
   opacity: 0.75;
 }
 
+/* Below DOUBT_THRESHOLD (lib/hmerDoubt.ts): the same symbols the editor lists
+   under "Mô hình ít chắc ở". */
+.hmer-token.is-doubtful { border-color: color-mix(in srgb, var(--danger) 60%, transparent); }
+.hmer-token.is-doubtful .hmer-token-bar { background: var(--danger); }
+
 .hmer-evidence-hint,
 .hmer-evidence-caption { margin: 0; font-size: 12.5px; color: var(--text3); }
 
@@ -329,31 +374,77 @@
 
 .hmer-empty { margin: 0; font-size: 14px; color: var(--text3); }
 
+.hmer-editor { display: grid; gap: 8px; }
+
+/* The LaTeX box: editable, so it reads as a field (border, focus ring). */
 .hmer-code {
   display: block;
-  padding: 10px 12px;
-  border-radius: 8px;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 3.4em;
+  padding: 12px 14px;
+  border: 1px solid var(--border2);
+  border-radius: 12px;
   background: var(--bg3);
-  color: var(--text2);
+  color: var(--text);
   font-family: var(--mono, ui-monospace, monospace);
   font-size: 12.5px;
   line-height: 1.6;
   word-break: break-word;
   white-space: pre-wrap;
+  resize: vertical;
 }
+.hmer-code:focus {
+  outline: none;
+  border-color: var(--accent-hmer);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-hmer) 22%, transparent);
+}
+
+.hmer-doubt { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; color: var(--text3); }
+.hmer-doubt-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 3px 9px;
+  border: 1px solid color-mix(in srgb, var(--danger) 50%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+}
+.hmer-doubt-chip:hover { border-color: var(--danger); }
+.hmer-doubt-chip:focus-visible { outline: 2px solid var(--accent-hmer); outline-offset: 2px; }
+.hmer-doubt-chip code { font-family: var(--mono, ui-monospace, monospace); }
+.hmer-doubt-prob { font-family: var(--mono, ui-monospace, monospace); font-size: 11px; color: var(--text3); font-variant-numeric: tabular-nums; }
+
+.hmer-edit-state { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; font-size: 12.5px; color: var(--text3); }
+.hmer-link-btn {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text2);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.hmer-link-btn:hover { color: var(--text); }
+.hmer-link-btn:focus-visible { outline: 2px solid var(--accent-hmer); outline-offset: 2px; border-radius: 3px; }
 
 .hmer-copy {
   align-self: flex-start;
-  padding: 6px 12px;
+  padding: 7px 14px;
   border: 1px solid var(--border2);
-  border-radius: 8px;
-  background: transparent;
+  border-radius: 999px;
+  background: var(--bg2);
   color: var(--text2);
   font-size: 13px;
   cursor: pointer;
 }
 
 .hmer-copy:hover { border-color: var(--accent-hmer); color: var(--text); }
+.hmer-copy:disabled { opacity: 0.5; cursor: default; }
 
 .hmer-meta {
   display: flex;

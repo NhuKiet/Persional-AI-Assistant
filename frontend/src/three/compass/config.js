@@ -88,12 +88,21 @@ export const RINGS = {
 };
 
 /* ------------------------------------------------------------------- layers */
+// KiNg: vanh "lich ngoai" L1 cu (0.431-0.8) day gan gap doi cac vanh khac va
+// chua ba nhom noi dung khong lien quan nhau, nen tach thanh ba vanh rieng -
+// moi vanh tu quay, nghieng va keo duoc doc lap. Ranh gioi dat dung tai cac
+// vong da ve san (C8, C11, C13a) nen de phang thi mat dia y het ban goc.
+// Thu tu mang nay la chi so lop cua he hat (particles.js) - dung sap lai.
 export const LAYERS = [
   { id: 'L0', name: 'Vành chòm sao', inner: 0.8, outer: 1.0 },
-  { id: 'L1', name: 'Vành lịch ngoài', inner: 0.431, outer: 0.8 },
+  { id: 'L1a', name: 'Vành 28 tú', inner: RINGS.C13a, outer: 0.8 },
+  { id: 'L1b', name: 'Vành 24 tiết khí', inner: RINGS.C11, outer: RINGS.C13a },
+  { id: 'L1c', name: 'Vành thước độ', inner: RINGS.C8, outer: RINGS.C11 },
   { id: 'L2', name: 'Vành 12 tháng', inner: 0.2, outer: 0.431 },
   { id: 'L3', name: 'Lõi Bắc Đẩu', inner: 0.0, outer: 0.2 },
 ];
+
+export const LAYER_BY_ID = Object.fromEntries(LAYERS.map((l) => [l.id, l]));
 
 /* ------------------------------------------------------- vanh gia khoi (rim) */
 export const RIMS = {
@@ -116,14 +125,22 @@ export const PRESETS = {
   phang: {
     label: 'Mặt phẳng',
     hint: 'Nhìn thẳng, mọi vành trùng nhau',
-    pose: { L0: [0, 0, 0, 0], L1: [0, 0, 0, 0], L2: [0, 0, 0, 0], L3: [0, 0, 0, 0] },
+    pose: {
+      L0: [0, 0, 0, 0], L1a: [0, 0, 0, 0], L1b: [0, 0, 0, 0], L1c: [0, 0, 0, 0],
+      L2: [0, 0, 0, 0], L3: [0, 0, 0, 0],
+    },
   },
+  // Ba vanh L1a/L1b/L1c: L1b giu dung tu the cua L1 cu, hai vanh con lai lech
+  // dan ve phia hang xom (L0 ben ngoai, L2 ben trong) de ba vanh tach ra thanh
+  // ba mat phang thay vi dinh lien nhu mot.
   nghieng: {
     label: 'Nghiêng nhẹ',
     hint: 'Bắt đầu tách lớp, vẫn đọc được chữ',
     pose: {
       L0: [15, 6, -3, 4],
-      L1: [27, 14, -6, 8],
+      L1a: [22, 9, -5, 6],
+      L1b: [27, 14, -6, 8],
+      L1c: [20, 26, -6, 9],
       L2: [10, 38, -5, 9],
       L3: [9, 22, -4, 6],
     },
@@ -133,7 +150,9 @@ export const PRESETS = {
     hint: 'Các vành cắt nhau như armillary sphere',
     pose: {
       L0: [58, -10, -20, 25],
-      L1: [62, 46, -23, 31],
+      L1a: [60, 18, -21, 28],
+      L1b: [62, 46, -23, 31],
+      L1c: [45, 62, -25, 38],
       L2: [28, 78, -26, 44],
       L3: [26, 70, -25, 37],
     },
@@ -143,7 +162,9 @@ export const PRESETS = {
     hint: 'Các vành dẹt thành elip rất mảnh',
     pose: {
       L0: [86, 0, -26, 20],
-      L1: [90, -2, -29, 26],
+      L1a: [88, -1, -28, 23],
+      L1b: [90, -2, -29, 26],
+      L1c: [66, 45, -29, 30],
       L2: [42, 92, -29, 34],
       L3: [34, 82, -25, 28],
     },
@@ -251,7 +272,7 @@ export const DUST = {
  */
 export const AUTO_SPIN = {
   enabled: true,
-  speeds: { L0: 3.0, L1: -4.4, L2: 6.2, L3: -8.6 },
+  speeds: { L0: 3.0, L1a: -3.8, L1b: 4.6, L1c: -5.4, L2: 6.2, L3: -8.6 },
 };
 
 /* ------------------------------------------------- bui theo chuyen dong */

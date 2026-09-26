@@ -2,11 +2,12 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import ModelPicker from "../components/ModelPicker";
 import { AppShell } from "../components/AppShell";
 import { InputBar } from "../components/InputBar";
+import { FocusPicker } from "../components/research/FocusPicker";
 import { ResearchProgress } from "../components/research/ResearchProgress";
 import { ResearchResult, type ResearchResultData } from "../components/research/ResearchResult";
 import { shuffle, SUGGESTIONS } from "../config/tools";
 import { fetchSessionHistory, SESSION_RECOVERY_NOTICE, useChatHistory } from "../hooks/useChatHistory";
-import { useResearch, type ResearchProgressItem } from "../hooks/useResearch";
+import { useResearch, type ResearchFocus, type ResearchProgressItem } from "../hooks/useResearch";
 import { useTrendingSuggestions } from "../hooks/useTrendingSuggestions";
 import { SESSION_ID } from "../lib/api";
 import type { ModelSelection } from "../types";
@@ -27,12 +28,31 @@ interface ResearchMessage {
 
 const EMPTY_MSG = (): ResearchMessage => ({ id: Math.random().toString(36).slice(2), query: "", phase: "searching", progress: [], result: null, errMsg: "" });
 
+/** The last chosen source focus, remembered per browser. Storage can be
+ *  blocked or hold junk, so anything unexpected falls back to "all". */
+const FOCUS_KEY = "king_research_focus";
+const FOCUS_VALUES: ResearchFocus[] = ["all", "academic", "web", "code"];
+
+function loadFocus(): ResearchFocus {
+  try {
+    const saved = localStorage.getItem(FOCUS_KEY) as ResearchFocus | null;
+    return saved && FOCUS_VALUES.includes(saved) ? saved : "all";
+  } catch {
+    return "all";
+  }
+}
+
+function saveFocus(focus: ResearchFocus): void {
+  try { localStorage.setItem(FOCUS_KEY, focus); } catch { /* per-browser convenience only */ }
+}
+
 export function ResearchPage() {
   const [sessionId, setSessionId] = useState(() => SESSION_ID());
   const { runSearch, abort } = useResearch();
   const { sessions, activeId, setActiveId, addSession, removeSession, clearAll } = useChatHistory("research");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [model, setModel]             = useState<ModelSelection | null>(null);
+  const [focus, setFocus]             = useState<ResearchFocus>(loadFocus);
   const [messages, setMessages]       = useState<ResearchMessage[]>([]);
   const [followUps, setFollowUps]     = useState<string[]>([]);
   const [notice, setNotice]           = useState("");
@@ -82,7 +102,7 @@ export function ResearchPage() {
     addSession(sid, text);
     const msg = { ...EMPTY_MSG(), query: text };
     setMessages([msg]);
-    runSearch(text, sid, patch => updateMsg(msg.id, patch), model);
+    runSearch(text, sid, patch => updateMsg(msg.id, patch), model, focus);
   };
 
   // Follow-up: appends a new result below the previous ones, keeps history
@@ -92,7 +112,7 @@ export function ResearchPage() {
     setFollowUps([]);
     const msg = { ...EMPTY_MSG(), query: q };
     setMessages(prev => [...prev, msg]);
-    runSearch(q, sessionId, patch => updateMsg(msg.id, patch), model);
+    runSearch(q, sessionId, patch => updateMsg(msg.id, patch), model, focus);
   };
 
   // InputBar: new search if no history yet, follow-up otherwise
@@ -182,6 +202,7 @@ export function ResearchPage() {
           placeholder="Nhập chủ đề nghiên cứu…"
           accentColor={accentColor}
         />
+        <FocusPicker value={focus} onChange={(f) => { setFocus(f); saveFocus(f); }} />
       </div>
 
       <div className="chat-area chat-active" style={{ paddingTop: 8 }}>
@@ -230,7 +251,7 @@ export function ResearchPage() {
               <div className="rp-error">
                 <div>⚠️ {msg.errMsg || "Research thất bại."}</div>
                 <button className="clear-btn" style={{ marginTop: 10 }}
-                  onClick={() => runSearch(msg.query, sessionId, patch => updateMsg(msg.id, patch), model)}>
+                  onClick={() => runSearch(msg.query, sessionId, patch => updateMsg(msg.id, patch), model, focus)}>
                   Thử lại
                 </button>
               </div>

@@ -101,6 +101,26 @@ _SEARCH_TIMEOUT_SECONDS = 60
 _JUDGE_TIMEOUT_SECONDS = getattr(settings, "RESEARCH_JUDGE_TIMEOUT_SECONDS", 20)
 _JUDGE_POLL_SECONDS    = 0.1
 
+# Which searchers each research focus runs ("all" = every one above).
+_FOCUS_SEARCHERS = {
+    "academic": ("arxiv", "semantic", "huggingface"),
+    "web":      ("web", "duckduckgo"),
+    "code":     ("stackoverflow", "web"),   # SO answers + web for official docs
+}
+
+# SearchResult.source written by each searcher — used to keep stored
+# knowledge from outside the focus out of an "academic"/"web"/"code" run.
+_RESULT_SOURCE = {
+    "web": "web", "arxiv": "arxiv", "huggingface": "huggingface",
+    "semantic": "semantic_scholar", "duckduckgo": "duckduckgo", "stackoverflow": "stackoverflow",
+}
+
+
+def _searchers_for(focus: str) -> list[tuple[str, str, int]]:
+    names = _FOCUS_SEARCHERS.get(focus)
+    return list(_SOURCES) if names is None else [s for s in _SOURCES if s[0] in names]
+
+
 _SSE_STATUS = {
     "web":           "Searching web sources…",
     "arxiv":         "Searching Arxiv papers…",
@@ -173,12 +193,13 @@ class ResearchAgent:
         query:       str,
         dynamic_k:   dict[str, int] | None = None,
         expansions:  list[str]      | None = None,
+        searchers:   list[tuple[str, str, int]] = _SOURCES,
     ) -> list[SearchResult]:
         """
-        Search all sources in parallel using dynamic k.
+        Search `searchers` (all sources by default) in parallel using dynamic k.
         If expansions provided, run extra searches and merge.
         """
-        k_map = dynamic_k or {name: k for name, _, k in _SOURCES}
+        k_map = dynamic_k or {name: k for name, _, k in searchers}
         queries = expansions or [query]
 
         all_results: list[SearchResult] = []
@@ -191,7 +212,7 @@ class ResearchAgent:
         futures: dict = {}
         ex = ThreadPoolExecutor(max_workers=10)
         try:
-            for name, attr, _ in _SOURCES:
+            for name, attr, _ in searchers:
                 # Primary query
                 futures[ex.submit(_run_search, name, attr, query)] = (name, query)
                 # Expansion queries — only for academic sources to avoid API overuse
@@ -262,7 +283,10 @@ class ResearchAgent:
         )
         return reranked
 
-    def _top_up(self, query: str, base_sources: list, gap_query: str) -> tuple[list, list]:
+    def _top_up(
+        self, query: str, base_sources: list, gap_query: str,
+        searchers: list[tuple[str, str, int]] = _SOURCES,
+    ) -> tuple[list, list]:
         """Search bù rồi trộn với nguồn sẵn có.
 
         Trả (merged_sources, newly_fetched_sources). CHỈ tập thứ hai được
@@ -274,7 +298,7 @@ class ResearchAgent:
         """
         base_ids = {s.id for s in base_sources}
         try:
-            extra_raw = self._search_all(gap_query)
+            extra_raw = self._search_all(gap_query, searchers=searchers)
             extra     = self._process_pipeline(gap_query, extra_raw, anchor=query)
         except Exception as e:  # noqa: BLE001 — non-fatal, giữ nguyên nguồn cũ
             logger.warning("[TOP-UP] search failed (non-fatal): %s", e)
@@ -299,7 +323,7 @@ class ResearchAgent:
         except Exception as e:  # noqa: BLE001
             logger.warning("[KNOWLEDGE] STORE failed (non-fatal): %s", e)
 
-    def _iteration_step(self, query, sources, output, synth):
+    def _iteration_step(self, query, sources, output, synth, searchers=_SOURCES):
         """Một vòng search bù nhắm vào khoảng trống grounding.
 
         Trả (new_sources, new_output, newly_fetched), hoặc None để dừng.
@@ -308,7 +332,7 @@ class ResearchAgent:
         if not gq:
             return None
         try:
-            merged, newly = self._top_up(query, sources, gq)
+            merged, newly = self._top_up(query, sources, gq, searchers=searchers)
             new_output = synth.synthesize_grounded(query, merged)
             return merged, new_output, newly
         except Exception as e:  # noqa: BLE001 — non-fatal, giữ output trước đó
@@ -321,12 +345,14 @@ class ResearchAgent:
         self, query: str, provider: str | None = None, model: str | None = None,
         cancel_event: threading.Event | None = None,
         history: list[dict] | None = None,
+        focus: str = "all",
     ) -> Generator[dict, None, None]:
-        yield from self._run_core(query, provider, model, cancel_event, history)
+        yield from self._run_core(query, provider, model, cancel_event, history, focus)
 
     def _run_core(
         self, query: str, provider: str | None, model: str | None,
         cancel_event: threading.Event | None, history: list[dict] | None,
+        focus: str = "all",
     ) -> Generator[dict, None, ResearchOutput | None]:
         """Toàn bộ luồng thật: contextualize → gate 3 tầng → judge/top-up →
         search live → synthesize → iteration → persistence → done.
@@ -378,6 +404,13 @@ class ResearchAgent:
                 logger.warning("[KNOWLEDGE] retrieve failed (non-fatal): %s", e)
                 candidates = []
 
+            # A focused run searches only some sources — and may only reuse
+            # stored knowledge that came from those same sources.
+            searchers = _searchers_for(focus)
+            if focus != "all":
+                allowed = {_RESULT_SOURCE[name] for name, _, _ in searchers}
+                candidates = [c for c in candidates if c.source in allowed]
+
             state, fresh = (
                 sufficiency.assess(query, candidates) if use_gate
                 else ((sufficiency.MAYBE, candidates) if candidates else (sufficiency.EMPTY, []))
@@ -412,7 +445,7 @@ class ResearchAgent:
                     gap = sufficiency.anchor_gap_query(query, missing)
                     yield {"type": "status", "message": "Bổ sung nguồn còn thiếu…",
                            "source": "knowledge"}
-                    all_sources, newly = self._top_up(query, fresh, gap)
+                    all_sources, newly = self._top_up(query, fresh, gap, searchers=searchers)
                     yield {"type": "source_done", "source": "knowledge", "count": len(newly)}
                     newly_fetched.extend(newly)
                     if newly:
@@ -449,7 +482,7 @@ class ResearchAgent:
                 dynamic_k = get_dynamic_k(query)
 
                 # Status messages
-                for name, _, _ in _SOURCES:
+                for name, _, _ in searchers:
                     yield {"type": "status", "message": _SSE_STATUS[name], "source": name}
 
                 # Parallel search
@@ -468,7 +501,7 @@ class ResearchAgent:
                     # source by a full LLM latency.
                     exp_future = ex.submit(expand_query, query, provider=provider, model=model)
 
-                    for name, attr, _ in _SOURCES:
+                    for name, attr, _ in searchers:
                         k = dynamic_k.get(name, 4)
                         futures[ex.submit(
                             getattr(getattr(self, attr), "search"), query, k
@@ -486,7 +519,7 @@ class ResearchAgent:
                             "source":  "llm",
                         }
                         # Expansions for academic sources
-                        for name, attr, _ in _SOURCES:
+                        for name, attr, _ in searchers:
                             if name not in ("arxiv", "semantic"):
                                 continue
                             k = dynamic_k.get(name, 4)
@@ -549,7 +582,10 @@ class ResearchAgent:
                 # contain the generic phrase "A Comparative Study of…").
                 relevant_results = filter_by_anchor_relevance(query, raw_results)
 
-                yield {"type": "status", "message": "Enriching web content…", "source": "web"}
+                # "pipeline", not "web": the UI opens a progress row per
+                # status source, and under an academic focus a "web" row
+                # would spin forever — no web search ever reports done.
+                yield {"type": "status", "message": "Enriching web content…", "source": "pipeline"}
                 enriched = _enrich_web_results(relevant_results)
 
                 yield {"type": "status", "message": "Deduplicating results…", "source": "pipeline"}
@@ -618,7 +654,7 @@ class ResearchAgent:
                         "message": f"Additional research (round {rounds})…",
                         "source":  "llm",
                     }
-                    step = self._iteration_step(query, all_sources, output, synth)
+                    step = self._iteration_step(query, all_sources, output, synth, searchers=searchers)
                     if step is None:
                         break
                     all_sources, output, iteration_newly = step

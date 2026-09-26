@@ -10,6 +10,7 @@ import {
   type GlassSettings,
 } from "../components/news/newsGlassSettings";
 import { useNews, type NewsTopic } from "../hooks/useNews";
+import { safeHref } from "../lib/citations";
 import communityVisual from "../assets/news/community.webp";
 import modelReleaseVisual from "../assets/news/model-release.webp";
 import researchVisual from "../assets/news/research.webp";
@@ -65,7 +66,7 @@ export function NewsPage() {
   }));
   const glassPanelRef = useRef<HTMLDivElement>(null);
   const glassToggleRef = useRef<HTMLButtonElement>(null);
-  const { items, loading, error, refresh, refreshState } = useNews(topic);
+  const { items, loading, error, refresh, refreshState, hasMore, loadingMore, loadMoreError, loadMore } = useNews(topic);
   const navigate = useNavigate();
   const visualValues = toGlassVisualValues(glassSettings);
   const glassStyle = {
@@ -333,9 +334,14 @@ export function NewsPage() {
                 <img src={NEWS_TOPIC_VISUALS[item.topic]} alt="" loading="lazy" decoding="async" />
               </div>
               <div className="news-card-content">
-                <a href={item.url} target="_blank" rel="noopener noreferrer" className="news-card-title">
-                  {item.title_vi || item.title}
-                </a>
+                {/* RSS URLs are third-party input: only http(s) becomes a link. */}
+                {safeHref(item.url) ? (
+                  <a href={safeHref(item.url)} target="_blank" rel="noopener noreferrer" className="news-card-title">
+                    {item.title_vi || item.title}
+                  </a>
+                ) : (
+                  <span className="news-card-title">{item.title_vi || item.title}</span>
+                )}
                 <p className="news-card-summary">{item.summary_vi || item.title}</p>
                 <div className="news-card-meta">
                   <span className="news-badge">{TOPIC_BADGE[item.topic]}</span>
@@ -358,6 +364,21 @@ export function NewsPage() {
             </li>
           ))}
         </ul>
+
+        {!loading && !error && hasMore && (
+          <div className="news-more">
+            <button
+              type="button"
+              className="news-more-btn"
+              onClick={() => void loadMore()}
+              disabled={loadingMore}
+              aria-busy={loadingMore}
+            >
+              {loadingMore ? "Đang tải…" : "Xem thêm"}
+            </button>
+            {loadMoreError && <p className="news-status news-error" role="alert">{loadMoreError}</p>}
+          </div>
+        )}
       </section>
     </main>
   );

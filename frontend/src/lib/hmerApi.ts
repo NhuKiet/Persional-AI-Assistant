@@ -1,4 +1,4 @@
-import { API } from "./api";
+import { API, apiFetch } from "./api";
 
 export interface HmerStatus {
   configured: boolean;
@@ -57,7 +57,7 @@ export function describeStatus(status: HmerStatus | null): string | null {
 }
 
 export async function fetchHmerStatus(): Promise<HmerStatus> {
-  const response = await fetch(`${API}/api/hmer/status`);
+  const response = await apiFetch(`${API}/api/hmer/status`);
   if (!response.ok) throw new Error(`Không đọc được trạng thái (${response.status})`);
   return response.json();
 }
@@ -78,7 +78,7 @@ export async function recognizeImage(file: File): Promise<HmerResult> {
   const form = new FormData();
   form.append("file", file);
 
-  const response = await fetch(`${API}/api/hmer/recognize`, {
+  const response = await apiFetch(`${API}/api/hmer/recognize`, {
     method: "POST",
     body: form,
   });
@@ -94,7 +94,7 @@ export async function explainImage(
   latex: string,
   signal?: AbortSignal,
 ): Promise<HmerExplanation> {
-  const response = await fetch(`${API}/api/hmer/explain`, {
+  const response = await apiFetch(`${API}/api/hmer/explain`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ filename, latex }),

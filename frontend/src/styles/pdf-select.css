@@ -2,9 +2,11 @@
 /* ============================================================
    PDF Selection Layer — text highlight + Alt-drag image crop
    ============================================================ */
-.sel-toolbar { position: absolute; display: flex; gap: 4px; background: #1f2430; border: 1px solid #3a4152; border-radius: 8px; padding: 4px; z-index: 50; transform: translate(-50%, 6px); }
-.sel-tb-btn { background: var(--accent-pdf); border: none; color: #111; border-radius: 6px; padding: 4px 8px; cursor: pointer; font-size: 12px; }
-.sel-tb-close { background: transparent; border: none; color: #aaa; cursor: pointer; }
+/* Thanh nổi đè lên trang PDF: bề mặt nổi gần đục (--float-surface), không
+   phải kính trong suốt — chữ của trang PDF bên dưới sẽ lộ qua nút. */
+.sel-toolbar { position: absolute; display: flex; gap: 4px; background: var(--float-surface); backdrop-filter: var(--float-blur); -webkit-backdrop-filter: var(--float-blur); border: 1px solid var(--border2); border-radius: 12px; padding: 4px; z-index: 50; transform: translate(-50%, 6px); box-shadow: var(--shadow-2); }
+.sel-tb-btn { background: var(--accent-pdf); border: none; color: var(--bg); border-radius: 6px; padding: 4px 8px; cursor: pointer; font-size: 12px; }
+.sel-tb-close { background: transparent; border: none; color: var(--text2); cursor: pointer; }
 .crop-box { position: absolute; border: 2px dashed var(--accent-pdf); background: color-mix(in srgb, var(--accent-pdf) 12%, transparent); pointer-events: none; z-index: 40; }
 /* Khung giữ lại sau khi thả chuột: nền trong hơn để nhìn rõ vùng đã cắt,
    viền đậm + quầng sáng để phân biệt với khung đang kéo. */

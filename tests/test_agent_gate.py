@@ -28,7 +28,7 @@ def _run(monkeypatch, candidates, judge_verdict=(True, None), topup_new=None):
     monkeypatch.setattr(agent_mod, "get_store", lambda: _Store())
     monkeypatch.setattr(a, "_run_judge", lambda *args: judge_verdict, raising=False)
     monkeypatch.setattr(a, "_top_up",
-                        lambda q, base, gap: (base + (topup_new or []), topup_new or []),
+                        lambda q, base, gap, **_: (base + (topup_new or []), topup_new or []),
                         raising=False)
     monkeypatch.setattr(a, "_search_all", lambda *args, **kw: [_sr("live")], raising=False)
     monkeypatch.setattr(a, "_process_pipeline", lambda q, r, **kw: r, raising=False)
@@ -161,7 +161,7 @@ def test_thin_coverage_emits_top_up_decision_without_judge(monkeypatch):
     monkeypatch.setattr(a, "_run_judge",
                         lambda *args: judged.append(1) or (True, None), raising=False)
     monkeypatch.setattr(a, "_top_up",
-                        lambda q, base, gap: (base + [_sr("topup_result")], [_sr("topup_result")]),
+                        lambda q, base, gap, **_: (base + [_sr("topup_result")], [_sr("topup_result")]),
                         raising=False)
     monkeypatch.setattr(a, "_search_all", lambda *args, **kw: [_sr("live")], raising=False)
     monkeypatch.setattr(a, "_process_pipeline", lambda q, r, **kw: r, raising=False)

@@ -123,7 +123,7 @@ def test_executor_hides_server_secrets(monkeypatch):
     monkeypatch.setenv("TAVILY_API_KEY", "SECRET_tavily")
     import backend.app.features.coding.execution as ce
 
-    monkeypatch.setattr(ce, "_docker_available", lambda: True)
+    monkeypatch.setattr(ce, "executor_status", lambda **_: ce.ExecutorStatus(True, "ok"))
     captured = {}
 
     def fake_run_docker(self, script_path, run_dir, timeout):
@@ -152,7 +152,7 @@ def test_executor_timeout_kills_container_and_reports_timed_out(monkeypatch):
 
     import backend.app.features.coding.execution as ce
 
-    monkeypatch.setattr(ce, "_docker_available", lambda: True)
+    monkeypatch.setattr(ce, "executor_status", lambda **_: ce.ExecutorStatus(True, "ok"))
 
     class _FakeProc:
         def __init__(self):
@@ -263,3 +263,112 @@ def test_artifact_response_keeps_images_inline():
         assert "attachment" not in (resp.headers.get("content-disposition") or "")
     finally:
         path.unlink(missing_ok=True)
+
+
+# ── Coding run: uploaded_files[].name must never pull host files in ─────────
+#
+# The old copy loop did `SANDBOX_DIR / name -> session_sandbox / name`, so
+# each "../" hop moved a host file one directory closer: ["../../.env",
+# "../.env", ".env"] landed the repo's .env inside the session sandbox,
+# where generated code could print it.
+
+def test_coding_run_does_not_copy_files_named_in_the_request(tmp_path, monkeypatch):
+    import backend.app.features.coding.service as coding_service
+
+    root = tmp_path / "sandbox"
+    session_dir = root / "s1"
+    session_dir.mkdir(parents=True)
+    (tmp_path / "secret.env").write_text("OPENAI_API_KEY=sk-test", encoding="utf-8")
+    monkeypatch.setattr(coding_service, "SANDBOX_DIR", root, raising=False)
+    monkeypatch.setattr(coding_service, "_session_sandbox", lambda _sid: session_dir)
+
+    names = [{"name": "../secret.env"}, {"name": "secret.env"}]
+    run = coding_service.CodingAgent(executor=object()).run("hi", [], "s1", names)
+    assert next(run)["type"] == "thinking"
+    run.close()
+
+    assert not (root / "secret.env").exists()
+    assert not (session_dir / "secret.env").exists()
+
+
+# ── Shared upload filename rule (coding, pdf, hmer) ─────────────────────────
+#
+# The backend also runs natively on Windows: there `base / "D:x.csv"` jumps
+# to drive D, and "a.txt:x.csv" writes an NTFS alternate data stream.
+
+_BAD_UPLOAD_NAMES = [
+    "", ".", "..", "../a.csv", "a/b.csv", "a\\b.csv",
+    "D:x.csv", "a.txt:x.csv",
+    "CON.txt", "nul", "com1.csv", "LPT9.json",
+    "x\x00.csv", "x\n.csv",
+]
+
+
+@pytest.mark.parametrize("bad", _BAD_UPLOAD_NAMES)
+def test_safe_filename_rejects(bad):
+    from backend.app.shared.files import safe_filename
+
+    with pytest.raises(ValueError):
+        safe_filename(bad)
+
+
+@pytest.mark.parametrize(
+    "good", ["data.csv", "b\u00e1o c\u00e1o 2024.xlsx", "my-file_1.json", "console.txt"],
+)
+def test_safe_filename_accepts_plain_names(good):
+    from backend.app.shared.files import safe_filename
+
+    assert safe_filename(good) == good
+
+
+@pytest.mark.parametrize("bad", ["D:evil.csv", "a.txt:evil.csv", "CON.csv"])
+def test_coding_upload_rejects_windows_path_tricks(bad):
+    r = _client(coding_router.router).post(
+        "/api/coding/upload",
+        files={"file": (bad, b"a,b\n1,2\n", "text/csv")},
+        data={"session_id": "sec-sess"},
+    )
+    assert r.status_code == 400
+
+
+@pytest.mark.parametrize("bad", ["D:main.py", "a.txt:x.csv", "CON"])
+def test_coding_delete_rejects_windows_path_tricks(bad):
+    r = _client(coding_router.router).delete(
+        f"/api/coding/file/{bad}", params={"session_id": "sec-sess"},
+    )
+    assert r.status_code == 400
+
+
+@pytest.mark.parametrize(
+    "method,path",
+    [("get", "/api/pdf/raw/D:x.pdf"), ("delete", "/api/pdf/file/D:x.pdf"),
+     ("get", "/api/pdf/raw/a.pdf:x.pdf")],
+)
+def test_pdf_file_routes_reject_drive_and_stream_names(method, path):
+    r = getattr(_client(pdf_router.router), method)(path)
+    assert r.status_code == 400
+
+
+def test_coding_upload_refuses_to_write_through_symlink_leaving_sandbox(tmp_path):
+    # Generated code can create symlinks in its (writable) session dir; the
+    # backend writes there as the host user and must not follow them out.
+    from backend.app.features.coding.service import _session_sandbox
+
+    sdir = _session_sandbox("sec-symlink-upload")
+    outside = tmp_path / "victim.csv"
+    outside.write_text("original", encoding="utf-8")
+    link = sdir / "victim.csv"
+    try:
+        link.symlink_to(outside)
+    except (OSError, NotImplementedError):
+        pytest.skip("symlink creation not permitted in this environment")
+    try:
+        r = _client(coding_router.router).post(
+            "/api/coding/upload",
+            files={"file": ("victim.csv", b"pwned", "text/csv")},
+            data={"session_id": "sec-symlink-upload"},
+        )
+        assert r.status_code == 400
+        assert outside.read_text(encoding="utf-8") == "original"
+    finally:
+        link.unlink()

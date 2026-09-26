@@ -7,11 +7,13 @@ import { CodingResult } from "../components/coding/CodingResult";
 import { EventRow } from "../components/coding/EventRow";
 import { FileUploadZone, type UploadedFile } from "../components/coding/FileUploadZone";
 import { PhaseBar } from "../components/coding/PhaseBar";
+import { SandboxBadge, SandboxBanner } from "../components/coding/SandboxStatus";
 import { shuffle, SUGGESTIONS } from "../config/tools";
 import { fetchSessionHistory, SESSION_RECOVERY_NOTICE, useChatHistory } from "../hooks/useChatHistory";
 import { isBusyPhase, useCoding } from "../hooks/useCoding";
 import { useDragResize } from "../hooks/useDragResize";
-import { API, SESSION_ID } from "../lib/api";
+import { useSandboxStatus } from "../hooks/useSandboxStatus";
+import { API, SESSION_ID, apiFetch } from "../lib/api";
 import type { ChatMessage, ModelSelection } from "../types";
 
 export function CodingPage() {
@@ -31,13 +33,14 @@ export function CodingPage() {
   const suggestions = useMemo(() => shuffle(SUGGESTIONS.coding), []);
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [showUpload, setShowUpload] = useState(false);
+  const sandbox = useSandboxStatus();
 
   const handleAddFile = useCallback((fileData: UploadedFile) => {
     setUploadedFiles(p => [...p.filter(f => f.name !== fileData.name), fileData]);
   }, []);
 
   const handleRemoveFile = useCallback(async (name: string) => {
-    try { await fetch(`${API}/api/coding/file/${encodeURIComponent(name)}?session_id=${encodeURIComponent(sessionId)}`, { method: "DELETE" }); } catch {}
+    try { await apiFetch(`${API}/api/coding/file/${encodeURIComponent(name)}?session_id=${encodeURIComponent(sessionId)}`, { method: "DELETE" }); } catch {}
     setUploadedFiles(p => p.filter(f => f.name !== name));
   }, [sessionId]);
 
@@ -117,6 +120,7 @@ export function CodingPage() {
         <div className="mode-hint">
           {mode === "agent" ? "Plan → Generate → Execute → Debug tự động" : "Hỏi về code, giải thích, review"}
         </div>
+        {sandbox.status?.available && <SandboxBadge status={sandbox.status} />}
         <button
           className={`upload-toggle-btn ${showUpload ? "upload-toggle-active" : ""} ${uploadedFiles.length > 0 ? "upload-toggle-has-files" : ""}`}
           onClick={() => setShowUpload(o => !o)}
@@ -125,6 +129,11 @@ export function CodingPage() {
           📂 {uploadedFiles.length > 0 ? `${uploadedFiles.length} file` : "Upload"}
         </button>
       </div>
+
+      {/* Quick chat never runs code, so only Code chat needs to hear it. */}
+      {mode === "agent" && sandbox.status && !sandbox.status.available && (
+        <SandboxBanner status={sandbox.status} checking={sandbox.checking} onRecheck={sandbox.recheck} />
+      )}
 
       {/* File upload panel */}
       {showUpload && (
@@ -228,10 +237,10 @@ export function CodingPage() {
             />
             <MicButton onTranscript={t => setInput(v => (v ? v + " " + t : t))} disabled={isRunning} />
             <button className="input-send" onClick={() => handleSend(input)} disabled={isRunning || !input.trim()}
-              style={{ background: isRunning ? "#2a2a2e" : accentColor }}>
+              style={{ background: isRunning ? "var(--bg4)" : accentColor }}>
               {isRunning
                 ? <span className="mini-spinner" />
-                : <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M1 7.5h13M8 1.5l6 6-6 6" stroke="#000" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                : <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M1 7.5h13M8 1.5l6 6-6 6" stroke="var(--bg)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>}
             </button>
           </div>
           {isRunning && (

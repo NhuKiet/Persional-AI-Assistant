@@ -1,9 +1,10 @@
 import logging
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
 from backend.app.core.config import settings
+from backend.app.core.rate_limit import rate_limit
 from backend.app.features.hmer.schemas import (
     EvidenceMap,
     ExplainRequest,
@@ -31,7 +32,11 @@ async def hmer_status():
     return _service.status()
 
 
-@router.post("/api/hmer/recognize", response_model=RecognizeResponse)
+@router.post(
+    "/api/hmer/recognize",
+    response_model=RecognizeResponse,
+    dependencies=[Depends(rate_limit("expensive"))],
+)
 async def recognize(file: UploadFile = File(...)):
     try:
         filename = _service.validate_filename(file.filename)
@@ -76,7 +81,11 @@ async def recognize(file: UploadFile = File(...)):
     )
 
 
-@router.post("/api/hmer/explain", response_model=ExplainResponse)
+@router.post(
+    "/api/hmer/explain",
+    response_model=ExplainResponse,
+    dependencies=[Depends(rate_limit("expensive"))],
+)
 async def explain(request: ExplainRequest):
     """Which regions of the image each token of `latex` rests on.
 

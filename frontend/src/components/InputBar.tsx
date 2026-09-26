@@ -42,11 +42,11 @@ export function InputBar({ onSend, streaming, onStop, placeholder, accentColor, 
       <div className="input-actions">
         {tools && <div className="input-tools">{tools}</div>}
         <MicButton onTranscript={t => setVal(v => (v ? v + " " + t : t))} disabled={streaming} />
-        <button className="input-send" onClick={submit} style={{ background: streaming ? "#2a2a2e" : accentColor }}
+        <button className="input-send" onClick={submit} style={{ background: streaming ? "var(--bg4)" : accentColor }}
           aria-label={streaming ? "Dừng" : "Gửi"}>
           {streaming
-            ? <span style={{ width: 12, height: 12, borderRadius: 3, background: "#fff", display: "block" }} />
-            : <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true"><path d="M1 7.5h13M8 1.5l6 6-6 6" stroke="#000" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+            ? <span style={{ width: 12, height: 12, borderRadius: 3, background: "var(--text)", display: "block" }} />
+            : <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true"><path d="M1 7.5h13M8 1.5l6 6-6 6" stroke="var(--bg)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>}
         </button>
       </div>
     </div>

@@ -1,24 +1,34 @@
 /* sidebar shell, session list, footer, overlay, toggle */
 /* ── Sidebar shell ─────────────────────────────────────────── */
 
+/* Tấm kính NỔI: cách mép 12px, bo góc lớn, viền sáng quanh cả bốn cạnh —
+   như thanh bên của dashboard kính ở trang chủ, thay cho một dải dính sát mép
+   trái chỉ có viền phải. Trên mobile responsive.css đổi nó thành ngăn kéo
+   fixed; lề và bo góc giữ nguyên nên ngăn kéo cũng nổi như vậy. */
 .sidebar {
   width: 240px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
+  margin: 12px 0 12px 12px;
   background: var(--shell-surface);
-  border-right: 1px solid var(--shell-edge);
+  border: 1px solid var(--shell-edge);
+  border-radius: var(--r-lg);
+  box-shadow: var(--secondary-glass-shadow);
   backdrop-filter: var(--shell-blur);
   -webkit-backdrop-filter: var(--shell-blur);
   transition: width var(--dur-slow) var(--ease),
+              margin var(--dur-slow) var(--ease),
               opacity var(--dur) var(--ease);
   overflow: hidden;
 }
 
+/* Đóng: bỏ cả lề và viền, nếu không còn lại một khe 12px + một vạch viền. */
 .sb-closed {
   width: 0;
   opacity: 0;
-  border-right: none;
+  margin-left: 0;
+  border: none;
   pointer-events: none;
 }
 
@@ -51,7 +61,7 @@
   margin: 2px 8px 6px;
   padding: 8px 12px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 12px;
   background: transparent;
   color: var(--text2);
   font-family: var(--sans);
@@ -71,7 +81,7 @@
 .sb-icon-btn {
   width: 28px;
   height: 28px;
-  border-radius: 8px;
+  border-radius: 10px;
   border: none;
   background: none;
   color: var(--text3);
@@ -103,7 +113,7 @@
   transition: background var(--dur) var(--ease), color var(--dur) var(--ease), border-color var(--dur) var(--ease);
   flex-shrink: 0;
 }
-.sb-new-chat:hover { background: var(--bg3); color: var(--text); border-color: rgba(255,255,255,0.18); }
+.sb-new-chat:hover { background: var(--bg3); color: var(--text); border-color: var(--border2); }
 
 /* ── Session list ──────────────────────────────────────────── */
 
@@ -137,7 +147,7 @@
   align-items: center;
   gap: 6px;
   padding: 7px 8px;
-  border-radius: 8px;
+  border-radius: 10px;
   cursor: pointer;
   transition: background 0.12s;
   min-height: 34px;
@@ -174,7 +184,7 @@
   line-height: 1;
 }
 .sb-item:hover .sb-item-del { opacity: 1; }
-.sb-item-del:hover           { background: rgba(255,133,133,0.12); color: var(--danger); }
+.sb-item-del:hover           { background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--danger); }
 
 /* ── Footer ────────────────────────────────────────────────── */
 
@@ -187,7 +197,7 @@
 .sb-clear-all {
   width: 100%;
   padding: 7px;
-  border-radius: 8px;
+  border-radius: 10px;
   border: none;
   background: none;
   color: var(--text3);
@@ -196,7 +206,7 @@
   cursor: pointer;
   transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
 }
-.sb-clear-all:hover { background: rgba(255,133,133,0.08); color: var(--danger); }
+.sb-clear-all:hover { background: color-mix(in srgb, var(--danger) 9%, transparent); color: var(--danger); }
 
 .sb-theme-toggle {
   display: flex;
@@ -205,7 +215,7 @@
   width: 100%;
   padding: 7px 8px;
   margin-bottom: 4px;
-  border-radius: 8px;
+  border-radius: 10px;
   border: none;
   background: none;
   color: var(--text2);
@@ -236,7 +246,7 @@
   z-index: 10;
   width: 28px;
   height: 28px;
-  border-radius: 8px;
+  border-radius: 10px;
   border: 1px solid var(--border2);
   background: var(--bg2);
   color: var(--text3);

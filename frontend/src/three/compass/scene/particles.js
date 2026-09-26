@@ -42,9 +42,9 @@ function samplePoints(strokeCanvas, extent, count, rnd, threshold) {
 
 const COMMON_VERT = /* glsl */ `
 uniform float uTime;
-uniform mat3  uRot[4];
-uniform float uDisperse[4];
-uniform float uLayerAlpha[4];
+uniform mat3  uRot[LAYER_COUNT];
+uniform float uDisperse[LAYER_COUNT];
+uniform float uLayerAlpha[LAYER_COUNT];
 uniform float uPixelsPerUnit;
 uniform float uSpread;
 uniform float uLift;
@@ -82,12 +82,12 @@ float vein(vec3 p) {
 }
 
 void main() {
+  // KiNg: so vanh khong con co dinh la 4 (L1 tach ba), nen doc mang theo chi
+  // so thay cho chuoi if ghi cung. Vertex shader duoc phep danh chi so dong
+  // vao mang uniform o ca GLSL ES 1.0 lan 3.0.
   int li = int(aLayer + 0.5);
-  float d = uDisperse[0];
-  float la = uLayerAlpha[0];
-  if (li == 1) { d = uDisperse[1]; la = uLayerAlpha[1]; }
-  else if (li == 2) { d = uDisperse[2]; la = uLayerAlpha[2]; }
-  else if (li == 3) { d = uDisperse[3]; la = uLayerAlpha[3]; }
+  float d = uDisperse[li];
+  float la = uLayerAlpha[li];
 
   vec3 base = vec3(position.xy, 0.0);
 
@@ -105,10 +105,7 @@ void main() {
   offset.z  += (aSeed.z - 0.5) * amt * 0.7;
 
   vec3 local = base + offset * d;
-  vec3 world = uRot[0] * local;
-  if (li == 1) world = uRot[1] * local;
-  else if (li == 2) world = uRot[2] * local;
-  else if (li == 3) world = uRot[3] * local;
+  vec3 world = uRot[li] * local;
 
   world.y += uLift * d * (0.2 + 0.8 * aSeed.y);
 
@@ -246,9 +243,9 @@ class ParticleField {
 
     this.uniforms = {
       uTime: { value: 0 },
-      uRot: { value: [0, 1, 2, 3].map(() => new THREE.Matrix3()) },
-      uDisperse: { value: [0, 0, 0, 0] },
-      uLayerAlpha: { value: [0, 0, 0, 0] },
+      uRot: { value: Array.from({ length: n }, () => new THREE.Matrix3()) },
+      uDisperse: { value: new Array(n).fill(0) },
+      uLayerAlpha: { value: new Array(n).fill(0) },
       uPixelsPerUnit: { value: 800 },
       uSpread: { value: cfg.spread },
       uLift: { value: cfg.lift },
@@ -287,6 +284,7 @@ class ParticleField {
     }
 
     const material = new THREE.ShaderMaterial({
+      defines: { LAYER_COUNT: n },
       uniforms: this.uniforms,
       vertexShader: declarations + COMMON_VERT.replace('EXTRA_VERT', extra),
       fragmentShader: isStar ? STAR_FRAG : SMOKE_FRAG,

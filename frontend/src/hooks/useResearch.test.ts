@@ -108,3 +108,33 @@ describe("useResearch section_done streaming", () => {
     expect(collector.state.result).toEqual({ query: "q", key_points: ["a"], summary_short: "final" });
   });
 });
+
+describe("useResearch request", () => {
+  function captureBody() {
+    const fetchMock = vi.fn().mockResolvedValue(sseResponse([{ type: "done", data: { query: "q" } }]));
+    vi.stubGlobal("fetch", fetchMock);
+    return () => JSON.parse(String(fetchMock.mock.calls[0][1].body));
+  }
+
+  it("sends the chosen source focus", async () => {
+    const body = captureBody();
+    const { result } = renderHook(() => useResearch());
+
+    await act(async () => {
+      await result.current.runSearch("q", "sess-1", makeCollector().onUpdate, null, "academic");
+    });
+
+    expect(body()).toMatchObject({ query: "q", focus: "academic" });
+  });
+
+  it("searches every source when no focus is given", async () => {
+    const body = captureBody();
+    const { result } = renderHook(() => useResearch());
+
+    await act(async () => {
+      await result.current.runSearch("q", "sess-1", makeCollector().onUpdate, null);
+    });
+
+    expect(body()).toMatchObject({ focus: "all" });
+  });
+});

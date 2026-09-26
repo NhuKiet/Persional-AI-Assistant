@@ -44,7 +44,7 @@ def test_docker_run_argv_has_isolation_flags():
 
 
 def test_docker_unavailable_returns_typed_result_without_subprocess(monkeypatch, tmp_path):
-    monkeypatch.setattr(ce, "_docker_available", lambda: False)
+    monkeypatch.setattr(ce, "executor_status", lambda **_: ce.ExecutorStatus(False, "docker_unavailable"))
     called = {"run_subprocess": False}
 
     def fake_run_subprocess(*_args, **_kwargs):
@@ -66,7 +66,7 @@ def test_docker_unavailable_returns_typed_result_without_subprocess(monkeypatch,
 
 
 def test_docker_unavailable_logs_structured_event(monkeypatch, tmp_path, caplog):
-    monkeypatch.setattr(ce, "_docker_available", lambda: False)
+    monkeypatch.setattr(ce, "executor_status", lambda **_: ce.ExecutorStatus(False, "docker_unavailable"))
     with caplog.at_level(logging.INFO):
         ce.CodeExecutor().run("print(1)", sandbox=tmp_path, session_id="s-1")
 
@@ -76,7 +76,7 @@ def test_docker_unavailable_logs_structured_event(monkeypatch, tmp_path, caplog)
 
 
 def test_docker_mode_dispatches_to_docker_with_rewritten_chdir(monkeypatch, tmp_path):
-    monkeypatch.setattr(ce, "_docker_available", lambda: True)
+    monkeypatch.setattr(ce, "executor_status", lambda **_: ce.ExecutorStatus(True, "ok"))
 
     captured = {}
 
@@ -95,7 +95,7 @@ def test_docker_mode_dispatches_to_docker_with_rewritten_chdir(monkeypatch, tmp_
 
 
 def test_docker_dispatch_logs_started_and_finished_events(monkeypatch, tmp_path, caplog):
-    monkeypatch.setattr(ce, "_docker_available", lambda: True)
+    monkeypatch.setattr(ce, "executor_status", lambda **_: ce.ExecutorStatus(True, "ok"))
 
     def fake_run_docker(self, script_path, run_dir, timeout):
         return ce.ExecutionResult(stdout="ok", stderr="", exit_code=0,
@@ -160,7 +160,7 @@ def test_run_does_not_widen_sandbox_permissions_when_host_user_override_availabl
     """On a POSIX host (os.getuid present), the container matches the host
     UID via --user, so CodeExecutor.run() must NOT fall back to
     world-writable chmod(0o777) on the sandbox directory."""
-    monkeypatch.setattr(ce, "_docker_available", lambda: True)
+    monkeypatch.setattr(ce, "executor_status", lambda **_: ce.ExecutorStatus(True, "ok"))
     monkeypatch.setattr(ce.os, "getuid", lambda: 1000, raising=False)
     monkeypatch.setattr(ce.os, "getgid", lambda: 1000, raising=False)
 
@@ -179,7 +179,7 @@ def test_run_does_not_widen_sandbox_permissions_when_host_user_override_availabl
 def test_run_still_chmods_sandbox_without_host_getuid(monkeypatch, tmp_path):
     """Without os.getuid (Windows), there is no --user override to make, so
     the chmod(0o777) fallback is still exercised there specifically."""
-    monkeypatch.setattr(ce, "_docker_available", lambda: True)
+    monkeypatch.setattr(ce, "executor_status", lambda **_: ce.ExecutorStatus(True, "ok"))
     monkeypatch.delattr(ce.os, "getuid", raising=False)
 
     chmod_calls = []

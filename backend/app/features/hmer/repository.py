@@ -1,6 +1,8 @@
 import uuid
 from pathlib import Path
 
+from backend.app.shared.files import contained_path, safe_filename
+
 ALLOWED_SUFFIXES = {".png", ".jpg", ".jpeg", ".bmp"}
 
 
@@ -18,8 +20,10 @@ class HmerRepository:
 
     @staticmethod
     def validate_filename(filename: str | None) -> str:
-        if not filename or "/" in filename or "\\" in filename or ".." in filename:
-            raise ValueError("Tên file không hợp lệ")
+        try:
+            safe_filename(filename)
+        except ValueError:
+            raise ValueError("Tên file không hợp lệ") from None
         if Path(filename).suffix.lower() not in ALLOWED_SUFFIXES:
             raise ValueError(
                 "Chỉ chấp nhận ảnh " + ", ".join(sorted(ALLOWED_SUFFIXES))
@@ -27,7 +31,7 @@ class HmerRepository:
         return filename
 
     def resolve(self, filename: str | None) -> Path:
-        return self._directory / self.validate_filename(filename)
+        return contained_path(self._directory, self.validate_filename(filename))
 
     def save(self, filename: str, content: bytes) -> Path:
         # Prefixed with a UUID because two uploads of "bai1.png" from different

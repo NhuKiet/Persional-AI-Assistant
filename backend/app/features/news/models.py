@@ -13,13 +13,16 @@ def normalize_url(url: str) -> str:
     không kèm query string, để không gộp nhầm hai URL khác nhau trên server
     mà trailing slash có ý nghĩa riêng.
 
-    Returns "" for empty/schemeless input — callers treat that as "skip
-    this entry", never as a valid dedupe key.
+    Returns "" for empty input and for anything but http(s) — callers treat
+    that as "skip this entry", never as a valid dedupe key. The stored URL
+    becomes a link in the news list, and a feed entry can carry any scheme
+    (`javascript://host/%0A…` even has a host), so only http(s) gets in.
     """
     if not url or not url.strip():
         return ""
     parts = urlsplit(url.strip())
-    if not parts.scheme or not parts.netloc:
+    scheme = parts.scheme.lower()
+    if scheme not in ("http", "https") or not parts.netloc:
         return ""
     query_pairs = [
         (k, v) for k, v in parse_qsl(parts.query, keep_blank_values=True)
@@ -29,7 +32,7 @@ def normalize_url(url: str) -> str:
     path = parts.path
     if not query and path.endswith("/") and path != "/":
         path = path.rstrip("/")
-    return urlunsplit((parts.scheme, parts.netloc.lower(), path, query, ""))
+    return urlunsplit((scheme, parts.netloc.lower(), path, query, ""))
 
 
 @dataclass

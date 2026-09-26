@@ -3,7 +3,6 @@ import ast
 import json
 import logging
 import re
-import shutil
 import threading
 from collections.abc import AsyncIterator, Callable, Generator, Iterator
 from pathlib import Path
@@ -13,7 +12,8 @@ from fastapi import HTTPException
 from backend.app.core.config import settings
 from backend.app.core.llm import invoke_chat, stream_chat
 from backend.app.features.coding.artifacts import ARTIFACT_EXTS, ArtifactService, emit_path_rejected, validate_relative_path
-from backend.app.features.coding.execution import CodeExecutor, SANDBOX_DIR, detect_missing_packages, install_packages
+from backend.app.features.coding.data_preview import describe_table
+from backend.app.features.coding.execution import CodeExecutor, detect_missing_packages, install_packages
 from backend.app.features.coding.prompts import CHAT_SYSTEM, CODE_PROMPT, DEBUG_PROMPT, PLAN_PROMPT, PLAN_SYSTEM, REVIEW_PROMPT, SYSTEM_PROMPT, TEST_PROMPT
 from backend.app.features.coding.schemas import CodingRequest
 from backend.app.features.coding.uploads import session_sandbox
@@ -147,6 +147,9 @@ def _build_file_context(uploaded_files: list[dict]) -> str:
     for file in uploaded_files:
         name, size, preview = file.get("name", ""), file.get("size", 0), file.get("preview", "")
         lines.append(f"  - {name} ({size} bytes)")
+        # Exact column names and types, so the code doesn't guess them.
+        if table := describe_table(file.get("table")):
+            lines.append(f"    Table: {table}")
         if preview:
             lines.append(f"    Preview: {preview[:200]}")
     return "\n".join(lines) + "\n\n"
@@ -214,12 +217,8 @@ class CodingAgent:
         sandbox = _session_sandbox(session_id)
         sandbox_str = str(sandbox).replace("\\", "/")
 
-        for uploaded_file in uploaded_files or []:
-            source = SANDBOX_DIR / uploaded_file.get("name", "")
-            destination = sandbox / uploaded_file.get("name", "")
-            if source.exists() and not destination.exists():
-                shutil.copy2(source, destination)
-
+        # uploaded_files is prompt context only: uploads already land in the
+        # session sandbox (UploadService). Never treat its names as paths.
         yield {"type": "thinking", "message": "Đang lên kế hoạch..."}
         plan_tokens: list[str] = []
         try:

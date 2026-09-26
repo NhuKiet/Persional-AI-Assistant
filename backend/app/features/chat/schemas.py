@@ -8,6 +8,10 @@ class ChatRequest(BaseModel):
     context: str = ""
     provider: str | None = None
     model: str | None = None
+    # Answer again instead of appending: the session's last exchange is left
+    # out of the context and replaced once the new answer exists. Regenerate
+    # sends the same message, edit-last sends the edited one.
+    replace_last: bool = False
 
 
 class SessionHistoryResponse(BaseModel):

@@ -10,7 +10,7 @@ def _sr(title, content="nội dung"):
 
 def _agent(monkeypatch, extra_results):
     a = ResearchAgent.__new__(ResearchAgent)          # bỏ qua __init__ (mở socket)
-    monkeypatch.setattr(a, "_search_all", lambda q: extra_results, raising=False)
+    monkeypatch.setattr(a, "_search_all", lambda q, **_: extra_results, raising=False)
     monkeypatch.setattr(a, "_process_pipeline", lambda q, r, **k: r, raising=False)
     monkeypatch.setattr(agent_mod, "deduplicate_results", lambda r, threshold=0.92: r)
     monkeypatch.setattr(agent_mod, "rerank_results", lambda q, r, top_k=15: r)
@@ -55,7 +55,7 @@ def test_top_up_search_failure_returns_base_unchanged(monkeypatch):
     base = [_sr("cũ")]
     a = _agent(monkeypatch, [])
 
-    def boom(q):
+    def boom(q, **_):
         raise RuntimeError("search down")
 
     monkeypatch.setattr(a, "_search_all", boom, raising=False)

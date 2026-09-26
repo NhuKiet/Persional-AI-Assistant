@@ -108,9 +108,16 @@ describe("Pearl Aurora Glass CSS contract", () => {
     expect(chat).toMatch(
       /\.dock-item:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--focus-ring\);/s,
     );
-    expect(chat).toMatch(
-      /\.input-bar:focus-within\s*\{[^}]*0 0 0 3px var\(--focus-ring\)/s,
+    // Ô soạn tin: focus là viền + quầng sáng theo màu nhấn của trang, KHÔNG
+    // phải vòng đặc 3px --focus-ring (người dùng thấy nó dày cộp trên ô viên
+    // thuốc lớn). Vẫn phải có dấu hiệu focus nhìn thấy được.
+    const composerFocus =
+      chat.match(/\.input-bar:focus-within\s*\{[^}]*\}/s)?.[0] ?? "";
+    expect(composerFocus).toMatch(
+      /border-color:\s*color-mix\(in srgb, var\(--composer-accent\)/,
     );
+    expect(composerFocus).toMatch(/box-shadow:[^;]*var\(--composer-accent\)/s);
+    expect(composerFocus).not.toMatch(/0 0 0 3px var\(--focus-ring\)/);
     expect(chat).toMatch(
       /\.input-bar \.mp-trigger:focus-visible\s*\{[^}]*outline-color:\s*var\(--focus-ring\);/s,
     );

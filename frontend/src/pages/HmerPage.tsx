@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppShell } from "../components/AppShell";
 import { EvidenceView, type EvidenceStatus } from "../components/hmer/EvidenceView";
 import { InkCanvas } from "../components/hmer/InkCanvas";
+import { LatexEditor } from "../components/hmer/LatexEditor";
 import { LatexPreview } from "../components/hmer/LatexPreview";
+import { ToolIcon } from "../components/ToolIcon";
 import { useChatHistory } from "../hooks/useChatHistory";
 import {
   describeStatus,
@@ -14,9 +16,19 @@ import {
   type HmerResult,
   type HmerStatus,
 } from "../lib/hmerApi";
+import { doubtfulTokens } from "../lib/hmerDoubt";
+import { normalizeHmerLatex } from "../lib/hmerLatex";
 import "../styles/hmer.css";
 
 const ACCEPT = "image/png,image/jpeg,image/bmp";
+
+/** Pasted images arrive as "image.png" or with no usable name at all; the
+ *  backend only takes these types, under a plain file name. */
+const PASTE_EXTENSIONS: Record<string, string> = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/bmp": "bmp",
+};
 
 type InputMode = "upload" | "draw";
 
@@ -32,6 +44,8 @@ export function HmerPage() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [status, setStatus] = useState<HmerStatus | null>(null);
   const [result, setResult] = useState<HmerResult | null>(null);
+  /** The LaTeX box — starts as the model's reading, then whatever the user fixes. */
+  const [edited, setEdited] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [dragging, setDragging] = useState(false);
@@ -107,12 +121,14 @@ export function HmerPage() {
     setBusy(true);
     setError("");
     setResult(null);
+    setEdited("");
     setCopied(false);
     resetEvidence();
     let recognized: HmerResult | null = null;
     try {
       recognized = await recognizeImage(file);
       setResult(recognized);
+      setEdited(normalizeHmerLatex(recognized.latex));
       // Recognition succeeding proves the model loaded, so refresh the banner
       // rather than leaving a stale "not loaded" line under a live result.
       void fetchHmerStatus().then(setStatus).catch(() => undefined);
@@ -134,10 +150,41 @@ export function HmerPage() {
     [handleFile],
   );
 
+  // Ctrl+V anywhere on the page: a screenshot of one formula goes straight
+  // to recognition. Only image pastes are taken — pasting text into the
+  // LaTeX box keeps working as usual.
+  useEffect(() => {
+    const onPaste = (event: ClipboardEvent) => {
+      const image = Array.from(event.clipboardData?.files ?? []).find((f) => f.type.startsWith("image/"));
+      if (!image) return;
+      event.preventDefault();
+      if (busy) return;
+      const extension = PASTE_EXTENSIONS[image.type];
+      if (!extension) {
+        setError(`Chỉ nhận ảnh PNG, JPG hoặc BMP — ảnh vừa dán là ${image.type}.`);
+        return;
+      }
+      void handleFile(new File([image], `anh-dan-${Date.now()}.${extension}`, { type: image.type }));
+    };
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+  }, [busy, handleFile]);
+
+  /** The model's reading as valid LaTeX — what the box starts from and what
+   *  "Khôi phục" restores. The raw string stays in `result` for explain. */
+  const readable = useMemo(() => (result ? normalizeHmerLatex(result.latex) : ""), [result]);
+
+  // Spans are found by walking the tokens through the text in order, which
+  // still works after normalization only removed spaces between them.
+  const doubtful = useMemo(
+    () => (explanation ? doubtfulTokens(readable, explanation.tokens, explanation.token_probs) : []),
+    [readable, explanation],
+  );
+
   const copyLatex = useCallback(async () => {
-    if (!result?.latex) return;
+    if (!edited.trim()) return;
     try {
-      await navigator.clipboard.writeText(result.latex);
+      await navigator.clipboard.writeText(edited);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
@@ -145,7 +192,7 @@ export function HmerPage() {
       // The LaTeX is already on screen and selectable, so a failed copy is
       // not worth an error state.
     }
-  }, [result]);
+  }, [edited]);
 
   const statusNote = describeStatus(status);
 
@@ -160,6 +207,7 @@ export function HmerPage() {
       onClearAll={clearAll}
       onNewChat={() => {
         setResult(null);
+        setEdited("");
         setError("");
         resetEvidence();
         setActiveId(null);
@@ -169,9 +217,13 @@ export function HmerPage() {
     >
       <div className="hmer-page">
         <header className="hmer-head">
-          <h1 className="hmer-title">Công thức viết tay</h1>
+          <h1 className="hmer-title">
+            <span className="hmer-title-icon"><ToolIcon tool="hmer" size={24} /></span>
+            Công thức viết tay
+          </h1>
           <p className="hmer-sub">
-            Tải ảnh lên hoặc vẽ tay <strong>một biểu thức</strong> toán, nhận lại LaTeX.
+            Tải ảnh, dán ảnh (Ctrl+V) hoặc vẽ tay <strong>một biểu thức</strong> toán, nhận lại
+            LaTeX sửa được ngay tại chỗ.
             Ảnh chụp cả trang nhiều dòng sẽ cho kết quả sai — hãy cắt từng biểu thức.
           </p>
         </header>
@@ -259,7 +311,7 @@ export function HmerPage() {
             ) : (
               <>
                 <span className="hmer-drop-main">Kéo thả ảnh công thức vào đây</span>
-                <span className="hmer-drop-sub">hoặc bấm để chọn — PNG, JPG, BMP</span>
+                <span className="hmer-drop-sub">hoặc bấm để chọn, hay dán bằng Ctrl+V — PNG, JPG, BMP</span>
               </>
             )}
           </div>
@@ -288,12 +340,21 @@ export function HmerPage() {
 
             <div className="hmer-panel">
               <h2 className="hmer-panel-title">Công thức</h2>
-              <LatexPreview latex={result.latex} />
-
-              {result.latex && (
+              {!result.latex ? (
+                <LatexPreview latex="" />
+              ) : (
                 <>
-                  <code className="hmer-code">{result.latex}</code>
-                  <button className="hmer-copy" onClick={copyLatex}>
+                  {/* The preview follows the box, so a fix shows up as it is typed. */}
+                  {edited.trim()
+                    ? <LatexPreview latex={edited} />
+                    : <p className="hmer-empty">Ô LaTeX đang trống.</p>}
+                  <LatexEditor
+                    value={edited}
+                    original={readable}
+                    onChange={setEdited}
+                    doubtful={doubtful}
+                  />
+                  <button className="hmer-copy" onClick={copyLatex} disabled={!edited.trim()}>
                     {copied ? "Đã chép" : "Chép LaTeX"}
                   </button>
                 </>

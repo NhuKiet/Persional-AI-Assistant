@@ -76,7 +76,8 @@ class _StubRecognizer:
 
 @pytest.mark.parametrize(
     "filename",
-    ["../escape.png", "sub/dir.png", "back\\slash.png", "", None],
+    ["../escape.png", "sub/dir.png", "back\\slash.png", "", None,
+     "D:escape.png", "a.png:x.png", "CON.png"],
 )
 def test_validate_filename_rejects_traversal(tmp_path, filename):
     repo = HmerRepository(tmp_path)
@@ -521,3 +522,9 @@ def test_real_model_explains_the_sample():
     assert len(result.weights) == len(result.token_probs) == len(tokens)
     assert all(len(row) == result.rows * result.cols for row in result.weights)
     assert min(result.token_probs) > 0.1, "ground truth on its own image should not look implausible"
+
+
+@pytest.mark.parametrize("method", ["get", "delete"])
+def test_image_routes_reject_drive_relative_name(client, method):
+    response = getattr(client, method)("/api/hmer/images/D:x.png")
+    assert response.status_code == 400

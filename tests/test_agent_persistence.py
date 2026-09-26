@@ -26,7 +26,7 @@ def _run(monkeypatch, candidates, judge_verdict=(True, None), topup_new=None):
     monkeypatch.setattr(agent_mod, "get_store", lambda: _Store())
     monkeypatch.setattr(a, "_run_judge", lambda *args: judge_verdict, raising=False)
     monkeypatch.setattr(a, "_top_up",
-                        lambda q, base, gap: (base + (topup_new or []), topup_new or []),
+                        lambda q, base, gap, **_: (base + (topup_new or []), topup_new or []),
                         raising=False)
     monkeypatch.setattr(a, "_search_all", lambda *args, **kw: [_sr("live")], raising=False)
     monkeypatch.setattr(a, "_process_pipeline", lambda q, r, **kw: r, raising=False)
@@ -120,7 +120,7 @@ def test_iteration_sources_are_stored_exactly_once(monkeypatch):
                         lambda out, rounds, mx: rounds_seen.append(rounds) or rounds == 0)
     extra = _sr("từ-iteration")
     monkeypatch.setattr(a, "_iteration_step",
-                        lambda q, s, o, sy: (s + [extra], o, [extra]), raising=False)
+                        lambda q, s, o, sy, **_: (s + [extra], o, [extra]), raising=False)
 
     class _Synth(StreamingSynthFake):
         def synthesize_rag_grounded(self, q, s): return ResearchOutput(query=q)

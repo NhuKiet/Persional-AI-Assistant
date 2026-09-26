@@ -15,9 +15,13 @@
 }
 
 .dd-modal {
-  background: #131320;
+  /* Trước là #131320 viết cứng (mực ánh tím của hệ màu cũ) — không đổi theo
+     theme, và lệch hẳn khỏi nền than giờ. */
+  background: var(--float-surface);
+  backdrop-filter: var(--float-blur);
+  -webkit-backdrop-filter: var(--float-blur);
   border: 1px solid var(--border2);
-  border-radius: 14px;
+  border-radius: var(--r-lg);
   width: 100%;
   max-width: 740px;
   display: flex;
@@ -51,7 +55,7 @@
 }
 .dd-year, .dd-cites {
   font-size: 11px;
-  color: #666;
+  color: var(--text3);
 }
 
 .dd-close {
@@ -59,7 +63,7 @@
   border-radius: 50%;
   background: var(--bg3);
   border: none;
-  color: #888;
+  color: var(--text2);
   font-size: 14px;
   cursor: pointer;
   display: flex; align-items: center; justify-content: center;
@@ -69,18 +73,18 @@
 
 .dd-title-wrap {
   padding: 16px 18px 14px;
-  border-bottom: 1px solid #1a1a2a;
+  border-bottom: 1px solid var(--border);
 }
 .dd-title {
   font-size: 15px;
   font-weight: 600;
-  color: #e0e0f0;
+  color: var(--text);
   margin: 0 0 6px;
   line-height: 1.4;
 }
 .dd-authors {
   font-size: 12px;
-  color: #888;
+  color: var(--text2);
   margin: 0 0 10px;
 }
 .dd-links { display: flex; gap: 10px; flex-wrap: wrap; }
@@ -97,7 +101,7 @@
 
 .dd-content-section {
   padding: 14px 18px;
-  border-bottom: 1px solid #1a1a2a;
+  border-bottom: 1px solid var(--border);
   max-height: 200px;
   overflow-y: auto;
 }
@@ -106,12 +110,12 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.8px;
-  color: #555;
+  color: var(--text3);
   margin-bottom: 8px;
 }
 .dd-snippet {
   font-size: 13px;
-  color: #aaa;
+  color: var(--text2);
   line-height: 1.6;
   white-space: pre-wrap;
 }
@@ -138,7 +142,7 @@
   transition: opacity 0.15s, background 0.15s;
   white-space: nowrap;
 }
-.dd-preset-pill:hover { opacity: 0.75; background: rgba(255,255,255,0.04); }
+.dd-preset-pill:hover { opacity: 0.75; background: var(--glass); }
 
 .dd-input-row {
   display: flex;
@@ -146,12 +150,12 @@
 }
 .dd-input {
   flex: 1;
-  background: #0d0d18;
+  background: var(--bg2);
   border: 1px solid var(--border2);
   border-radius: 8px;
   padding: 9px 12px;
   font-size: 13px;
-  color: #e0e0f0;
+  color: var(--text);
   outline: none;
   transition: border-color 0.15s;
 }
@@ -162,7 +166,7 @@
   border: none;
   font-size: 13px;
   font-weight: 600;
-  color: #000;
+  color: var(--bg);
   cursor: pointer;
   transition: opacity 0.15s;
   white-space: nowrap;
@@ -170,7 +174,7 @@
 .dd-ask-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .dd-answer {
-  background: #0d0d18;
+  background: var(--bg2);
   border: 1px solid var(--border2);
   border-radius: 8px;
   overflow: hidden;
@@ -207,7 +211,7 @@
 .paper-dive-hint {
   margin-left: auto;
   font-size: 10px;
-  color: #555;
+  color: var(--text3);
   opacity: 0;
   transition: opacity 0.15s;
 }
@@ -231,17 +235,17 @@
 }
 .ref-item-wrap .ref-item { flex: 1; border-radius: 7px 0 0 7px; border-right: none; }
 .ref-dive-btn {
-  background: #1a1a2a;
+  background: var(--bg3);
   border: 1px solid var(--border2);
   border-left: none;
   border-radius: 0 7px 7px 0;
   padding: 0 10px;
   font-size: 13px;
   cursor: pointer;
-  color: #666;
+  color: var(--text3);
   transition: background 0.15s, color 0.15s;
 }
-.ref-dive-btn:hover { background: #252538; color: var(--accent-research); }
+.ref-dive-btn:hover { background: var(--bg4); color: var(--accent-research); }
 
 @media (max-width: 600px) {
   .dd-modal { max-width: 100%; border-radius: 12px 12px 0 0; }

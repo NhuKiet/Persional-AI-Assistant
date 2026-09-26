@@ -146,18 +146,32 @@ class PDFProcessor:
         scored.sort(key=lambda c: c.score, reverse=True)
         return scored[:top_k]
 
-    def build_context_from_chunks(self, doc: PDFDocument, chunks: list[PDFChunk]) -> str:
-        ordered = sorted(chunks, key=lambda chunk: (chunk.page, chunk.index))
-        parts = [f"[Tài liệu: {doc.filename} — {doc.total_pages} trang]\n"]
-        total = len(parts[0])
-        for chunk in ordered:
-            snippet = f"\n--- Trang {chunk.page} ---\n{chunk.text}\n"
-            if total + len(snippet) > MAX_CONTEXT:
-                break
-            parts.append(snippet)
-            total += len(snippet)
+    @staticmethod
+    def _context_header(doc: PDFDocument) -> str:
+        return f"[Tài liệu: {doc.filename} — {doc.total_pages} trang]\n"
 
-        return "".join(parts)
+    @staticmethod
+    def _context_snippet(chunk: PDFChunk) -> str:
+        return f"\n--- Trang {chunk.page} ---\n{chunk.text}\n"
+
+    def select_context_chunks(self, doc: PDFDocument, chunks: list[PDFChunk]) -> list[PDFChunk]:
+        """The chunks that fit in the context, in document order. The model
+        can only cite pages it was shown, so sources are built from exactly
+        this list (see PdfService.chat_events)."""
+        ordered = sorted(chunks, key=lambda chunk: (chunk.page, chunk.index))
+        total = len(self._context_header(doc))
+        included: list[PDFChunk] = []
+        for chunk in ordered:
+            size = len(self._context_snippet(chunk))
+            if total + size > MAX_CONTEXT:
+                break
+            included.append(chunk)
+            total += size
+        return included
+
+    def build_context_from_chunks(self, doc: PDFDocument, chunks: list[PDFChunk]) -> str:
+        included = self.select_context_chunks(doc, chunks)
+        return self._context_header(doc) + "".join(self._context_snippet(c) for c in included)
 
     def build_context(self, doc: PDFDocument, query: str) -> str:
         return self.build_context_from_chunks(doc, self.retrieve(doc, query))

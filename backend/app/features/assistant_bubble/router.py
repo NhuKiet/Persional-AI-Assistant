@@ -5,9 +5,10 @@ toàn bộ tool-calling/policy nằm bên ai-agent."""
 import logging
 
 import httpx
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from backend.app.core.config import settings
+from backend.app.core.rate_limit import rate_limit
 from backend.app.features.assistant_bubble.schemas import BubbleChatRequest, BubbleChatResponse
 
 logger = logging.getLogger(__name__)
@@ -21,7 +22,11 @@ def _headers() -> dict:
     return {"X-Bridge-Token": settings.BRIDGE_TOKEN or ""}
 
 
-@router.post("/api/bubble/chat", response_model=BubbleChatResponse)
+@router.post(
+    "/api/bubble/chat",
+    response_model=BubbleChatResponse,
+    dependencies=[Depends(rate_limit("expensive"))],
+)
 async def bubble_chat(req: BubbleChatRequest) -> BubbleChatResponse:
     try:
         async with httpx.AsyncClient(timeout=90) as client:

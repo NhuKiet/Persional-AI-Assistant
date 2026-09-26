@@ -19,6 +19,7 @@ export interface ReferenceItem {
   title?: string;
   url: string;
   id?: string;
+  snippet?: string;
 }
 
 export interface Claim {
@@ -142,7 +143,11 @@ export function ResearchResult({ result, model }: ResearchResultProps) {
           <span className="rr-ai-label">KiNg Research</span>
         </div>
         <div className="rr-body">
-          <Markdown text={result.summary_detailed || result.summary_medium || result.summary_short || ""} />
+          {/* [n] in the summary is references[n - 1] (numbered by the backend). */}
+          <Markdown
+            text={result.summary_detailed || result.summary_medium || result.summary_short || ""}
+            citations={result.references}
+          />
         </div>
         {(!!claims.length || !!confLabel || !!result.limitations?.length) && (
           <div className="claims-list">

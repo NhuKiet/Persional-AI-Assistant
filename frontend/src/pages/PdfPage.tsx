@@ -22,7 +22,7 @@ import {
   SESSION_RECOVERY_NOTICE,
   useChatHistory,
 } from "../hooks/useChatHistory";
-import { API, SESSION_ID } from "../lib/api";
+import { API, SESSION_ID, apiFetch } from "../lib/api";
 import { pdfDeleteUrl, pdfRawUrl } from "../lib/pdfUrls";
 import { applyPdfStreamEvent, type PdfStreamEvent } from "../lib/pdfStreamState";
 import { parseSSE, readErrorResponse } from "../lib/sse";
@@ -59,6 +59,7 @@ export function PDFPage() {
   const [outline, setOutline] = useState<ResolvedOutlineItem[]>([]);
   const [searchPages, setSearchPages] = useState<PdfSearchPage[]>([]);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [docSuggestions, setDocSuggestions] = useState<string[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
   const canvasesRef = useRef(new Map<number, HTMLCanvasElement>());
   const viewerRef = useRef<PdfViewerHandle>(null);
@@ -93,6 +94,43 @@ export function PDFPage() {
   useEffect(() => {
     if (uploadedPDF) setSidebarOpen(false);
   }, [uploadedPDF]);
+
+  // Read through a ref so the model picker settling on its default doesn't
+  // ask again — the backend generates suggestions once per file anyway.
+  const modelRef = useRef(model);
+  modelRef.current = model;
+
+  // Questions about this document for the empty chat. Best effort: without
+  // them the panel falls back to the general suggestions.
+  const suggestFor = uploadedPDF?.filename;
+  useEffect(() => {
+    setDocSuggestions([]);
+    if (!suggestFor) return;
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        const response = await apiFetch(`${API}/api/pdf/suggestions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            filename: suggestFor,
+            provider: modelRef.current?.provider ?? null,
+            model: modelRef.current?.model ?? null,
+          }),
+          signal: controller.signal,
+        });
+        if (!response.ok) return;
+        const data = (await response.json()) as { questions?: unknown };
+        const questions = Array.isArray(data.questions)
+          ? data.questions.filter((q): q is string => typeof q === "string" && q.trim() !== "")
+          : [];
+        if (!controller.signal.aborted) setDocSuggestions(questions);
+      } catch {
+        // Aborted, offline or a bad response: keep the general suggestions.
+      }
+    })();
+    return () => controller.abort();
+  }, [suggestFor]);
 
   useEffect(() => {
     let cancelled = false;
@@ -142,7 +180,7 @@ export function PDFPage() {
     try {
       const form = new FormData();
       form.append("file", file);
-      const response = await fetch(`${API}/api/pdf/upload`, { method: "POST", body: form });
+      const response = await apiFetch(`${API}/api/pdf/upload`, { method: "POST", body: form });
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.detail);
@@ -171,7 +209,7 @@ export function PDFPage() {
     ]);
 
     try {
-      const response = await fetch(`${API}/api/pdf/summarize`, {
+      const response = await apiFetch(`${API}/api/pdf/summarize`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -259,7 +297,7 @@ export function PDFPage() {
     const pinsToSend = pinsOverride ?? pins;
     let streamFailed = false;
     try {
-      const response = await fetch(`${API}/api/pdf/stream`, {
+      const response = await apiFetch(`${API}/api/pdf/stream`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -322,7 +360,7 @@ export function PDFPage() {
   const handleRemovePDF = async () => {
     if (!uploadedPDF) return;
     try {
-      await fetch(pdfDeleteUrl(uploadedPDF.filename, sessionId), { method: "DELETE" });
+      await apiFetch(pdfDeleteUrl(uploadedPDF.filename, sessionId), { method: "DELETE" });
     } catch {
       // Local reset must still be available when deletion cannot reach the backend.
     }
@@ -553,6 +591,7 @@ export function PDFPage() {
                 onSummarize={() => void handleSummarize()}
                 onRemovePin={(index) => setPins((current) => current.filter((_, itemIndex) => itemIndex !== index))}
                 onOpenSource={openSource}
+                docSuggestions={docSuggestions}
               />
             )}
           />

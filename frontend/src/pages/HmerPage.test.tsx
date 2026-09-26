@@ -168,12 +168,9 @@ test("renders the recognized LaTeX and its metadata", async () => {
 
   upload(container);
 
-  // Scoped to .hmer-code on purpose: KaTeX re-emits the source string inside
-  // a MathML <annotation>, so a bare text query matches two elements.
+  // The editable LaTeX box starts with exactly what the model read.
   await waitFor(() =>
-    expect(container.querySelector(".hmer-code")).toHaveTextContent(
-      "\\frac { 1 } { 2 }",
-    ),
+    expect(container.querySelector(".hmer-code")).toHaveValue("\\frac { 1 } { 2 }"),
   );
   expect(screen.getByText("1234 ms")).toBeInTheDocument();
   expect(screen.getByText("-0.420")).toBeInTheDocument();
@@ -230,7 +227,7 @@ test("switches between uploading and drawing, keeping the upload path intact", a
   fireEvent.click(uploadTab);
   upload(container);
   await waitFor(() =>
-    expect(container.querySelector(".hmer-code")).toHaveTextContent("x ^ { 2 }"),
+    expect(container.querySelector(".hmer-code")).toHaveValue("x ^ { 2 }"),
   );
 });
 
@@ -269,7 +266,7 @@ test("recognizes a drawing through the same endpoint as an upload", async () => 
   fireEvent.click(screen.getByRole("button", { name: "Nhận dạng" }));
 
   await waitFor(() =>
-    expect(container.querySelector(".hmer-code")).toHaveTextContent("x ^ { 2 }"),
+    expect(container.querySelector(".hmer-code")).toHaveValue("x ^ { 2 }"),
   );
   expect(sent).toBeInstanceOf(File);
   expect((sent as unknown as File).name).toBe("ve-tay.png");
@@ -311,6 +308,172 @@ test("keeps the LaTeX when the evidence map fails", async () => {
   upload(container);
 
   expect(await screen.findByText(/Không tính được vùng mô hình dựa vào/)).toHaveTextContent(/CUDA/);
-  expect(container.querySelector(".hmer-code")).toHaveTextContent("x ^ { 2 }");
+  expect(container.querySelector(".hmer-code")).toHaveValue("x ^ { 2 }");
   expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+});
+
+
+// ── Fixing the result by hand ───────────────────────────────────────────────
+// The model reads about half of all expressions correctly, so a wrong symbol
+// has to be fixable in place rather than only copyable.
+
+const RESULT_7 = { ...RESULT, latex: "x ^ { 7 }" };
+const DOUBTFUL_EXPLANATION = {
+  ...EXPLANATION,
+  tokens: ["x", "^", "{", "7", "}"],
+  token_probs: [0.95, 0.9, 1, 0.31, 1],
+};
+
+async function recognizeOnce(result = RESULT, explanation = EXPLANATION) {
+  mockBackend({ recognize: () => json(result), explain: () => json(explanation) });
+  const view = renderPage();
+  await screen.findByText(/Kéo thả ảnh công thức vào đây/i);
+  upload(view.container);
+  const box = (await screen.findByRole("textbox", { name: /LaTeX/ })) as HTMLTextAreaElement;
+  return { ...view, box };
+}
+
+test("re-renders the preview from the edited LaTeX and copies the edit", async () => {
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+  const { container, box } = await recognizeOnce();
+
+  fireEvent.change(box, { target: { value: "x ^ { 3 }" } });
+
+  // KaTeX keeps its source in a MathML annotation: the preview follows the box.
+  expect(container.querySelector(".hmer-render annotation")).toHaveTextContent("x ^ { 3 }");
+  fireEvent.click(screen.getByRole("button", { name: "Chép LaTeX" }));
+  await waitFor(() => expect(writeText).toHaveBeenCalledWith("x ^ { 3 }"));
+});
+
+test("restores the model's reading after an edit", async () => {
+  const { box } = await recognizeOnce();
+  expect(screen.queryByRole("button", { name: /Khôi phục/ })).toBeNull();
+
+  fireEvent.change(box, { target: { value: "y" } });
+  fireEvent.click(screen.getByRole("button", { name: /Khôi phục/ }));
+
+  expect(box).toHaveValue("x ^ { 2 }");
+  expect(screen.queryByRole("button", { name: /Khôi phục/ })).toBeNull();
+});
+
+test("says the box is empty rather than blaming the model when it is cleared", async () => {
+  const { box } = await recognizeOnce();
+
+  fireEvent.change(box, { target: { value: "  " } });
+
+  expect(screen.getByText(/Ô LaTeX đang trống/)).toBeInTheDocument();
+  expect(screen.queryByText(/không đưa ra giả thuyết nào/i)).toBeNull();
+});
+
+test("points at the symbol the model was least sure of and selects it", async () => {
+  const { box } = await recognizeOnce(RESULT_7, DOUBTFUL_EXPLANATION);
+
+  fireEvent.click(await screen.findByRole("button", { name: /Chọn ký hiệu 7/ }));
+
+  // "x ^ { 7 }": the 7 sits at index 6.
+  expect([box.selectionStart, box.selectionEnd]).toEqual([6, 7]);
+  expect(document.activeElement).toBe(box);
+});
+
+test("still finds a doubtful symbol after the text around it changed", async () => {
+  const { box } = await recognizeOnce(RESULT_7, DOUBTFUL_EXPLANATION);
+  const chip = await screen.findByRole("button", { name: /Chọn ký hiệu 7/ });
+
+  fireEvent.change(box, { target: { value: "2 x ^ { 7 }" } });
+  fireEvent.click(chip);
+
+  expect([box.selectionStart, box.selectionEnd]).toEqual([8, 9]);
+});
+
+test("lists no doubtful symbols when the model was sure of every one", async () => {
+  await recognizeOnce(); // EXPLANATION: every probability ≥ 0.8
+  await screen.findByRole("toolbar", { name: /Các ký hiệu/ });
+
+  expect(screen.queryByText(/Mô hình ít chắc/)).toBeNull();
+});
+
+test("flags doubtful symbols in the evidence strip too", async () => {
+  const { container } = await recognizeOnce(RESULT_7, DOUBTFUL_EXPLANATION);
+  await screen.findByRole("toolbar", { name: /Các ký hiệu/ });
+
+  const flagged = [...container.querySelectorAll(".hmer-token.is-doubtful")];
+  expect(flagged.map((n) => n.getAttribute("aria-label"))).toEqual([
+    expect.stringMatching(/^7, /),
+  ]);
+});
+
+// ── Pasting an image ────────────────────────────────────────────────────────
+
+function paste(files: File[]) {
+  const event = new Event("paste", { bubbles: true, cancelable: true });
+  Object.defineProperty(event, "clipboardData", { value: { files } });
+  document.body.dispatchEvent(event);
+  return event;
+}
+
+test("recognizes an image pasted with Ctrl+V", async () => {
+  const sent: File[] = [];
+  mockBackend({
+    recognize: (init) => {
+      sent.push((init?.body as FormData).get("file") as File);
+      return json(RESULT);
+    },
+  });
+  renderPage();
+  await screen.findByText(/Kéo thả ảnh công thức vào đây/i);
+
+  const event = paste([new File(["png"], "image.png", { type: "image/png" })]);
+
+  expect(event.defaultPrevented).toBe(true);
+  expect(await screen.findByRole("textbox", { name: /LaTeX/ })).toHaveValue("x ^ { 2 }");
+  expect(sent).toHaveLength(1);
+  expect(sent[0].type).toBe("image/png");
+  expect(sent[0].name).toMatch(/^[\w-]+\.png$/);
+});
+
+test("refuses a pasted image format the model cannot read", async () => {
+  const recognize = vi.fn(() => json(RESULT));
+  mockBackend({ recognize });
+  renderPage();
+  await screen.findByText(/Kéo thả ảnh công thức vào đây/i);
+
+  paste([new File(["gif"], "a.gif", { type: "image/gif" })]);
+
+  expect(await screen.findByRole("alert")).toHaveTextContent(/PNG, JPG hoặc BMP/);
+  expect(recognize).not.toHaveBeenCalled();
+});
+
+test("leaves a plain-text paste alone", async () => {
+  const recognize = vi.fn(() => json(RESULT));
+  mockBackend({ recognize });
+  renderPage();
+  await screen.findByText(/Kéo thả ảnh công thức vào đây/i);
+
+  const event = paste([]);
+
+  expect(event.defaultPrevented).toBe(false);
+  expect(recognize).not.toHaveBeenCalled();
+});
+
+
+test("shows the model's matrix output as valid LaTeX, but explains the raw tokens", async () => {
+  const raw = String.raw`\ { \begin { m a t r i x } 2 \ \ 7 \end { m a t r i x } \ }`;
+  const readable = String.raw`\{ \begin{matrix} 2 \\ 7 \end{matrix} \}`;
+  const { explainCalls } = mockBackend({ recognize: () => json({ ...RESULT, latex: raw }) });
+  const { container } = renderPage();
+  await screen.findByText(/Kéo thả ảnh công thức vào đây/i);
+
+  upload(container);
+
+  const box = await screen.findByRole("textbox", { name: /LaTeX/ });
+  expect(box).toHaveValue(readable);
+  expect(container.querySelector(".hmer-render .katex")).toBeTruthy();
+  expect(screen.queryByText(/Không dựng được công thức/)).toBeNull();
+  // Restoring goes back to the readable version, not the raw tokens.
+  fireEvent.change(box, { target: { value: "2 + 3" } });
+  fireEvent.click(screen.getByRole("button", { name: /Khôi phục/ }));
+  expect(box).toHaveValue(readable);
+  await waitFor(() => expect(explainCalls).toHaveLength(1));
+  expect(explainCalls[0]).toMatchObject({ latex: raw });
 });

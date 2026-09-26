@@ -1,4 +1,4 @@
-/** Icon của 6 tool — SVG nét đơn sắc vẽ bằng `currentColor`, KHÔNG phải emoji.
+/** Icon của các tool — SVG nét đơn sắc vẽ bằng `currentColor`, KHÔNG phải emoji.
  *
  *  Lý do: emoji (💻📘✍️📧) là ảnh màu đầy đủ bão hòa do hệ điều hành vẽ, nằm
  *  ngoài bảng màu đất trầm của app (xem hệ --accent-* trong base.css) nên dock
@@ -12,7 +12,9 @@
 import type { ReactElement } from "react";
 
 interface ToolIconProps {
-  /** id trong TOOLS (research | coding | homework | essay | email | pdf). */
+  /** id trong TOOLS (research | coding | homework | essay | email | pdf | hmer).
+   *  Id không có hình thì không vẽ gì — thêm tool mới vào TOOLS thì phải thêm
+   *  hình vào PATHS, nếu không nút của nó ở dock sẽ là một ô trống. */
   tool: string;
   size?: number;
 }
@@ -55,6 +57,17 @@ const PATHS: Record<string, ReactElement> = {
       <path d="M13.4 3.8H7.6a2 2 0 0 0-2 2v12.4a2 2 0 0 0 2 2h8.8a2 2 0 0 0 2-2V8.8Z" strokeLinejoin="round" />
       <path d="M13.4 3.8v3.2a1.8 1.8 0 0 0 1.8 1.8h3.2" strokeLinejoin="round" />
       <path d="M9 13.4h6M9 16.4h4" strokeLinecap="round" />
+    </>
+  ),
+  /* Công thức viết tay: dấu căn √ đọc ra ngay là "toán", còn chữ x bên dưới
+     vẽ bằng hai nét cong có móc ở đầu — dáng chữ viết tay, không phải chữ in —
+     để nói phần "viết tay". Hai nét x cắt nhau ở giữa khoảng trống dưới gạch
+     ngang của dấu căn cho cân. */
+  hmer: (
+    <>
+      <path d="M3.4 12.9 5.6 11.7 8.8 19 12.2 5h8.4" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M13.3 9.6c.9-.3 1.7.2 2.2 1.3l1.6 3.4c.5 1.1 1.3 1.6 2.3 1.3" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M19.2 9.7c-.9.1-1.6.7-2.3 1.9l-1.8 3.2c-.6 1-1.3 1.4-2.1 1.2" strokeLinecap="round" strokeLinejoin="round" />
     </>
   ),
 };

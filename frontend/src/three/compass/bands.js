@@ -9,7 +9,7 @@
  *   startDeg      goc canvas (do) cua canh truoc o so 0; -90 la dinh
  *   labels        [chu Han, phien am / nghia]
  */
-import { RINGS, LAYERS } from './config.js';
+import { RINGS, LAYERS, LAYER_BY_ID } from './config.js';
 
 const cell = (count) => 360 / count;
 
@@ -84,7 +84,7 @@ export const BANDS = [
   },
   {
     id: 'cardinals',
-    layer: 'L1',
+    layer: 'L1c',
     title: 'Bốn hướng chính',
     rIn: RINGS.C8,
     rOut: RINGS.C9,
@@ -99,7 +99,7 @@ export const BANDS = [
   },
   {
     id: 'scale',
-    layer: 'L1',
+    layer: 'L1c',
     title: 'Thước chia độ',
     rIn: RINGS.C9,
     rOut: RINGS.C11,
@@ -112,10 +112,10 @@ export const BANDS = [
   },
   {
     id: 'terms',
-    layer: 'L1',
+    layer: 'L1b',
     title: 'Hai mươi bốn tiết khí',
     rIn: RINGS.C11,
-    rOut: RINGS.C13b,
+    rOut: RINGS.C13a,
     drawIn: RINGS.termIn,
     drawOut: RINGS.termOut,
     count: 24,
@@ -135,9 +135,9 @@ export const BANDS = [
   },
   {
     id: 'sigils',
-    layer: 'L1',
+    layer: 'L1a',
     title: 'Thiên can',
-    rIn: RINGS.C13b,
+    rIn: RINGS.C13a,
     rOut: RINGS.C14,
     drawIn: RINGS.sigilBand,
     drawOut: RINGS.sigilBand,
@@ -154,10 +154,10 @@ export const BANDS = [
   },
   {
     id: 'lodges',
-    layer: 'L1',
+    layer: 'L1a',
     title: 'Nhị thập bát tú',
     rIn: RINGS.C14,
-    rOut: LAYERS[1].outer,
+    rOut: LAYER_BY_ID.L1a.outer,
     drawIn: RINGS.lodgeIn,
     drawOut: RINGS.lodgeOut,
     count: 28,
@@ -216,9 +216,16 @@ export function cellIndexAt(band, theta) {
   return Math.floor(rel / (360 / band.count)) % band.count;
 }
 
-/** Tim dai chua ban kinh r */
-export function bandAt(r) {
-  for (const b of BANDS) if (r >= b.rIn && r < b.rOut) return b;
+/**
+ * Tim dai chua ban kinh r. Truyen layerId thi chi tim trong cac dai cua vanh
+ * do: khi cac vanh nghieng khac nhau, ban kinh tinh tren mat phang cua vanh A
+ * co the roi vao dai cua vanh B, va o sang se bi gan nham sang vanh A.
+ */
+export function bandAt(r, layerId) {
+  for (const b of BANDS) {
+    if (layerId && b.layer !== layerId) continue;
+    if (r >= b.rIn && r < b.rOut) return b;
+  }
   return null;
 }
 

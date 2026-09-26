@@ -31,7 +31,9 @@ export class LayerStack {
   constructor(layerTextures) {
     this.group = new THREE.Group();
     this.items = [];
-    this.visibleMask = { L0: true, L1: true, L2: true, L3: true };
+    // dung tu danh sach lop thay vi ghi cung id: id nao thieu o day se ra
+    // undefined, va pivot.visible = undefined la vanh bien mat khong bao loi
+    this.visibleMask = Object.fromEntries(layerTextures.map((lt) => [lt.id, true]));
     /** lop dang duoc tro / dang keo, de to sang vien */
     this.hoveredId = null;
     this.activeId = null;

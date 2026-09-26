@@ -5,7 +5,10 @@ services:
   backend:
     build: .
     ports:
-      - "8000:8000"
+      # Chỉ nghe trên loopback: API chưa có auth. "8000:8000" trần sẽ bind
+      # 0.0.0.0 — cả mạng LAN gọi được, và Docker còn vượt qua firewall máy
+      # host (ufw). Muốn mở ra ngoài thì phải có auth + reverse proxy trước.
+      - "127.0.0.1:8000:8000"
     env_file:
       - .env
     environment:
@@ -43,7 +46,7 @@ services:
         # đúng khi backend map ra cổng 8000 của host ở trên.
         VITE_API_URL: http://localhost:8000
     ports:
-      - "5173:80"
+      - "127.0.0.1:5173:80"
     depends_on:
       - backend
     restart: unless-stopped

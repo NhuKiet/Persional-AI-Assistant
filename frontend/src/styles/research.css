@@ -13,7 +13,7 @@
 .rs-query-text {
   background: var(--bg3);
   border: 1px solid var(--border2);
-  border-radius: 16px 4px 16px 16px;
+  border-radius: 20px 6px 20px 20px;
   padding: 10px 16px;
   font-size: 14px;
   color: var(--text);
@@ -41,30 +41,34 @@
 
 .rs-bar { display: flex; gap: 8px; margin-bottom: 16px; flex-shrink: 0; }
 
+/* Ô hỏi Research: viên thuốc kính, cùng vật liệu với các tấm lớn. */
 .rs-input {
   flex: 1;
-  background: var(--bg2);
-  border: 1px solid var(--border2);
-  border-radius: 12px;
-  padding: 10px 16px;
+  background: var(--secondary-glass-surface);
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
+  border: 1px solid var(--secondary-glass-edge);
+  box-shadow: var(--secondary-glass-shadow);
+  border-radius: 999px;
+  padding: 11px 20px;
   color: var(--text);
   font-family: var(--sans);
   font-size: 14px;
   outline: none;
   transition: border-color 0.15s;
 }
-.rs-input:focus       { border-color: rgba(255,255,255,0.2); }
+.rs-input:focus       { border-color: color-mix(in srgb, var(--accent-research) 55%, transparent); }
 .rs-input::placeholder{ color: var(--text3); }
 .rs-input:disabled    { opacity: 0.5; }
 
 .rs-btn {
-  padding: 10px 18px;
-  border-radius: 12px;
+  padding: 10px 20px;
+  border-radius: 999px;
   border: none;
   cursor: pointer;
   font-family: var(--sans);
   font-size: 15px;
-  color: #000;
+  color: var(--bg);   /* chữ trên nền màu tool: tối ở theme tối, sáng ở theme sáng */
   font-weight: 600;
   transition: filter var(--dur) var(--ease);
   flex-shrink: 0;
@@ -82,17 +86,17 @@
 
 .rp-sources { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; max-width: 500px; }
 .rp-source  { display: flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 20px; font-size: 12px; border: 1px solid var(--border2); background: var(--bg2); transition: border-color 0.2s var(--ease), background 0.2s var(--ease); }
-.rp-active  { border-color: rgba(124,158,255,0.3); background: rgba(124,158,255,0.06); }
-.rp-done    { border-color: rgba(168,230,163,0.3); background: rgba(168,230,163,0.06); }
+.rp-active  { border-color: color-mix(in srgb, var(--accent-research) 35%, transparent); background: color-mix(in srgb, var(--accent-research) 8%, transparent); }
+.rp-done    { border-color: color-mix(in srgb, var(--ok) 35%, transparent); background: color-mix(in srgb, var(--ok) 8%, transparent); }
 .rp-icon    { font-size: 13px; }
 .rp-label   { color: var(--text2); font-size: 12px; }
 .rp-count   { color: var(--text3); font-size: 11px; margin-left: 2px; }
-.rp-spinner { width: 10px; height: 10px; border: 1.5px solid rgba(124,158,255,0.3); border-top-color: var(--accent-research); border-radius: 50%; animation: spin 0.7s linear infinite; }
+.rp-spinner { width: 10px; height: 10px; border: 1.5px solid color-mix(in srgb, var(--accent-research) 35%, transparent); border-top-color: var(--accent-research); border-radius: 50%; animation: spin 0.7s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 .rp-error { padding: 20px; color: var(--danger); font-size: 13px; display: flex; flex-direction: column; }
 
-.synth-notice { margin-top: 16px; padding: 14px 16px; background: rgba(124,158,255,0.06); border: 1px solid rgba(124,158,255,0.2); border-radius: 10px; font-size: 13px; color: var(--text2); line-height: 1.6; }
+.synth-notice { margin-top: 16px; padding: 14px 16px; background: color-mix(in srgb, var(--accent-research) 8%, transparent); border: 1px solid color-mix(in srgb, var(--accent-research) 26%, transparent); border-radius: var(--r); font-size: 13px; color: var(--text2); line-height: 1.6; }
 .synth-dot    { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--accent-research); margin-right: 8px; animation: rpPulse 1.2s ease-in-out infinite; vertical-align: middle; }
 
 
@@ -107,7 +111,7 @@
 
 .rr-panels { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 4px; border-top: 1px solid var(--border); }
 
-.hp-wrap         { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; transition: border-color 0.15s; flex-shrink: 0; }
+.hp-wrap         { border: 1px solid var(--border); border-radius: var(--r); overflow: hidden; transition: border-color 0.15s; flex-shrink: 0; }
 .hp-wrap.hp-open { border-color: var(--border2); flex: 1 1 300px; }
 .hp-trigger      { display: flex; align-items: center; gap: 6px; padding: 7px 12px; background: var(--bg2); border: none; cursor: pointer; white-space: nowrap; transition: background 0.15s; }
 .hp-trigger:hover{ background: var(--bg3); }
@@ -131,7 +135,7 @@
   text-align: left;
   font-family: var(--sans);
 }
-.followup-pill:hover { border-color: rgba(124,158,255,0.4); color: var(--accent-research); background: rgba(124,158,255,0.06); }
+.followup-pill:hover { border-color: color-mix(in srgb, var(--accent-research) 45%, transparent); color: var(--accent-research); background: color-mix(in srgb, var(--accent-research) 8%, transparent); }
 
 /* References */
 .ref-list { display: flex; flex-direction: column; gap: 6px; }
@@ -150,7 +154,7 @@
 
 /* Papers */
 .papers-grid { display: flex; flex-direction: column; gap: 10px; }
-.paper-card  { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 14px; transition: border-color 0.15s; }
+.paper-card  { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--r); padding: 14px; transition: border-color 0.15s; }
 .paper-card:hover { border-color: var(--border2); }
 .paper-top    { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
 .paper-source { font-size: 10px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; border: 1px solid; border-radius: 4px; padding: 1px 6px; }
@@ -161,11 +165,11 @@
 .paper-snippet { font-size: 12px; color: var(--text2); line-height: 1.5; margin-bottom: 8px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .paper-actions { display: flex; gap: 8px; }
 .paper-link    { font-size: 12px; color: var(--text3); text-decoration: none; padding: 3px 8px; border: 1px solid var(--border2); border-radius: 6px; transition: color var(--dur) var(--ease), border-color var(--dur) var(--ease); }
-.paper-link:hover { color: var(--text); border-color: rgba(255,255,255,0.2); }
+.paper-link:hover { color: var(--text); border-color: var(--border2); }
 
 /* Compare table */
 .cmp-table { display: flex; flex-direction: column; gap: 10px; }
-.cmp-row   { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 6px; }
+.cmp-row   { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--r); padding: 14px; display: flex; flex-direction: column; gap: 6px; }
 .cmp-title { font-size: 12px; font-weight: 600; color: var(--text); letter-spacing: -0.01em; }
 .cmp-claim { font-size: 13px; color: var(--text2); line-height: 1.5; }
 .cmp-meta  { display: flex; flex-direction: column; gap: 3px; margin-top: 4px; }
@@ -176,21 +180,21 @@
 .claims-list          { display: flex; flex-direction: column; gap: 10px; padding-top: 4px; border-top: 1px solid var(--border); }
 .claim-confidence     { font-size: 12px; color: var(--text3); display: flex; align-items: center; gap: 6px; }
 .conf-badge            { font-size: 11px; font-weight: 600; letter-spacing: 0.02em; border-radius: 4px; padding: 1px 7px; border: 1px solid; }
-.conf-badge.conf-high { color: var(--ok); border-color: rgba(168,230,163,0.35); background: rgba(168,230,163,0.08); }
-.conf-badge.conf-mid  { color: #e0c15a; border-color: rgba(224,193,90,0.35); background: rgba(224,193,90,0.08); }
-.conf-badge.conf-low  { color: var(--danger); border-color: rgba(224,90,90,0.3); background: rgba(224,90,90,0.08); }
+.conf-badge.conf-high { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 38%, transparent); background: color-mix(in srgb, var(--ok) 10%, transparent); }
+.conf-badge.conf-mid  { color: var(--accent-homework); border-color: color-mix(in srgb, var(--accent-homework) 38%, transparent); background: color-mix(in srgb, var(--accent-homework) 10%, transparent); }
+.conf-badge.conf-low  { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 35%, transparent); background: color-mix(in srgb, var(--danger) 10%, transparent); }
 .claim-items          { list-style: none; display: flex; flex-direction: column; gap: 10px; }
 .claim-item           { display: flex; flex-direction: column; gap: 6px; }
 .claim-text           { font-size: 13px; line-height: 1.55; color: var(--text); }
 .claim-sources        { display: flex; flex-wrap: wrap; gap: 6px; }
 .claim-source-chip    { font-size: 11px; color: var(--text3); text-decoration: none; border: 1px solid var(--border2); border-radius: 20px; padding: 3px 10px; transition: color var(--dur) var(--ease), border-color var(--dur) var(--ease); }
-.claim-source-chip:hover { color: var(--accent-research); border-color: rgba(124,158,255,0.4); }
+.claim-source-chip:hover { color: var(--accent-research); border-color: color-mix(in srgb, var(--accent-research) 45%, transparent); }
 .claim-limitations       { font-size: 12px; color: var(--text2); }
 .claim-limitations-label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
 .claim-limitations ul    { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; }
 
 /* Bar chart */
-.chart-wrap  { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+.chart-wrap  { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--r); padding: 16px; margin-bottom: 16px; }
 .chart-title { font-size: 12px; color: var(--text2); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
 .chart-bars  { display: flex; flex-direction: column; gap: 8px; }
 .chart-row   { display: flex; align-items: center; gap: 10px; }
@@ -201,3 +205,21 @@
 .chart-val   { font-size: 12px; color: var(--text3); width: 50px; text-align: right; flex-shrink: 0; }
 
 
+
+/* Bộ chọn nguồn dưới ô nhập Research: nhóm radio thật, hiển thị như các viên
+   thuốc. Input ẩn khỏi mắt nhưng vẫn nhận bàn phím; viên đang chọn dùng màu
+   Research, viên đang focus có viền. */
+.focus-picker { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; font-size: 12.5px; }
+.focus-picker-label { color: var(--text3); margin-right: 2px; }
+.focus-option { position: relative; cursor: pointer; }
+.focus-option input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.focus-option span {
+  display: inline-block; padding: 4px 12px; border-radius: 999px;
+  border: 1px solid var(--border2); background: var(--bg2); color: var(--text2);
+}
+.focus-option:hover span { color: var(--text); }
+.focus-option input:checked + span {
+  color: var(--text); border-color: var(--accent-research);
+  background: color-mix(in srgb, var(--accent-research) 18%, transparent);
+}
+.focus-option input:focus-visible + span { outline: 2px solid var(--accent-research); outline-offset: 2px; }

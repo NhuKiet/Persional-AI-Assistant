@@ -63,3 +63,20 @@ it("renders assistant sources and removable context pins", async () => {
   await userEvent.click(screen.getByRole("button", { name: "Bỏ ghim trang 3" }));
   expect(props.onRemovePin).toHaveBeenCalledWith(0);
 });
+
+it("offers questions about this document instead of the general ones", async () => {
+  const props = { ...panelProps(), docSuggestions: ["Chương 3 chứng minh điều gì?"] };
+  render(<PdfAssistantPanel {...props} />);
+
+  expect(screen.getByText("Gợi ý từ tài liệu")).toBeInTheDocument();
+  expect(screen.queryByText("Thử hỏi ngay")).toBeNull();
+  await userEvent.click(screen.getByRole("button", { name: /Chương 3 chứng minh điều gì\?/ }));
+
+  expect(props.onSend).toHaveBeenCalledWith("Chương 3 chứng minh điều gì?");
+});
+
+it("falls back to the general questions without document ones", () => {
+  render(<PdfAssistantPanel {...panelProps()} docSuggestions={[]} />);
+
+  expect(screen.getByText("Thử hỏi ngay")).toBeInTheDocument();
+});

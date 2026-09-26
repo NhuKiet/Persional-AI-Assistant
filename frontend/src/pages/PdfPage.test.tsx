@@ -61,6 +61,7 @@ vi.mock("../components/pdf/SelectionLayer", () => ({
 type FetchScenario = {
   stream?: Response | (() => Promise<Response>);
   summarize?: Response;
+  suggestions?: string[];
 };
 
 function jsonResponse(value: unknown, status = 200) {
@@ -90,6 +91,9 @@ function installFetch(scenario: FetchScenario = {}) {
     }
     if (url.endsWith("/api/pdf/summarize") && init?.method === "POST") {
       return scenario.summarize ?? sseResponse([{ type: "done", message: "done" }]);
+    }
+    if (url.endsWith("/api/pdf/suggestions") && init?.method === "POST") {
+      return jsonResponse({ questions: scenario.suggestions ?? [] });
     }
     throw new Error(`Unexpected fetch: ${url}`);
   }));
@@ -209,5 +213,43 @@ describe("PDF workspace stream integration", () => {
     await userEvent.click(screen.getByRole("button", { name: "Tóm tắt" }));
 
     expect(await screen.findByText("Tài liệu vượt giới hạn tóm tắt")).toBeInTheDocument();
+  });
+});
+
+describe("PDF — questions about the document and page citations", () => {
+  it("suggests questions about the uploaded document and asks the one picked", async () => {
+    installFetch({ suggestions: ["Self-attention khác RNN ở đâu?", "Vì sao cần positional encoding?"] });
+    await renderUploadedPdf();
+
+    await userEvent.click(await screen.findByRole("button", { name: /Self-attention khác RNN ở đâu\?/ }));
+
+    const calls = (fetch as ReturnType<typeof vi.fn>).mock.calls;
+    const suggest = calls.find(([url]) => String(url).endsWith("/api/pdf/suggestions"));
+    expect(JSON.parse(String(suggest![1].body))).toMatchObject({ filename: "doc.pdf" });
+    const stream = calls.find(([url]) => String(url).endsWith("/api/pdf/stream"));
+    expect(JSON.parse(String(stream![1].body))).toMatchObject({ message: "Self-attention khác RNN ở đâu?" });
+  });
+
+  it("keeps the general suggestions when the document gets none", async () => {
+    installFetch({ suggestions: [] });
+    await renderUploadedPdf();
+
+    expect(await screen.findByText("Thử hỏi ngay")).toBeInTheDocument();
+  });
+
+  it("opens the cited page when a [Tr.N] chip in the answer is clicked", async () => {
+    installFetch({
+      stream: sseResponse([
+        { type: "sources", sources: [{ page: 3, chunk_index: 1, excerpt: "Đoạn trang ba" }] },
+        { type: "token", content: "Attention thay RNN [Tr.3]." },
+        { type: "done", message: "done" },
+      ]),
+    });
+    await renderUploadedPdf();
+    await sendQuestion();
+
+    await userEvent.click(await screen.findByRole("button", { name: "Mở trang 3 trong tài liệu" }));
+
+    expect(viewerHandle.highlightExcerpt).toHaveBeenCalledWith(3, "Đoạn trang ba");
   });
 });

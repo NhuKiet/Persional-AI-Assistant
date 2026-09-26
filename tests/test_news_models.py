@@ -35,6 +35,15 @@ def test_normalize_url_rejects_empty_and_schemeless():
     assert normalize_url("not a url") == ""
 
 
+def test_normalize_url_rejects_non_http_schemes():
+    # A feed entry can carry any scheme; `javascript://host/%0A…` even has a
+    # netloc. Stored URLs end up as links in the news list, so only http(s).
+    assert normalize_url("javascript://example.com/%0Aalert(1)") == ""
+    assert normalize_url("data://example.com/text") == ""
+    assert normalize_url("ftp://example.com/file") == ""
+    assert normalize_url("HTTPS://Example.com/a") == "https://example.com/a"
+
+
 def test_news_item_defaults_vi_fields_empty():
     item = NewsItem(
         url="https://example.com/a", title="Title", description_raw="Desc",

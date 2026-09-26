@@ -1,11 +1,16 @@
 import { useState, useRef } from "react";
-import { API } from "../../lib/api";
+import { API, apiFetch } from "../../lib/api";
+import { DataPreview, type DataTable } from "./DataPreview";
 
 export const ALLOWED_EXTS = [".csv",".json",".jsonl",".xlsx",".xls",".txt",".tsv",".parquet",".xml"];
 
 export interface UploadedFile {
   name: string;
   size: number;
+  /** First lines as text — goes into the coding prompt. */
+  preview?: string;
+  /** Columns, types and first rows, when the file reads as a table. */
+  table?: DataTable | null;
   [key: string]: unknown;
 }
 
@@ -22,6 +27,9 @@ export function FileUploadZone({ files, onAdd, onRemove, sessionId }: FileUpload
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
+  // One preview open at a time; a fresh upload opens its own, since checking
+  // it was read right (delimiter, header row) is the next thing to do.
+  const [openPreview, setOpenPreview] = useState<string | null>(null);
 
   const uploadFile = async (file: File) => {
     const ext = "." + (file.name.split(".").pop() || "").toLowerCase();
@@ -34,13 +42,14 @@ export function FileUploadZone({ files, onAdd, onRemove, sessionId }: FileUpload
       const form = new FormData();
       form.append("file", file);
       form.append("session_id", sessionId);
-      const res = await fetch(`${API}/api/coding/upload`, { method: "POST", body: form });
+      const res = await apiFetch(`${API}/api/coding/upload`, { method: "POST", body: form });
       if (!res.ok) {
         const err = await res.json();
         throw new Error(err.detail || "Upload thất bại");
       }
       const data: UploadedFile = await res.json();
       onAdd(data);
+      if (data.table) setOpenPreview(data.name);
     } catch (e) {
       alert("Upload lỗi: " + (e as Error).message);
     } finally {
@@ -81,14 +90,31 @@ export function FileUploadZone({ files, onAdd, onRemove, sessionId }: FileUpload
 
       {files.length > 0 && (
         <div className="upload-file-list">
-          {files.map(f => (
-            <div key={f.name} className="upload-file-item">
-              <span className="upload-file-icon">{f.name.endsWith(".csv") ? "📊" : f.name.endsWith(".json") || f.name.endsWith(".jsonl") ? "📋" : f.name.endsWith(".xlsx") || f.name.endsWith(".xls") ? "📈" : "📄"}</span>
-              <span className="upload-file-name">{f.name}</span>
-              <span className="upload-file-size">{(f.size / 1024).toFixed(1)}KB</span>
-              <button className="upload-file-del" onClick={() => onRemove(f.name)} title="Xóa">×</button>
-            </div>
-          ))}
+          {files.map(f => {
+            const open = openPreview === f.name && !!f.table;
+            return (
+              <div key={f.name}>
+                <div className="upload-file-item">
+                  <span className="upload-file-icon">{f.name.endsWith(".csv") ? "📊" : f.name.endsWith(".json") || f.name.endsWith(".jsonl") ? "📋" : f.name.endsWith(".xlsx") || f.name.endsWith(".xls") ? "📈" : "📄"}</span>
+                  <span className="upload-file-name">{f.name}</span>
+                  <span className="upload-file-size">{(f.size / 1024).toFixed(1)}KB</span>
+                  {f.table && (
+                    <button
+                      type="button"
+                      className="upload-file-preview"
+                      aria-expanded={open}
+                      aria-label={`${open ? "Ẩn" : "Xem trước"} ${f.name}`}
+                      onClick={() => setOpenPreview(open ? null : f.name)}
+                    >
+                      {open ? "Ẩn" : "Xem trước"}
+                    </button>
+                  )}
+                  <button className="upload-file-del" onClick={() => onRemove(f.name)} title="Xóa" aria-label={`Xóa ${f.name}`}>×</button>
+                </div>
+                {open && f.table && <DataPreview table={f.table} name={f.name} />}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

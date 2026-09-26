@@ -36,7 +36,11 @@ export function pickLayer(raycaster, items) {
     _local.copy(_hit).applyMatrix4(_inv);
 
     const r = Math.hypot(_local.x, _local.y);
-    if (r < it.layer.inner - 1e-4 || r > it.layer.outer + 0.03) continue;
+    // Le 0.03 ngoai mep chi danh cho vanh ngoai cung (bat duoc ca quang sang).
+    // Vanh ben trong ma cung duoc le nay thi no lan sang dai cua vanh ke ben va
+    // cuop thao tac keo cua vanh do moi khi mat phang cua no gan camera hon.
+    const slack = it.layer.outer >= 0.999 ? 0.03 : 0;
+    if (r < it.layer.inner - 1e-4 || r > it.layer.outer + slack) continue;
 
     const dist = raycaster.ray.origin.distanceTo(_hit);
     if (best && dist >= best.dist) continue;
@@ -48,7 +52,7 @@ export function pickLayer(raycaster, items) {
 
   if (!best) return null;
 
-  const band = bandAt(best.r);
+  const band = bandAt(best.r, best.id);
   if (!band) return null;
   const cellIndex = cellIndexAt(band, best.theta);
   return {

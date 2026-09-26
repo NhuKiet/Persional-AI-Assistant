@@ -23,7 +23,7 @@ def test_stream_events_yields_done_with_contract_keys(monkeypatch):
     }
 
     class _FakeAgent:
-        def run_streaming(self, query, provider=None, model=None, cancel_event=None, history=None):
+        def run_streaming(self, query, provider=None, model=None, cancel_event=None, history=None, focus="all"):
             yield {"type": "source_done", "source": "web", "count": 1}
             yield {"type": "done", "data": DONE}
 
@@ -43,7 +43,7 @@ def test_stream_events_persists_query_and_result_in_order(monkeypatch, tmp_path)
     DONE = {"query": "q", "summary_short": "s"}
 
     class _FakeAgent:
-        def run_streaming(self, query, provider=None, model=None, cancel_event=None, history=None):
+        def run_streaming(self, query, provider=None, model=None, cancel_event=None, history=None, focus="all"):
             yield {"type": "done", "data": DONE}
 
     svc = service_mod.ResearchService(agent=_FakeAgent())
@@ -62,7 +62,8 @@ def test_stream_events_persists_query_and_result_in_order(monkeypatch, tmp_path)
         {"role": "user", "content": "q"},
         {"role": "assistant", "content": DONE},
     ]
-    assert revision == 2
+    # The exchange is saved in one write (add_turns), not one per turn.
+    assert revision == 1
 
 
 def test_deep_dive_events_persists_question_and_answer(monkeypatch, tmp_path):
@@ -92,7 +93,8 @@ def test_deep_dive_events_persists_question_and_answer(monkeypatch, tmp_path):
         {"role": "user", "content": "what?"},
         {"role": "assistant", "content": "hello"},
     ]
-    assert revision == 2
+    # The exchange is saved in one write (add_turns), not one per turn.
+    assert revision == 1
 
 
 def test_deep_dive_events_retrieves_full_content_when_snippet_short(monkeypatch, tmp_path):
@@ -411,7 +413,7 @@ def test_stream_events_yields_storage_error_after_done_when_persist_fails(monkey
     DONE = {"query": "q", "summary_short": "s"}
 
     class _FakeAgent:
-        def run_streaming(self, query, provider=None, model=None, cancel_event=None, history=None):
+        def run_streaming(self, query, provider=None, model=None, cancel_event=None, history=None, focus="all"):
             yield {"type": "done", "data": DONE}
 
     class _SaveFailsStore:
@@ -527,7 +529,7 @@ def test_stream_events_succeeds_normally_when_storage_works(monkeypatch):
     DONE = {"query": "q", "summary_short": "s"}
 
     class _FakeAgent:
-        def run_streaming(self, query, provider=None, model=None, cancel_event=None, history=None):
+        def run_streaming(self, query, provider=None, model=None, cancel_event=None, history=None, focus="all"):
             yield {"type": "done", "data": DONE}
 
     from tests.fake_session_store import FakeSessionStore

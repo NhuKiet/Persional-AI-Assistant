@@ -3,8 +3,8 @@
 
 /* Streaming code preview while LLM is generating */
 .code-stream-preview {
-  background: #0d0d14;
-  border: 1px solid #2a2a3a;
+  background: var(--bg2);
+  border: 1px solid var(--border2);
   border-radius: 8px;
   overflow: hidden;
 }
@@ -37,7 +37,7 @@
   bottom: 80px;
   left: 50%;
   transform: translateX(-50%);
-  background: #1e1e3a;
+  background: var(--bg3);
   border: 1px solid color-mix(in srgb, var(--accent-research) 27%, transparent);
   border-radius: 10px;
   padding: 10px 20px;
@@ -59,21 +59,21 @@
   overflow: hidden;
   border: 1px solid;
 }
-.test-panel.test-pass { border-color: #4CAF5066; }
-.test-panel.test-fail { border-color: #FF585866; }
+.test-panel.test-pass { border-color: color-mix(in srgb, var(--ok) 40%, transparent); }
+.test-panel.test-fail { border-color: color-mix(in srgb, var(--danger) 40%, transparent); }
 
 .test-header {
   padding: 10px 16px;
   font-weight: 600;
   font-size: 14px;
 }
-.test-pass .test-header { background: #1a2e1a; color: #81c784; }
-.test-fail .test-header { background: #2e1a1a; color: #e57373; }
+.test-pass .test-header { background: color-mix(in srgb, var(--ok) 14%, transparent); color: var(--ok); }
+.test-fail .test-header { background: color-mix(in srgb, var(--danger) 14%, transparent); color: var(--danger); }
 
 .test-output {
   margin: 0;
   padding: 14px;
-  background: #0d0d14;
+  background: var(--bg2);
   font-family: "JetBrains Mono", monospace;
   font-size: 12px;
   line-height: 1.6;
@@ -86,9 +86,9 @@
 /* Code review panel */
 .review-panel {
   padding: 16px;
-  background: #111120;
+  background: var(--bg2);
   border-radius: 8px;
-  border: 1px solid #2a2a3a;
+  border: 1px solid var(--border2);
   line-height: 1.7;
   color: var(--text);
 }
@@ -110,9 +110,9 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  background: #2a1a4a;
-  color: #c084fc;
-  border: 1px solid #c084fc44;
+  background: color-mix(in srgb, var(--accent-essay) 16%, transparent);
+  color: var(--accent-essay);
+  border: 1px solid color-mix(in srgb, var(--accent-essay) 30%, transparent);
   border-radius: 5px;
   padding: 2px 8px;
   font-size: 11px;
@@ -124,14 +124,14 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  background: #1a3a1a;
-  color: #81c784;
+  background: color-mix(in srgb, var(--ok) 14%, transparent);
+  color: var(--ok);
   border-radius: 5px;
   padding: 2px 8px;
   font-size: 11px;
 }
 
 /* Phase bar — new phases */
-.phase-step:has(.phase-dot[data-phase="testing"]) .phase-dot { background: #FFB300; }
-.phase-step:has(.phase-dot[data-phase="reviewing"]) .phase-dot { background: #AB47BC; }
+.phase-step:has(.phase-dot[data-phase="testing"]) .phase-dot { background: var(--accent-homework); }
+.phase-step:has(.phase-dot[data-phase="reviewing"]) .phase-dot { background: var(--accent-essay); }
 

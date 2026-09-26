@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { API } from "../lib/api";
+import { API, apiFetch } from "../lib/api";
 import { historyKey, loadHistory, saveHistory, type Session } from "../lib/storage";
 
 /** Vietnamese notice shown when a sidebar entry points at a session the
@@ -22,7 +22,7 @@ export type RestoreResult =
 /** GET /api/<feature>/sessions/{session_id} — read-only, never locks. */
 export async function fetchSessionHistory(feature: string, sessionId: string): Promise<RestoreResult> {
   try {
-    const res = await fetch(`${API}/api/${feature}/sessions/${encodeURIComponent(sessionId)}`);
+    const res = await apiFetch(`${API}/api/${feature}/sessions/${encodeURIComponent(sessionId)}`);
     if (res.status === 404) return { status: "not_found" };
     if (!res.ok) return { status: "error" };
     const data: RestoredSession = await res.json();

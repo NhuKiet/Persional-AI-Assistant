@@ -4,10 +4,12 @@ import os
 import re
 import subprocess
 import sys
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
 
+from backend.app.core import capabilities
 from backend.app.core.config import settings
 
 
@@ -74,20 +76,70 @@ def install_packages(packages: list[str]) -> tuple[bool, str]:
         return False, str(exc)
 
 
-_docker_ok: bool | None = None
+@dataclass(frozen=True)
+class ExecutorStatus:
+    available: bool
+    # "ok", "docker_unavailable" (daemon down or no docker CLI) or
+    # "image_missing" (EXECUTOR_IMAGE was never built on this host).
+    reason: str
 
 
-def _docker_available() -> bool:
-    global _docker_ok
-    if _docker_ok is None:
+# How long a probe result is trusted. Short while down, so starting Docker
+# Desktop is noticed within seconds instead of needing a backend restart;
+# longer while up, since a run re-probes at most this often.
+_TTL_AVAILABLE = 30.0
+_TTL_UNAVAILABLE = 10.0
+# Even an explicit refresh reuses a result this fresh: every probe spawns
+# docker CLI processes, and "Check again" can be clicked repeatedly.
+_MIN_PROBE_INTERVAL = 2.0
+
+_status_lock = threading.Lock()
+_status_cache: tuple[float, ExecutorStatus] | None = None
+
+
+def _probe() -> ExecutorStatus:
+    def succeeds(*argv: str) -> bool:
         try:
-            result = subprocess.run(["docker", "info"], capture_output=True, timeout=8)
-            _docker_ok = result.returncode == 0
+            return subprocess.run(["docker", *argv], capture_output=True, timeout=8).returncode == 0
         except Exception:
-            _docker_ok = False
-        if not _docker_ok:
-            logger.warning("Docker daemon không sẵn sàng — chạy code sinh bị vô hiệu hoá (không fallback host).")
-    return _docker_ok
+            return False
+
+    if not succeeds("info"):
+        return ExecutorStatus(False, "docker_unavailable")
+    # `docker run` would otherwise try to pull a missing image from a
+    # registry, fail after a long wait, and look like the code's own error.
+    if not succeeds("image", "inspect", settings.EXECUTOR_IMAGE):
+        return ExecutorStatus(False, "image_missing")
+    return ExecutorStatus(True, "ok")
+
+
+def executor_status(refresh: bool = False) -> ExecutorStatus:
+    """Whether generated code can run right now. Blocking — it runs the
+    docker CLI — so async callers go through a worker thread."""
+    global _status_cache
+    with _status_lock:
+        previous = _status_cache
+        if previous is not None:
+            age = time.monotonic() - previous[0]
+            ttl = _TTL_AVAILABLE if previous[1].available else _TTL_UNAVAILABLE
+            if age < (_MIN_PROBE_INTERVAL if refresh else ttl):
+                return previous[1]
+        status = _probe()
+        _status_cache = (time.monotonic(), status)
+
+    if status.available:
+        capabilities.ok(capabilities.EXECUTOR)
+    else:
+        capabilities.failed(capabilities.EXECUTOR, status.reason)
+    if previous is None or previous[1] != status:
+        if status.available:
+            logger.info("Sandbox chạy code sẵn sàng (image %s).", settings.EXECUTOR_IMAGE)
+        else:
+            logger.warning(
+                "Sandbox chạy code không dùng được (%s) — chạy code sinh bị vô hiệu hoá (không fallback host).",
+                status.reason,
+            )
+    return status
 
 
 def _rewrite_chdir_for_container(code: str) -> str:
@@ -229,8 +281,9 @@ class CodeExecutor:
             except Exception:
                 pass
 
-        if not _docker_available():
-            _emit_execution_event("coding.execution_unavailable", session_id, "docker_unavailable")
+        status = executor_status()
+        if not status.available:
+            _emit_execution_event("coding.execution_unavailable", session_id, status.reason)
             return ExecutionResult(
                 stdout="",
                 stderr="Code execution is currently unavailable.",
@@ -238,7 +291,7 @@ class CodeExecutor:
                 timed_out=False,
                 duration=0.0,
                 unavailable=True,
-                reason_code="docker_unavailable",
+                reason_code=status.reason,
             )
 
         script_code = _rewrite_chdir_for_container(code)

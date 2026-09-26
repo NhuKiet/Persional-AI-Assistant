@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { Markdown } from "../../components/Markdown";
-import { API } from "../../lib/api";
+import { API, apiFetch } from "../../lib/api";
 import { parseSSE, readErrorResponse } from "../../lib/sse";
 import type { ModelSelection } from "../../types";
 
@@ -45,7 +45,7 @@ export function DeepDiveModal({ source, onClose, model }: DeepDiveModalProps) {
     setLoading(true);
     abortRef.current = new AbortController();
     try {
-      const res = await fetch(`${API}/api/research/deep-dive`, {
+      const res = await apiFetch(`${API}/api/research/deep-dive`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         signal: abortRef.current.signal,
@@ -132,7 +132,7 @@ export function DeepDiveModal({ source, onClose, model }: DeepDiveModalProps) {
               disabled={loading}
             />
             <button className="dd-ask-btn"
-              style={{ background: loading ? "#2a2a3a" : sourceColor }}
+              style={{ background: loading ? "var(--bg4)" : sourceColor }}
               onClick={() => (loading ? abortRef.current?.abort() : ask())}
               disabled={!loading && !question.trim()}>
               {loading ? "■ Stop" : "Ask"}

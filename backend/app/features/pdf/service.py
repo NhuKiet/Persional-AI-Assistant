@@ -1,11 +1,13 @@
 import asyncio
 import logging
+import re
 import threading
 from collections.abc import AsyncIterator, Iterator
 
 from backend.app.core.config import settings
 from backend.app.core.llm import invoke_chat, stream_chat
 from backend.app.shared.conversation_store import ConversationManager
+from backend.app.features.pdf import prompts
 from backend.app.features.pdf.context import build_multimodal_content, has_image_pin
 from backend.app.features.pdf.processor import (
     MAP_OUTPUT_CHARS,
@@ -31,11 +33,39 @@ SCOPE_LIMIT_MESSAGE = (
 )
 
 
+_SUGGEST_EXCERPTS = 8
+_SUGGEST_EXCERPT_CHARS = 450
+_MAX_SUGGESTIONS = 4
+# "1." "2)" "-" "•" "*" or "Câu hỏi 3:" in front of a line.
+_QUESTION_PREFIX = re.compile(r"^\s*(?:[-*•]+|\d+\s*[.)]|câu\s*hỏi\s*\d+\s*[:.)-])\s*", re.IGNORECASE)
+
+
+def _spread_excerpts(chunks: list) -> list[tuple[int, str]]:
+    """Chunks spaced evenly from the first to the last, so the questions
+    cover the whole document rather than just its introduction."""
+    if not chunks:
+        return []
+    count = min(_SUGGEST_EXCERPTS, len(chunks))
+    step = (len(chunks) - 1) / max(count - 1, 1)
+    picked = sorted({round(i * step) for i in range(count)})
+    return [(chunks[i].page, chunks[i].text[:_SUGGEST_EXCERPT_CHARS]) for i in picked]
+
+
+def _parse_questions(raw: str) -> list[str]:
+    questions = []
+    for line in raw.splitlines():
+        text = _QUESTION_PREFIX.sub("", line).strip()
+        if text.endswith("?") and len(text) > 8 and text not in questions:
+            questions.append(text)
+    return questions[:_MAX_SUGGESTIONS]
+
+
 class PdfService:
     def __init__(self, processor: PDFProcessor | None = None, conversations: ConversationManager | None = None):
         self._processor = processor or PDFProcessor()
         self._conv_manager = conversations or ConversationManager(namespace="pdf")
         self._doc_cache: dict[str, object] = {}
+        self._suggestions: dict[str, list[str]] = {}
         # Single-worker only — see backend/app/shared/session_locks.py.
         # Both chat and summarize mutate the same session_id, so they share
         # one registry: only one of the two may run at a time per session.
@@ -66,6 +96,37 @@ class PdfService:
     ) -> Iterator[str]:
         yield from stream_chat(messages, system=system, provider=provider, model=model)
 
+    def _invoke_llm(self, prompt: str, system: str, provider: str | None = None, model: str | None = None) -> str:
+        return invoke_chat(prompt, system=system, provider=provider, model=model)
+
+    def forget_document(self, filename: str) -> None:
+        """Drop what was derived from a file (parsed text, suggestions) —
+        after it is deleted or replaced by an upload with the same name."""
+        self._doc_cache.pop(filename, None)
+        self._suggestions.pop(filename, None)
+
+    def suggest_questions(self, filename: str, provider: str | None = None, model: str | None = None) -> list[str]:
+        """Up to four questions about this document, generated once per
+        file. Blocking (parse + one LLM call): call from a worker thread.
+        Raises FileNotFoundError for an unknown file; an LLM failure yields
+        no suggestions (and isn't cached, so reopening tries again)."""
+        cached = self._suggestions.get(filename)
+        if cached is not None:
+            return cached
+        document = self._get_doc(filename)
+        prompt = prompts.suggestions_prompt(
+            document.filename, document.total_pages, _spread_excerpts(document.chunks),
+        )
+        try:
+            raw = self._invoke_llm(prompt, prompts.SUGGEST_SYSTEM, provider=provider, model=model)
+        except Exception as e:  # noqa: BLE001 — suggestions are optional
+            logger.warning("[PDF] suggestions failed for %s: %s", filename, e)
+            return []
+        questions = _parse_questions(raw)
+        if questions:
+            self._suggestions[filename] = questions
+        return questions
+
     async def chat_events(self, request: PDFChatRequest, system: str) -> AsyncIterator[dict]:
         effective_provider = (request.provider or settings.DEFAULT_PROVIDER).lower()
         if has_image_pin(request.pins) and effective_provider == "ollama":
@@ -85,13 +146,20 @@ class PdfService:
             try:
                 document = self._get_doc(request.filename)
                 retrieved = self._processor.retrieve(document, request.message)
-                sources = serialize_sources(retrieved)
+                # One source per page the model is actually shown — every
+                # [Tr.N] it can legitimately cite then has a passage to jump
+                # to. Most relevant chunk first, so each page's excerpt is
+                # the passage that matched the question.
+                included = self._processor.select_context_chunks(document, retrieved)
+                sources = serialize_sources(
+                    sorted(included, key=lambda c: c.score, reverse=True), limit=len(included),
+                )
                 if sources:
                     loop.call_soon_threadsafe(
                         queue.put_nowait,
                         {"type": "sources", "sources": sources},
                     )
-                context = self._processor.build_context_from_chunks(document, retrieved)
+                context = self._processor.build_context_from_chunks(document, included)
                 content = build_multimodal_content(request.message, context, request.pins)
                 history = self._conv_manager.get_history(request.session_id)
                 messages = [*history[-8:], {"role": "user", "content": content}]

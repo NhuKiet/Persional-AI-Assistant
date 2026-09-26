@@ -28,7 +28,7 @@
   align-items: baseline;
   gap: 8px;
   padding: 7px 12px;
-  background: #1a1a2e;
+  background: var(--bg3);
   border-radius: 10px;
   border: 1px solid var(--border2);
   max-width: 88%;
@@ -47,7 +47,7 @@
 
 .agent-history-msg {
   font-size: 13px;
-  color: #d0d0e8;
+  color: var(--text);
   line-height: 1.4;
   word-break: break-word;
 }
@@ -61,15 +61,15 @@
 }
 
 .ahr-ok {
-  color: #81c784;
-  background: #1a2e1a;
-  border: 1px solid #81c78422;
+  color: var(--ok);
+  background: color-mix(in srgb, var(--ok) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ok) 25%, transparent);
 }
 
 .ahr-fail {
-  color: #e57373;
-  background: #2e1a1a;
-  border: 1px solid #e5737322;
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--danger) 25%, transparent);
 }
 
 .ahr-artifacts {

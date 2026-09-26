@@ -7,7 +7,7 @@ import {
 } from './primitives.js';
 import { buildConstellations, buildDippers, buildFieldStars } from './constellations.js';
 import {
-  SEED, TEXTURE, RINGS, LAYERS, COLORS, FONT, DIPPER, CONSTELLATIONS,
+  SEED, TEXTURE, RINGS, LAYERS, LAYER_BY_ID, COLORS, FONT, DIPPER, CONSTELLATIONS,
 } from '../config.js';
 import { BAND_BY_ID, cellCenterAngle, cellStartAngle } from '../bands.js';
 
@@ -168,15 +168,17 @@ function strokesL0(P) {
   for (const [r, th, rad] of buildFieldStars()) P.star(r, th, rad, 0.5);
 }
 
-function strokesL1(P) {
+/* KiNg: L1 cu tach thanh ba vanh L1a/L1b/L1c (xem LAYERS trong config.js),
+ * noi dung giu nguyen tung net. Moi vong chi do MOT vanh ve, giong ranh gioi C8
+ * giua L1 va L2 tu truoc toi nay: hai vanh cung ve thi luc de phang, blending
+ * cong don lam vong do sang gap doi. */
+
+/** L1c: bon huong chinh + thuoc chia do */
+function strokesL1c(P) {
   P.setLineCap('butt');
 
   P.ring(RINGS.C8, LW.bright, 1.0);
   P.ring(RINGS.C9, LW.thin, 0.85);
-  P.ring(RINGS.C11, LW.normal, 0.9);
-  P.ring(RINGS.C13a, LW.normal, 0.9);
-  P.ring(RINGS.C13b, LW.thin, 0.8);
-  P.ring(RINGS.C14, LW.bright, 1.0);
 
   /* -- 4 huong chinh trong dai hep 0.44-0.48 -- */
   const cardinals = bandText(P, 'cardinals');
@@ -205,10 +207,25 @@ function strokesL1(P) {
     else { len = (so - si) * 0.62; a = 0.85; lw = LW.thin; }
     P.spoke(si, si + len, th, lw, a);
   }
+}
 
-  /* -- 24 tiet khi -- */
+/** L1b: 24 tiet khi */
+function strokesL1b(P) {
+  P.setLineCap('butt');
+
+  P.ring(RINGS.C11, LW.normal, 0.9);
+  P.ring(RINGS.C13a, LW.normal, 0.9);
+
   bandDividers(P, 'terms', RINGS.C11, RINGS.C13a, LW.thin, 0.85);
   bandText(P, 'terms');
+}
+
+/** L1a: dai thien can + 28 tu */
+function strokesL1a(P) {
+  P.setLineCap('butt');
+
+  P.ring(RINGS.C13b, LW.thin, 0.8);
+  P.ring(RINGS.C14, LW.bright, 1.0);
 
   /* -- dai ky hieu thua 0.68-0.735 -- */
   const rnd = mulberry32(SEED + 777);
@@ -239,7 +256,7 @@ function strokesL2(P) {
   P.ring(RINGS.C6, LW.normal, 0.9);
 
   // vach chia xuyen suot tu C4 den C8 (bien ngoai cua lop)
-  bandDividers(P, 'months', RINGS.C4, LAYERS[2].outer, LW.thin, 0.9);
+  bandDividers(P, 'months', RINGS.C4, LAYER_BY_ID.L2.outer, LW.thin, 0.9);
   bandText(P, 'months');
   bandText(P, 'stations');
 }
@@ -254,7 +271,9 @@ function strokesL3(P) {
   }
 }
 
-const PAINTERS = { L0: strokesL0, L1: strokesL1, L2: strokesL2, L3: strokesL3 };
+const PAINTERS = {
+  L0: strokesL0, L1a: strokesL1a, L1b: strokesL1b, L1c: strokesL1c, L2: strokesL2, L3: strokesL3,
+};
 
 /**
  * @returns {{id:string, canvas:HTMLCanvasElement, extent:number, layer:object}[]}

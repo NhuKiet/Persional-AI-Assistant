@@ -1,6 +1,30 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
+import { preloadMarkdown } from "../Markdown";
 import { ResearchResult } from "./ResearchResult";
+
+beforeAll(async () => { await preloadMarkdown(); });
+
+describe("ResearchResult — inline citations", () => {
+  it("links each [n] in the summary to references[n - 1]", () => {
+    const result = {
+      query: "q",
+      summary_detailed: "Transformer bỏ hẳn recurrence [2] và dựa hoàn toàn vào attention [1][2].",
+      references: [
+        { source: "arxiv", title: "Attention Is All You Need", url: "https://arxiv.org/abs/1706.03762", id: "a" },
+        { source: "web", title: "The Illustrated Transformer", url: "https://jalammar.github.io/illustrated-transformer/", id: "b" },
+      ],
+    };
+    render(<ResearchResult result={result} model={null} />);
+
+    const links = screen.getAllByRole("link", { name: /^Nguồn \d/ });
+    expect(links.map((a) => a.getAttribute("aria-label"))).toEqual([
+      "Nguồn 2: The Illustrated Transformer",
+      "Nguồn 1: Attention Is All You Need",
+      "Nguồn 2: The Illustrated Transformer",
+    ]);
+  });
+});
 
 describe("ResearchResult — grounded claims, source chips, confidence, limitations", () => {
   it("renders claims with source chips, confidence label and limitations", () => {

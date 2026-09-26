@@ -33,6 +33,11 @@ afterEach(() => {
 if (!Element.prototype.scrollIntoView) {
   Element.prototype.scrollIntoView = function scrollIntoView() {};
 }
+// Tương tự cho scrollTo trên phần tử: carousel portfolio ở landing cuộn ray
+// ngang tới thẻ đích khi bấm nút/chấm.
+if (!Element.prototype.scrollTo) {
+  Element.prototype.scrollTo = function scrollTo() {};
+}
 
 // jsdom không có các API này; PdfViewer/SelectionLayer chạm tới chúng.
 if (!window.matchMedia) {

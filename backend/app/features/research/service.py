@@ -91,7 +91,7 @@ class ResearchService:
         cancel_event = threading.Event()
 
         try:
-            history = _text_history(self._conv_manager.get_history(req.session_id))
+            history = _text_history(await self._conv_manager.aget_history(req.session_id))
         except Exception as e:
             logger.error("[STORAGE] get_history failed: %s", e, exc_info=True)
             yield _STORAGE_ERROR
@@ -101,7 +101,7 @@ class ResearchService:
             try:
                 for event in self._agent.run_streaming(
                     query, req.provider, req.model, cancel_event=cancel_event,
-                    history=history,
+                    history=history, focus=req.focus,
                 ):
                     loop.call_soon_threadsafe(aqueue.put_nowait, event)
             except Exception as e:  # noqa: BLE001 — surfaced as SSE error
@@ -117,9 +117,9 @@ class ResearchService:
                     yield event
                     if event.get("type") == "done":
                         try:
-                            self._conv_manager.add_turn(req.session_id, role="user", content=query)
-                            self._conv_manager.add_turn(
-                                req.session_id, role="assistant", content=event.get("data", {})
+                            await self._conv_manager.aadd_turns(
+                                req.session_id,
+                                [("user", query), ("assistant", event.get("data", {}))],
                             )
                         except Exception as e:
                             logger.error("[STORAGE] add_turn failed: %s", e, exc_info=True)
@@ -165,7 +165,7 @@ class ResearchService:
         # deep-dive Q&A and/or the main research answer) so a question like
         # "so what about X" resolves against what was already discussed.
         try:
-            history = _text_history(self._conv_manager.get_history(req.session_id))
+            history = _text_history(await self._conv_manager.aget_history(req.session_id))
         except Exception as e:
             logger.error("[STORAGE] get_history failed: %s", e, exc_info=True)
             yield _STORAGE_ERROR
@@ -192,9 +192,9 @@ class ResearchService:
                 full_response += token
                 yield {"type": "token", "content": token}
             try:
-                self._conv_manager.add_turn(req.session_id, role="user", content=req.question.strip())
-                self._conv_manager.add_turn(
-                    req.session_id, role="assistant", content=full_response
+                await self._conv_manager.aadd_turns(
+                    req.session_id,
+                    [("user", req.question.strip()), ("assistant", full_response)],
                 )
             except Exception as e:
                 logger.error("[STORAGE] add_turn failed: %s", e, exc_info=True)

@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { API } from "../lib/api";
+import { API, apiFetch } from "../lib/api";
 import { Markdown } from "./Markdown";
 
 interface BubbleMessage {
@@ -41,7 +41,7 @@ export function AssistantBubble() {
     scrollToBottom();
 
     try {
-      const res = await fetch(`${API}/api/bubble/chat`, {
+      const res = await apiFetch(`${API}/api/bubble/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: text }),
@@ -64,7 +64,7 @@ export function AssistantBubble() {
   const reset = async () => {
     setMessages([]);
     try {
-      await fetch(`${API}/api/bubble/reset`, { method: "POST" });
+      await apiFetch(`${API}/api/bubble/reset`, { method: "POST" });
     } catch {
       // hội thoại phía client đã xoá; nếu bridge không phản hồi thì bỏ qua.
     }

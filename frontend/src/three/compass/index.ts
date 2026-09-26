@@ -1,6 +1,8 @@
-/** Cảnh 3D "La bàn thiên văn" cho trang chủ — bốn vành đồng tâm (chòm sao,
- *  lịch ngoài, 12 tháng, lõi Bắc Đẩu) vẽ bằng nét sáng trên nền tối, kèm bụi
- *  sao / khói bung ra theo chuyển động, bloom và một lớp vignette + grain.
+/** Cảnh 3D "La bàn thiên văn" cho trang chủ — sáu vành đồng tâm (chòm sao,
+ *  28 tú, 24 tiết khí, thước độ, 12 tháng, lõi Bắc Đẩu) vẽ bằng nét sáng trên
+ *  nền tối, kèm bụi sao / khói bung ra theo chuyển động, bloom và một lớp
+ *  vignette + grain. Bản gốc có bốn vành; ba vành giữa là vành "lịch ngoài"
+ *  của bản gốc được tách ra — xem LAYERS trong config.js.
  *
  *  Đây là lớp vỏ có kiểu thay cho `main.js` của project gốc: nó dựng cảnh, gắn
  *  điều khiển, chạy vòng lặp render và khoá lớp lịch vào ngày hôm nay; bỏ hẳn
@@ -13,7 +15,7 @@ import * as THREE from "three";
 import "@fontsource/noto-serif-sc/chinese-simplified-400.css";
 import "@fontsource/noto-serif-sc/latin-400.css";
 
-import { CAMERA, LAYERS, AUTO_SPIN, DEFAULT_PRESET, RINGS } from "./config.js";
+import { CAMERA, LAYERS, AUTO_SPIN, RINGS } from "./config.js";
 import { drawAllLayers } from "./textures/drawLayers.js";
 import { LayerStack } from "./scene/layers.js";
 import { StarField, SmokeField } from "./scene/particles.js";
@@ -21,16 +23,19 @@ import { buildComposer } from "./scene/post.js";
 import { Controls } from "./scene/controls.js";
 import { PoseState } from "./anim/poses.js";
 import { AgitationState } from "./anim/agitation.js";
-import { CellHighlight, Needle, buildTopIndex } from "./scene/markers.js";
+import { CellHighlight, Needle } from "./scene/markers.js";
 import { calendarFor } from "./astro/calendar.js";
 import { BAND_BY_ID, cellLabel } from "./bands.js";
 import { resolveTheme, DEFAULT_THEME } from "./theme.js";
 
-/** Tư thế ban đầu của bốn vành: mặc định của project gốc (`nghieng` — tách
- *  lớp nhẹ, vẫn đọc được chữ Hán). Các lựa chọn khác trong `PRESETS` của
- *  config.js: `phang` (mọi vành trùng nhau), `cau` (các vành cắt nhau như
- *  armillary sphere), `det` (dẹt thành elip mảnh). */
-const PRESET = DEFAULT_PRESET;
+/** Tư thế ban đầu của các vành — và cũng là tư thế các vành tự về sau khi
+ *  người dùng buông tay (settleNow). `phang`: mọi vành nằm trên một mặt phẳng,
+ *  nhìn thẳng, đọc được trọn chữ Hán quanh đĩa; các vành vẫn tự quay ngược
+ *  chiều nhau trong mặt phẳng đó. Người dùng chọn kiểu này thay cho mặc định
+ *  của project gốc (DEFAULT_PRESET = `nghieng`, các vành nghiêng lệch nhau).
+ *  Các lựa chọn khác trong `PRESETS` của config.js: `nghieng`, `cau` (các vành
+ *  cắt nhau như armillary sphere), `det` (dẹt thành elip mảnh). */
+const PRESET = "phang";
 
 /** Bảng màu và các mức hiệu chỉnh, CHÉP LẠI ĐÚNG bộ mà người dùng đã dò trên
  *  bảng điều khiển của project gốc — không phải mặc định của config.js. Trang
@@ -40,10 +45,10 @@ const PRESET = DEFAULT_PRESET;
  *  Sắc độ −180…180 · Đậm nhạt 0…2 · Nét vẽ/Chữ Hán/Chấm sao 0…4 ·
  *  Lớp phủ 0…2 · Hạt sao/Khói bụi 0…2.5 · Quầng sáng 0…1.5.
  *
- *  Lưu ý: bộ số này được dò trên NỀN ĐEN #171412 của project gốc, còn ở đây
- *  nền là card rêu ô liu sáng hơn nhiều, nên cùng một mức độ sáng sẽ đọc ra
- *  "cháy" hơn. Nếu thấy chói thì hạ `ink` xuống chứ đừng đổi nền — nền phải
- *  trùng --atom-bg của landing.css. */
+ *  Lưu ý: bộ số này được dò trên NỀN ĐEN #171412 của project gốc. Nền khung la
+ *  bàn giờ là xám khói #2a2629 (bảng "Ember Mist"), sáng hơn nền gốc một chút
+ *  nên nét có thể đọc ra hơi đậm hơn lúc dò. Nếu thấy chói thì hạ
+ *  `ink` xuống chứ đừng đổi nền — nền phải trùng --atom-bg của landing.css. */
 const THEME_ID = DEFAULT_THEME;      // 'vang' — Vàng kem
 const TUNING = {
   hueDeg: 20,                        // Sắc độ  (mặc định 0)
@@ -66,9 +71,9 @@ const TUNING = {
    *  đúng tỉ lệ 4× của nét, vì ô là hình quạt ĐẶC cộng thêm (additive), đậm
    *  gấp bốn thì nó nuốt luôn chữ Hán nằm dưới. */
   highlight: {
-    term: 0.55,                      // ô tiết khí (vành L1)
+    term: 0.55,                      // ô tiết khí (vành L1b)
     month: 0.45,                     // ô tháng kiến (vành L2)
-    lodge: 0.55,                     // ô 28 tú Mặt Trăng đang ở (vành L1)
+    lodge: 0.55,                     // ô 28 tú Mặt Trăng đang ở (vành L1a)
     hover: 0.60,                     // ô dưới con trỏ
   },
 };
@@ -77,34 +82,26 @@ const TUNING = {
  *  dùng một màu vignette riêng; ở đây nền là màu của app nên suy ra cho khớp. */
 const VIGNETTE_DARKEN = 0.45;
 
-/** Bố cục theo bề rộng canvas (không phải viewport — canvas nằm trong card).
- *  `discFraction` = đường kính đĩa / cạnh NGẮN của canvas; `offsetX` = đẩy tâm
- *  đĩa sang phải, tính theo bề rộng canvas.
- *
- *  Các mốc bám theo breakpoint của landing.css, không phải mốc thiết bị quen
- *  thuộc: DƯỚI 721px canvas tụt xuống thành một dải riêng ở đáy card còn chữ
- *  nằm hẳn phía trên nó, nên đĩa để to và đúng tâm. TỪ 721px trở lên, khối
- *  chữ hero nằm đè lên canvas ở nửa trái — nét la bàn sáng và dày hơn lõi kim
- *  loại của cảnh cũ nhiều, chữ đặt lên là mất đọc — nên đĩa phải vừa nhỏ lại
- *  vừa dạt sang phải để chừa nửa trái làm nền trơn. Khoảng 721–1023px chật
- *  nhất: chữ gần như full-width nên đĩa co nhiều nhất ở đó. */
-const LAYOUT = {
-  wide:    { minWidth: 1280, discFraction: 0.74, offsetX: 0.17 },
-  desktop: { minWidth: 1024, discFraction: 0.74, offsetX: 0.16 },
-  tablet:  { minWidth: 721,  discFraction: 0.62, offsetX: 0.22 },
-  mobile:  { minWidth: 0,    discFraction: 0.86, offsetX: 0 },
-};
+/** Đường kính đĩa / cạnh NGẮN của canvas. La bàn có khung riêng ở khu dưới
+ *  trang chủ, không chữ nào đè lên, nên đĩa luôn đúng tâm ở mọi khổ. (Khi còn
+ *  làm nền toàn trang, đĩa phải co nhỏ và dạt sang phải bằng setViewOffset để
+ *  chừa chỗ cho khối chữ hero — xem lịch sử git nếu cần dựng lại kiểu đó.) */
+const DISC_FRACTION = 0.86;
 
-/** Bán kính đặt kim chỉ Mặt Trời, ngay ngoài mép vành lịch (L1 hết ở 0.8R).
+/** Kim Mặt Trời: một kim bán kính vắt ngang vành 24 tiết khí (L1b), cùng kiểu
+ *  với kim Mặt Trăng trên vành 28 tú.
  *
  *  Bản gốc ghim kim này CỐ ĐỊNH ở đỉnh khung rồi xoay cả đĩa sao cho vị trí
  *  Mặt Trời trồi lên đúng dưới nó — nghĩa là muốn giữ kim đứng yên thì mặt
- *  đĩa phải đứng yên, và cả bốn vành mất luôn chuyển động nền. Ở đây làm
- *  ngược lại: gắn kim vào chính vành lịch và xoay nó tới góc của Mặt Trời,
- *  nên kim bám đúng ô tiết khí hiện tại dù vành xoay tới đâu. Đổi lại quy
- *  ước "Mặt Trời luôn ở đỉnh khung" của bản gốc, nhưng giữ được cả bốn vành
- *  cùng quay — thứ đáng giá hơn nhiều trên một trang chủ. */
-const SUN_INDEX_RADIUS = 0.84;
+ *  đĩa phải đứng yên, và mọi vành mất luôn chuyển động nền. Ở đây làm ngược
+ *  lại: gắn kim vào chính vành tiết khí và xoay nó tới góc của Mặt Trời, nên
+ *  kim bám đúng ô tiết khí hiện tại dù vành xoay tới đâu.
+ *
+ *  Trước khi tách vành, kim là một tam giác ở 0.84R, ngay ngoài mép vành lịch
+ *  cũ. Giờ vành tiết khí chỉ rộng 0.600–0.667R và tự nghiêng riêng: tam giác
+ *  treo ở 0.84R sẽ lơ lửng trên hai vành khác đang quay theo nhịp khác, nhìn
+ *  như rơi ra khỏi vành của nó — nên thu vào nằm ngay trên vành. */
+const SUN_NEEDLE = { rIn: RINGS.C11 - 0.012, rOut: RINGS.C13a + 0.012 };
 
 /** Bao lâu tính lại lịch một lần (ms). Kinh độ Mặt Trời nhích ~1°/ngày nên
  *  mười phút là thừa mịn; để lâu hơn thì tab mở qua đêm sẽ lệch ngày. */
@@ -154,6 +151,30 @@ function splitLabel(raw: [string, string] | null): { pair: [string, string]; res
   return { pair: [han, name], rest: rest.join(" · ") };
 }
 
+function toReadout(cal: ReturnType<typeof calendarFor>): CompassReadout {
+  const lodge = splitLabel(cellLabel(BAND_BY_ID.lodges, cal.lodgeIndex));
+  return {
+    date: cal.date,
+    sunLon: cal.sunLon,
+    term: splitLabel(cellLabel(BAND_BY_ID.terms, cal.termIndex)).pair,
+    month: splitLabel(cellLabel(BAND_BY_ID.months, cal.monthIndex)).pair,
+    lodge: lodge.pair,
+    lodgeQuadrant: lodge.rest,
+    phaseName: cal.phaseName,
+    illumination: cal.phase.illumination,
+    moonAge: cal.phase.age,
+  };
+}
+
+/** Số liệu lịch cho một thời điểm — thuần tính toán, KHÔNG cần WebGL. Trang
+ *  chủ gọi thẳng hàm này cho thẻ lịch, thay vì chờ `onCalendar`: nhờ vậy thẻ
+ *  có dữ liệu ngay lúc dựng trang (cảnh 3D phải nạp font và nướng texture mất
+ *  một hai giây, thẻ hiện muộn là đẩy lệch cả bố cục), và vẫn có dữ liệu trên
+ *  máy không dựng được cảnh 3D. Cùng nguồn nhãn với mặt đĩa nên luôn khớp. */
+export function readCalendar(date: Date = new Date()): CompassReadout {
+  return toReadout(calendarFor(date));
+}
+
 /** Nạp font chữ Hán trước khi vẽ texture — canvas vẽ chữ bằng font đang có tại
  *  thời điểm gọi, nạp sau thì texture đã nướng xong với font dự phòng rồi. */
 async function ensureFonts() {
@@ -187,15 +208,17 @@ export function createCompass(canvas: HTMLCanvasElement, opts: CompassOptions): 
   let poses: PoseState | null = null;
   let agit: AgitationState | null = null;
   let resizeObserver: ResizeObserver | null = null;
+  let visibilityObserver: IntersectionObserver | null = null;
+  let onScreen = true;
 
-  // Lớp lịch: ô tiết khí / tháng / tú đang tra, kim Mặt Trăng (gắn vào vành
-  // nên tự xoay theo khi kéo) và kim chỉ cố định ở đỉnh khung = vị trí Mặt Trời.
+  // Lớp lịch: ô tiết khí / tháng / tú đang tra, kim Mặt Trời và kim Mặt Trăng
+  // (gắn vào vành của mình nên tự xoay theo khi vành quay hay bị kéo).
   let termHL: CellHighlight | null = null;
   let monthHL: CellHighlight | null = null;
   let lodgeHL: CellHighlight | null = null;
   let hoverHL: CellHighlight | null = null;
   let moonNeedle: Needle | null = null;
-  let topIndex: THREE.Group | null = null;
+  let sunNeedle: Needle | null = null;
   let calendarAt = 0;
 
   // Tự về nếp: mốc thời gian lần tương tác cuối, và vị trí camera ban đầu.
@@ -204,12 +227,12 @@ export function createCompass(canvas: HTMLCanvasElement, opts: CompassOptions): 
   const cameraHome = new THREE.Vector3(0, 0, CAMERA.distance);
 
   const ORIGIN = new THREE.Vector3(0, 0, 0);
-  const rotArr = [new THREE.Matrix3(), new THREE.Matrix3(), new THREE.Matrix3(), new THREE.Matrix3()];
+  const rotArr = LAYERS.map(() => new THREE.Matrix3());
 
   /* Kích thước render = hộp CSS của chính canvas, không phải viewport: canvas
-   * nằm trong card bo góc và ở mobile chỉ cao 62svh, lấy window.innerHeight sẽ
-   * méo tỉ lệ. Chặn sàn ở 1 để WebGL không nhận framebuffer zero-size lúc
-   * canvas chưa layout xong. */
+   * nằm trong một khung riêng giữa trang, lấy window.innerHeight sẽ méo tỉ lệ.
+   * Chặn sàn ở 1 để WebGL không nhận framebuffer zero-size lúc canvas chưa
+   * layout xong. */
   function getRenderSize() {
     return {
       width: Math.max(1, canvas.clientWidth || window.innerWidth),
@@ -225,13 +248,6 @@ export function createCompass(canvas: HTMLCanvasElement, opts: CompassOptions): 
     const halfShort = 1 / discFraction;
     const halfH = aspect >= 1 ? halfShort : halfShort / aspect;
     return 2 * Math.atan(halfH / CAMERA.distance) * (180 / Math.PI);
-  }
-
-  function layoutFor(width: number) {
-    if (width >= LAYOUT.wide.minWidth) return LAYOUT.wide;
-    if (width >= LAYOUT.desktop.minWidth) return LAYOUT.desktop;
-    if (width >= LAYOUT.tablet.minWidth) return LAYOUT.tablet;
-    return LAYOUT.mobile;
   }
 
   function applyBackground() {
@@ -261,12 +277,12 @@ export function createCompass(canvas: HTMLCanvasElement, opts: CompassOptions): 
     hoverHL?.setColor(th.marker);
     lodgeHL?.setColor(th.moon);
     moonNeedle?.setColor(th.moon);
-    if (topIndex) topIndex.userData.material.color.copy(th.marker);
+    sunNeedle?.setColor(th.marker);
     applyBackground();
   }
 
   /** Pivot của một vành. `LayerStack.byId` dùng Array.find nên TS suy ra kiểu
-   *  có thể undefined; ở đây id luôn là một trong bốn vành đã dựng sẵn. */
+   *  có thể undefined; ở đây id luôn là một trong các vành đã dựng sẵn. */
   function pivotOf(id: string): THREE.Object3D {
     return stack!.byId(id)!.pivot;
   }
@@ -278,49 +294,38 @@ export function createCompass(canvas: HTMLCanvasElement, opts: CompassOptions): 
     monthHL = new CellHighlight("#FFD98A", TUNING.highlight.month);
     lodgeHL = new CellHighlight("#BFD8FF", TUNING.highlight.lodge);
 
+    // Gắn vào pivot của vành, không phải vào scene: kim phải nghiêng và xoay
+    // y hệt vành mà nó đang chỉ vào.
     moonNeedle = new Needle("#BFD8FF", RINGS.C14 - 0.02, RINGS.lodgeOut + 0.012);
-    pivotOf("L1").add(moonNeedle.mesh);
+    pivotOf("L1a").add(moonNeedle.mesh);
 
-    // Gắn vào pivot của vành lịch, không phải vào scene: kim phải nghiêng và
-    // xoay y hệt vành mà nó đang chỉ vào.
-    topIndex = buildTopIndex(SUN_INDEX_RADIUS);
-    pivotOf("L1").add(topIndex);
+    sunNeedle = new Needle("#FFD98A", SUN_NEEDLE.rIn, SUN_NEEDLE.rOut);
+    pivotOf("L1b").add(sunNeedle.mesh);
   }
 
   /** Khoá vành lịch theo ngày giờ hiện tại và đặt lại các dấu tra cứu. */
   function applyCalendar() {
-    if (!stack || !poses || !moonNeedle) return;
+    if (!stack || !poses || !moonNeedle || !sunNeedle) return;
     const cal = calendarFor(new Date());
     calendarAt = performance.now();
 
-    // KHÔNG gọi poses.setCalendarSpin(): không vành nào bị khoá, cả bốn cùng
+    // KHÔNG gọi poses.setCalendarSpin(): không vành nào bị khoá, tất cả cùng
     // tự quay. Các dấu lịch đều gắn vào pivot của vành nên chúng xoay theo và
     // vẫn chỉ đúng ô của mình.
     //
-    // `plateSpin` là góc mà bản gốc xoay đĩa đi để đưa Mặt Trời lên đỉnh, nên
-    // quay kim đi đúng chừng đó theo chiều ngược lại là kim nằm vào vị trí
-    // Mặt Trời trên mặt đĩa. Kiểm lại được: nếu vành đang ở spin = plateSpin
-    // (đúng trạng thái khoá của bản gốc) thì tổng bằng 0, kim về đỉnh khung —
-    // khớp y hệt hành vi cũ.
-    topIndex!.rotation.z = -cal.plateSpin;
+    // `plateSpin = π/2 + θ` với θ là góc canvas của Mặt Trời trên vành tiết khí
+    // (spinToTop trong astro/calendar.js — góc bản gốc xoay đĩa đi để đưa Mặt
+    // Trời lên đỉnh), nên θ = plateSpin − π/2. Kiểm lại được: nếu vành đang ở
+    // spin = plateSpin (đúng trạng thái khoá của bản gốc) thì kim chỉ thẳng
+    // lên đỉnh khung — khớp y hệt hành vi cũ.
+    sunNeedle.setAngle(cal.plateSpin - Math.PI / 2);
 
     moonNeedle.setAngle(cal.moonTheta);
 
-    const lodge = splitLabel(cellLabel(BAND_BY_ID.lodges, cal.lodgeIndex));
-    opts.onCalendar?.({
-      date: cal.date,
-      sunLon: cal.sunLon,
-      term: splitLabel(cellLabel(BAND_BY_ID.terms, cal.termIndex)).pair,
-      month: splitLabel(cellLabel(BAND_BY_ID.months, cal.monthIndex)).pair,
-      lodge: lodge.pair,
-      lodgeQuadrant: lodge.rest,
-      phaseName: cal.phaseName,
-      illumination: cal.phase.illumination,
-      moonAge: cal.phase.age,
-    });
-    termHL?.show(BAND_BY_ID.terms, cal.termIndex, pivotOf("L1"));
+    opts.onCalendar?.(toReadout(cal));
+    termHL?.show(BAND_BY_ID.terms, cal.termIndex, pivotOf("L1b"));
     monthHL?.show(BAND_BY_ID.months, cal.monthIndex, pivotOf("L2"));
-    lodgeHL?.show(BAND_BY_ID.lodges, cal.lodgeIndex, pivotOf("L1"));
+    lodgeHL?.show(BAND_BY_ID.lodges, cal.lodgeIndex, pivotOf("L1a"));
   }
 
   /** Người dùng vừa chạm vào cảnh — hoãn việc tự về nếp. */
@@ -339,17 +344,9 @@ export function createCompass(canvas: HTMLCanvasElement, opts: CompassOptions): 
   function resize() {
     if (!renderer || !camera) return;
     const { width, height } = getRenderSize();
-    const L = layoutFor(width);
     renderer.setSize(width, height, false);
     camera.aspect = width / height;
-    camera.fov = fovFor(camera.aspect, L.discFraction);
-    // Đẩy đĩa sang phải bằng cách lệch khung nhìn trong một khung ảo rộng hơn,
-    // thay vì dời camera hay dời cảnh: tâm quay của OrbitControls vẫn đúng là
-    // tâm đĩa (dời camera sẽ khiến kéo xoay quét đĩa văng đi), và view offset
-    // nằm trong projectionMatrix nên raycast chọn vành vẫn trúng.
-    const shift = L.offsetX * width;
-    if (shift !== 0) camera.setViewOffset(width, height, -shift, 0, width, height);
-    else camera.clearViewOffset();
+    camera.fov = fovFor(camera.aspect, DISC_FRACTION);
     camera.updateProjectionMatrix();
     post?.setSize(width, height);
     const bufH = renderer.domElement.height;
@@ -386,7 +383,7 @@ export function createCompass(canvas: HTMLCanvasElement, opts: CompassOptions): 
     for (const [field, amount] of [[stars, TUNING.dust.star], [smoke, TUNING.dust.smoke]] as const) {
       const u = field.uniforms;
       u.uTime.value += dt;
-      for (let i = 0; i < 4; i++) {
+      for (let i = 0; i < LAYERS.length; i++) {
         const id = LAYERS[i].id;
         u.uRot.value[i].copy(rotArr[i]);
         u.uDisperse.value[i] = agit.spread(id);
@@ -407,8 +404,22 @@ export function createCompass(canvas: HTMLCanvasElement, opts: CompassOptions): 
     rafId = requestAnimationFrame(loop);
     const dt = Math.min(0.1, (now - last) / 1000);
     last = now;
+    // Đĩa đã cuộn khỏi màn hình: bỏ qua cả cập nhật lẫn vẽ. La bàn giờ nằm ở
+    // khu dưới trang chủ, phần lớn thời gian người xem đang đọc phía trên nó.
+    if (!onScreen) return;
     render(dt);
   }
+
+  /** Trang chủ cuộn dọc và la bàn nằm giữa trang: để OrbitControls nuốt mọi
+   *  cú lăn chuột thì người đang cuộn trang sẽ bị "kẹt" ngay khi con trỏ lướt
+   *  qua đĩa — trang đứng im, đĩa phóng to. Chỉ phóng khi giữ Ctrl/⌘ (chụm hai
+   *  ngón trên trackpad cũng phát ra wheel kèm ctrlKey, nên vẫn chụm được).
+   *  Chặn ở pha capture của window để sự kiện không tới được canvas; không
+   *  preventDefault nên trang vẫn cuộn như thường. */
+  function onWheelCapture(e: WheelEvent) {
+    if (e.target === canvas && !e.ctrlKey && !e.metaKey) e.stopPropagation();
+  }
+  window.addEventListener("wheel", onWheelCapture, { capture: true, passive: true });
 
   async function init() {
     await ensureFonts();
@@ -474,6 +485,10 @@ export function createCompass(canvas: HTMLCanvasElement, opts: CompassOptions): 
 
     resizeObserver = new ResizeObserver(resize);
     resizeObserver.observe(canvas);
+    if (typeof IntersectionObserver !== "undefined") {
+      visibilityObserver = new IntersectionObserver(([entry]) => { onScreen = entry.isIntersecting; });
+      visibilityObserver.observe(canvas);
+    }
     lastTouchAt = performance.now();
 
     last = performance.now();
@@ -495,15 +510,13 @@ export function createCompass(canvas: HTMLCanvasElement, opts: CompassOptions): 
       disposed = true;
       cancelAnimationFrame(rafId);
       resizeObserver?.disconnect();
+      visibilityObserver?.disconnect();
+      window.removeEventListener("wheel", onWheelCapture, { capture: true });
       canvas.removeEventListener("pointerdown", touch);
       canvas.removeEventListener("wheel", touch);
       canvas.removeEventListener("dblclick", settleNow);
       controls?.dispose();
-      for (const m of [termHL, monthHL, lodgeHL, hoverHL, moonNeedle]) m?.dispose();
-      if (topIndex) {
-        topIndex.userData.material.dispose();
-        (topIndex.children[0] as THREE.Mesh).geometry.dispose();
-      }
+      for (const m of [termHL, monthHL, lodgeHL, hoverHL, moonNeedle, sunNeedle]) m?.dispose();
       stack?.dispose();
       stars?.dispose();
       smoke?.dispose();
@@ -519,9 +532,9 @@ export function createCompass(canvas: HTMLCanvasElement, opts: CompassOptions): 
       // tự được thu hồi khi renderer không còn ai tham chiếu.
       renderer?.dispose();
       resizeObserver = null;
+      visibilityObserver = null;
       termHL = monthHL = lodgeHL = hoverHL = null;
-      moonNeedle = null;
-      topIndex = null;
+      moonNeedle = sunNeedle = null;
       controls = null;
       stack = null;
       stars = null;

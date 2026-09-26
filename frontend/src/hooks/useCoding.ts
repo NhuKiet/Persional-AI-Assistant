@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { API } from "../lib/api";
+import { API, apiFetch } from "../lib/api";
 import { parseSSE, readErrorResponse } from "../lib/sse";
 import type { ChatMessage } from "../types";
 
@@ -85,7 +85,7 @@ export function useCoding(sessionId: string) {
 
     try {
       abortRef.current = new AbortController();
-      const res = await fetch(`${API}/api/coding/stream`, {
+      const res = await apiFetch(`${API}/api/coding/stream`, {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         signal:  abortRef.current.signal,
@@ -183,7 +183,7 @@ export function useCoding(sessionId: string) {
     // cancel-event so the abandoned agent run actually stops (not just the
     // client-side stream) instead of continuing to burn LLM/executor work
     // for a session nobody is looking at anymore.
-    fetch(`${API}/api/coding/session/${oldSessionId}`, { method: "DELETE" }).catch(() => {});
+    apiFetch(`${API}/api/coding/session/${oldSessionId}`, { method: "DELETE" }).catch(() => {});
   }, [sessionId]);
 
   const clearChat = useCallback(() => setChatMsgs([]), []);

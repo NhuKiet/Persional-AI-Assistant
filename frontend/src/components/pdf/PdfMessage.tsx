@@ -11,7 +11,7 @@ interface PdfMessageProps {
 export default function PdfMessage({ message, accentColor, onOpenSource }: PdfMessageProps) {
   return (
     <div className="pdf-message">
-      <Message msg={message} accentColor={accentColor} />
+      <Message msg={message} accentColor={accentColor} onOpenPage={onOpenSource} />
       {message.role === "assistant" && message.sources?.length ? (
         <SourceChips sources={message.sources} onOpenSource={onOpenSource} />
       ) : null}

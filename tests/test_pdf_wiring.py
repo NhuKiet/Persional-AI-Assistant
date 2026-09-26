@@ -104,6 +104,7 @@ def test_text_pin_with_ollama_passes_guard(monkeypatch):
     monkeypatch.setattr(pdf_router.settings, "DEFAULT_PROVIDER", "ollama", raising=False)
     monkeypatch.setattr(pdf_router._service, "_get_doc", lambda f: object())
     monkeypatch.setattr(pdf_router._service._processor, "retrieve", lambda doc, q: [])
+    monkeypatch.setattr(pdf_router._service._processor, "select_context_chunks", lambda doc, chunks: chunks)
     monkeypatch.setattr(
         pdf_router._service._processor,
         "build_context_from_chunks",
@@ -121,6 +122,7 @@ def test_no_pins_with_ollama_passes_guard(monkeypatch):
     monkeypatch.setattr(pdf_router.settings, "DEFAULT_PROVIDER", "ollama", raising=False)
     monkeypatch.setattr(pdf_router._service, "_get_doc", lambda f: object())
     monkeypatch.setattr(pdf_router._service._processor, "retrieve", lambda doc, q: [])
+    monkeypatch.setattr(pdf_router._service._processor, "select_context_chunks", lambda doc, chunks: chunks)
     monkeypatch.setattr(
         pdf_router._service._processor,
         "build_context_from_chunks",

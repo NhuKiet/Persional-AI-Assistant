@@ -270,6 +270,11 @@ npm run dev --prefix frontend
 Giao diện chạy ở `http://localhost:5173`. Backend tự chấp nhận CORS từ mọi cổng
 `localhost` / `127.0.0.1` nên đổi port cũng không sao.
 
+Backend chỉ trả lời request có Host header nằm trong `ALLOWED_HOSTS` (mặc định
+`localhost,127.0.0.1`) để chặn DNS rebinding. Mở app qua IP LAN hay domain khác thì
+backend trả `400 Invalid host header`. Muốn vậy thì thêm host đó vào `ALLOWED_HOSTS`, và
+đừng làm khi chưa có lớp auth.
+
 ### 7. (Tuỳ chọn) Bật nhận dạng công thức viết tay — HMER
 
 `/hmer` dùng mô hình SwinCoMER ở repo riêng `CapstoneProject_SP25AI12`. Cả package
@@ -302,11 +307,13 @@ khi timm trả feature map dạng NHWC. `torchvision` phải khớp đúng bản
 uv pip install --no-deps --index-url https://download.pytorch.org/whl/cu126 torchvision==0.29.0
 ```
 
-**Trỏ tới checkpoint** trong `.env` — chỉ bản `0.4713` khớp `dictionary.txt` của
-model; bản `0.4245` vẫn nạp được nhưng ra token sai mà không báo lỗi:
+**Chép checkpoint vào `data/models/hmer/` rồi trỏ tới nó** trong `.env` — chỉ bản
+`0.4713` khớp `dictionary.txt` của model; bản `0.4245` vẫn nạp được nhưng ra token sai
+mà không báo lỗi. Thư mục này đã gitignore (file ~490 MB) và docker-compose mount sẵn
+`data/`, nên cùng một đường dẫn tương đối dùng được cả khi chạy tay lẫn trong container:
 
 ```env
-HMER_CHECKPOINT=<đường-dẫn>/ComerSwin-epoch=02-val_ExpRate=0.4713.ckpt
+HMER_CHECKPOINT=data/models/hmer/ComerSwin-epoch=02-val_ExpRate=0.4713.ckpt
 ```
 
 > [!IMPORTANT]
@@ -331,6 +338,10 @@ docker compose up --build
 
 Vài điểm compose đã xử lý sẵn:
 
+- **Chỉ nghe trên loopback**: cả hai cổng publish dạng `127.0.0.1:<port>:<port>`, nên
+  máy khác trong mạng LAN không gọi được (cổng Docker publish trần `8000:8000` sẽ bind
+  `0.0.0.0` và vượt qua cả firewall máy host). Có test canh điều này
+  (`tests/test_network_exposure.py`).
 - **Ollama và Supabase chạy trên máy host**, không phải trong container — compose trỏ
   qua `host.docker.internal`. Nhớ điền `SUPABASE_DB_URL_DOCKER` (cùng connection string
   nhưng đổi host) vì container không resolve được `127.0.0.1` về máy host.
@@ -392,7 +403,8 @@ Mỗi lần chạy sinh một container tạm, sống đúng trong thời gian t
 | **Rerank** | `RERANKER_MODEL` · `RERANK_ENABLED` · `RERANK_GATE_THRESHOLD` · `COHERE_API_KEY` |
 | **Lưu trữ** | `SUPABASE_DB_URL` · `SUPABASE_DB_URL_DOCKER` |
 | **Coding** | `CODE_TIMEOUT` · `MAX_DEBUG_ITER` · `ENABLE_AUTO_INSTALL` · `EXECUTOR_*` |
-| **Giới hạn** | `MAX_MESSAGE_CHARS` · `MAX_UPLOAD_MB` · `MAX_HISTORY` |
+| **Giới hạn** | `MAX_MESSAGE_CHARS` · `MAX_UPLOAD_MB` · `MAX_HISTORY` · `RATE_LIMIT_ENABLED` · `RATE_LIMIT_PER_MINUTE` · `RATE_LIMIT_RESEARCH_PER_MINUTE` |
+| **Mạng** | `ALLOWED_HOSTS` (Host header được phục vụ, mặc định chỉ loopback) |
 | **PDF** | `PDF_MAX_CONTEXT` · `PDF_CHUNK_SIZE` · `PDF_CHUNK_OVERLAP` |
 | **Bubble** | `BRIDGE_URL` · `BRIDGE_TOKEN` |
 
@@ -405,11 +417,29 @@ DuckDuckGo và Stack Overflow không cần API key.
 Tất cả endpoint nằm dưới `/api`. Các endpoint `*/stream` trả về **SSE**, phần còn lại
 trả JSON. Chi tiết schema xem Swagger UI tại `/docs`.
 
+Mọi `POST` / `PUT` / `PATCH` / `DELETE` dưới `/api` phải kèm header `X-KiNg-Client`
+(giá trị bất kỳ, không rỗng), thiếu là `403 missing_client_header`. Đây là lớp chống CSRF:
+trang web lạ không gửi được header tuỳ chỉnh cross-origin nếu CORS không duyệt. Frontend
+tự gắn qua `apiFetch` (`frontend/src/lib/api.ts`); gọi bằng curl thì thêm
+`-H "X-KiNg-Client: cli"`.
+
+Hai lớp chặn đốt tiền:
+
+- **Allow-list model**: `provider` / `model` trong request phải là một cặp mà
+  `GET /api/models` liệt kê (hoặc chính default của server trong `.env`). Cặp khác
+  (model ngoài registry, provider chưa có key) bị trả `400` trước khi khoá session hay
+  gọi search/LLM.
+- **Rate limit** theo client: các endpoint gọi LLM/GPU giới hạn `RATE_LIMIT_PER_MINUTE`
+  request/phút (mặc định 30), riêng `POST /api/research/stream` giới hạn
+  `RATE_LIMIT_RESEARCH_PER_MINUTE` (mặc định 6). Vượt ngưỡng thì trả `429` kèm
+  `Retry-After`. Bộ đếm nằm trong bộ nhớ nên chỉ đúng khi chạy **một worker**, giống
+  session lock.
+
 | Nhóm | Endpoint |
 |---|---|
 | **Chat** | `POST /api/chat/stream` · `GET /api/chat/sessions/{id}` · `DELETE /api/chat/session/{id}` |
 | **Research** | `POST /api/research/stream` · `POST /api/research/deep-dive` · `GET /api/research/trending` · `GET /api/research/sessions/{id}` |
-| **Coding** | `POST /api/coding/stream` · `POST /api/coding/upload` · `GET /api/coding/artifact/{...}` · `DELETE /api/coding/file/{name}` · `GET /api/coding/sessions/{id}` |
+| **Coding** | `GET /api/coding/status` · `POST /api/coding/stream` · `POST /api/coding/upload` · `GET /api/coding/artifact/{...}` · `DELETE /api/coding/file/{name}` · `GET /api/coding/sessions/{id}` |
 | **PDF** | `POST /api/pdf/upload` · `GET /api/pdf/list` · `GET /api/pdf/raw/{name}` · `POST /api/pdf/stream` · `POST /api/pdf/summarize` · `DELETE /api/pdf/file/{name}` |
 | **News** | `GET /api/news` · `POST /api/news/refresh` |
 | **Models** | `GET /api/models` |

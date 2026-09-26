@@ -3,9 +3,9 @@
 @import url('https://fonts.googleapis.com/css2?family=Pacifico&display=swap');
 
 .news-page {
-  --news-ink: #0c1737;
-  --news-muted: #4d5a75;
-  --news-danger: #b32645;
+  --news-ink: #f7f3f0;
+  --news-muted: #d6cec9;
+  --news-danger: #ffa396;
   --news-blur: 0.75px;
   --news-tint-alpha: 0.12;
   --news-light-angle: 111deg;
@@ -16,13 +16,13 @@
   --news-dispersion-left: -4.36px;
   --news-dispersion-right: 4.36px;
   --news-splay: 14.12%;
-  --news-panel-bg: rgb(31 33 38 / 92%);
+  --news-panel-bg: rgb(30 27 30 / 92%);
   --news-panel-raised: rgb(255 255 255 / 7%);
   --news-panel-track: rgb(255 255 255 / 9%);
-  --news-panel-text: #f4f7fb;
-  --news-panel-muted: #aeb5c2;
-  --news-panel-accent: #209ce8;
-  --news-panel-thumb: #f7fbff;
+  --news-panel-text: #f7f3f0;
+  --news-panel-muted: #cfc6c1;
+  --news-panel-accent: #e8d54f;
+  --news-panel-thumb: #fffdf5;
   --news-distortion: url(#news-glass-distortion);
   --news-leaf-copper: #b77a59;
   --news-leaf-gold: #c0a36b;
@@ -36,7 +36,7 @@
   overflow-y: auto;
   padding: 34px clamp(18px, 4vw, 64px) 80px;
   color: var(--news-ink);
-  background: #e8f2fa;
+  background: #2a2629;
 }
 
 .news-liquid-defs {
@@ -55,10 +55,10 @@
   background:
     linear-gradient(
       135deg,
-      rgba(239, 247, 255, 0.98) 0%,
-      rgba(231, 247, 255, 0.92) 34%,
-      rgba(247, 239, 255, 0.9) 68%,
-      rgba(241, 249, 255, 0.98) 100%
+      rgba(42, 38, 41, 0.98) 0%,
+      rgba(48, 42, 46, 0.92) 34%,
+      rgba(52, 44, 48, 0.9) 68%,
+      rgba(40, 36, 39, 0.98) 100%
     );
   pointer-events: none;
 }
@@ -67,8 +67,8 @@
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(118deg, transparent 16%, rgba(255, 255, 255, 0.48) 38%, transparent 61%),
-    radial-gradient(ellipse at 50% 0%, rgba(255, 255, 255, 0.46), transparent 58%);
+    linear-gradient(118deg, transparent 16%, rgba(255, 255, 255, 0.08) 38%, transparent 61%),
+    radial-gradient(ellipse at 50% 0%, rgba(255, 255, 255, 0.07), transparent 58%);
   content: "";
   opacity: 0.55;
 }
@@ -97,8 +97,8 @@
   width: 56vw;
   height: 560px;
   background:
-    radial-gradient(circle at 34% 44%, rgba(22, 225, 236, 0.9), transparent 55%),
-    linear-gradient(128deg, rgba(32, 194, 246, 0.74), rgba(77, 236, 222, 0.24));
+    radial-gradient(circle at 34% 44%, rgba(150, 140, 178, 0.75), transparent 55%),
+    linear-gradient(128deg, rgba(130, 120, 165, 0.55), rgba(170, 160, 190, 0.2));
   animation: news-aurora-cyan 19s var(--ease) infinite alternate;
 }
 
@@ -108,8 +108,8 @@
   width: 58vw;
   height: 610px;
   background:
-    radial-gradient(circle at 50% 46%, rgba(110, 96, 246, 0.76), transparent 56%),
-    linear-gradient(140deg, rgba(67, 138, 255, 0.18), rgba(178, 93, 247, 0.66));
+    radial-gradient(circle at 50% 46%, rgba(120, 100, 122, 0.7), transparent 56%),
+    linear-gradient(140deg, rgba(150, 140, 178, 0.18), rgba(140, 110, 135, 0.55));
   opacity: 0.52;
   animation: news-aurora-violet 23s var(--ease) infinite alternate;
 }
@@ -120,8 +120,8 @@
   width: 48vw;
   height: 540px;
   background:
-    radial-gradient(circle at 54% 46%, rgba(255, 85, 144, 0.7), transparent 56%),
-    linear-gradient(118deg, rgba(255, 134, 90, 0.7), rgba(255, 77, 166, 0.28));
+    radial-gradient(circle at 54% 46%, rgba(255, 112, 38, 0.62), transparent 56%),
+    linear-gradient(118deg, rgba(255, 138, 70, 0.6), rgba(244, 150, 100, 0.26));
   opacity: 0.48;
   animation: news-aurora-coral 21s var(--ease) infinite alternate;
 }
@@ -132,8 +132,8 @@
   width: 55vw;
   height: 520px;
   background:
-    radial-gradient(circle at 46% 40%, rgba(255, 209, 90, 0.68), transparent 58%),
-    linear-gradient(135deg, rgba(255, 152, 81, 0.44), rgba(255, 222, 123, 0.16));
+    radial-gradient(circle at 46% 40%, rgba(244, 150, 100, 0.5), transparent 58%),
+    linear-gradient(135deg, rgba(255, 120, 50, 0.36), rgba(232, 213, 79, 0.12));
   opacity: 0.40;
   animation: news-aurora-violet 27s var(--ease) infinite alternate-reverse;
 }
@@ -146,8 +146,8 @@
   height: 520px;
   border-radius: 52% 48% 68% 32% / 34% 62% 38% 66%;
   background:
-    linear-gradient(126deg, transparent 8%, rgba(255, 255, 255, 0.66) 42%, transparent 58%),
-    linear-gradient(42deg, rgba(71, 211, 244, 0.24), rgba(118, 102, 247, 0.19) 52%, rgba(255, 113, 157, 0.17));
+    linear-gradient(126deg, transparent 8%, rgba(255, 255, 255, 0.18) 42%, transparent 58%),
+    linear-gradient(42deg, rgba(150, 140, 178, 0.2), rgba(255, 112, 38, 0.14) 52%, rgba(232, 213, 79, 0.12));
   filter: blur(9px);
   opacity: 0.60;
   transform: rotate(-8deg);
@@ -164,9 +164,9 @@
       90deg,
       transparent 0 8%,
       rgb(255 255 255 / 8%) 18%,
-      rgb(255 255 255 / 78%) 45%,
-      rgb(117 242 255 / 42%) 53%,
-      rgb(255 160 217 / 22%) 62%,
+      rgb(255 255 255 / 40%) 45%,
+      rgb(255 150 90 / 36%) 53%,
+      rgb(232 213 79 / 22%) 62%,
       transparent 88%
     );
   filter: blur(8px);
@@ -185,9 +185,9 @@
     linear-gradient(
       90deg,
       transparent,
-      rgb(255 255 255 / 84%),
-      rgb(115 244 255 / 55%),
-      rgb(255 177 226 / 34%),
+      rgb(255 255 255 / 45%),
+      rgb(255 150 90 / 45%),
+      rgb(232 213 79 / 30%),
       transparent
     );
   content: "";
@@ -307,7 +307,7 @@
   background: transparent;
   box-shadow:
     0 var(--news-depth-y) var(--news-depth-blur)
-      rgb(17 35 64 / var(--news-depth-alpha));
+      rgb(12 8 10 / var(--news-depth-alpha));
   transition:
     transform var(--dur-slow) var(--ease),
     box-shadow var(--dur-slow) var(--ease),
@@ -340,7 +340,7 @@
   z-index: 2;
   overflow: hidden;
   box-shadow:
-    inset 0 -7px 16px rgb(54 79 118 / var(--news-depth-alpha));
+    inset 0 -7px 16px rgb(20 14 18 / var(--news-depth-alpha));
 }
 
 .news-glass-shine::before {
@@ -351,8 +351,8 @@
   height: 2px;
   border-radius: 999px;
   box-shadow:
-    var(--news-dispersion-left) 0 5px rgb(74 227 255 / 62%),
-    var(--news-dispersion-right) 0 5px rgb(255 125 216 / 42%);
+    var(--news-dispersion-left) 0 5px rgb(255 150 90 / 55%),
+    var(--news-dispersion-right) 0 5px rgb(232 213 79 / 42%);
   content: "";
   transform: rotate(-10deg);
   transform-origin: left center;
@@ -471,7 +471,7 @@
 .news-tab:focus-visible,
 .news-mode-button:focus-visible,
 .news-card-title:focus-visible {
-  outline: 3px solid rgba(15, 140, 246, 0.65);
+  outline: 3px solid rgba(232, 213, 79, 0.75);
   outline-offset: 3px;
 }
 
@@ -489,7 +489,7 @@
 }
 
 .news-refresh-icon {
-  color: #168fdc;
+  color: #e8d54f;
 }
 
 .news-refresh-btn[aria-busy="true"] .news-refresh-icon {
@@ -545,18 +545,18 @@
 }
 
 .news-tab-active {
-  color: #fff;
-  text-shadow: 0 1px 2px rgba(9, 44, 96, 0.34);
+  color: #2a2629;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.25);
   box-shadow:
-    0 var(--news-depth-y) var(--news-depth-blur) rgba(11, 118, 204, 0.3);
+    0 var(--news-depth-y) var(--news-depth-blur) rgba(232, 213, 79, 0.28);
 }
 
 .news-tab-active .news-glass-tint {
-  background: linear-gradient(100deg, rgba(0, 211, 225, 0.94), rgba(54, 109, 242, 0.94));
+  background: linear-gradient(100deg, rgba(240, 222, 96, 0.95), rgba(255, 150, 70, 0.92));
 }
 
 .news-tab-active .news-glass-shine {
-  box-shadow: inset 0 -12px 22px rgba(16, 63, 183, 0.24);
+  box-shadow: inset 0 -12px 22px rgba(140, 70, 20, 0.22);
 }
 
 /* Popover neo vào góc phải thanh lệnh — thanh lệnh có overflow:hidden nên
@@ -795,11 +795,11 @@
   border-radius: 26px;
   color: var(--news-muted);
   text-align: center;
-  background: rgba(255, 255, 255, 0.36);
+  background: rgba(255, 255, 255, 0.08);
   box-shadow:
-    inset 0 -5px 14px rgb(54 79 118 / var(--news-depth-alpha)),
+    inset 0 -5px 14px rgb(20 14 18 / var(--news-depth-alpha)),
     0 var(--news-depth-y) var(--news-depth-blur)
-      rgb(17 35 64 / var(--news-depth-alpha));
+      rgb(12 8 10 / var(--news-depth-alpha));
   backdrop-filter: blur(18px) saturate(130%);
 }
 
@@ -822,6 +822,35 @@
   list-style: none;
 }
 
+/* "Xem thêm" cuối danh sách: cùng chất liệu kính với thẻ tin, dạng viên thuốc. */
+.news-more {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.news-more-btn {
+  min-width: 160px;
+  padding: 11px 26px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  color: var(--news-ink);
+  font: 500 14px var(--sans);
+  cursor: pointer;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.05)),
+    rgba(52, 47, 50, 0.3);
+  box-shadow: 0 var(--news-depth-y) var(--news-depth-blur) rgb(12 8 10 / var(--news-depth-alpha));
+  backdrop-filter: blur(18px) saturate(130%);
+}
+
+.news-more-btn:hover:not(:disabled) { border-color: rgba(255, 255, 255, 0.34); }
+.news-more-btn:focus-visible { outline: 2px solid var(--news-panel-accent); outline-offset: 3px; }
+.news-more-btn:disabled { opacity: 0.7; cursor: progress; }
+
 .news-card {
   display: grid;
   grid-template-columns: 280px minmax(0, 1fr) 54px;
@@ -832,12 +861,12 @@
   overflow: hidden;
   border-radius: 30px;
   background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.16)),
-    rgba(255, 255, 255, 0.13);
+    linear-gradient(135deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.05)),
+    rgba(52, 47, 50, 0.3);
   box-shadow:
-    inset 0 -7px 16px rgb(54 79 118 / var(--news-depth-alpha)),
+    inset 0 -7px 16px rgb(20 14 18 / var(--news-depth-alpha)),
     0 var(--news-depth-y) var(--news-depth-blur)
-      rgb(17 35 64 / var(--news-depth-alpha));
+      rgb(12 8 10 / var(--news-depth-alpha));
   backdrop-filter: blur(18px) saturate(135%);
   transition:
     transform var(--dur) var(--ease-out),
@@ -846,18 +875,18 @@
 
 .news-card:hover {
   box-shadow:
-    inset 0 -10px 20px rgb(54 79 118 / var(--news-depth-alpha)),
+    inset 0 -10px 20px rgb(20 14 18 / var(--news-depth-alpha)),
     0 calc(var(--news-depth-y) + 6px) calc(var(--news-depth-blur) + 8px)
-      rgb(17 35 64 / var(--news-depth-alpha));
+      rgb(12 8 10 / var(--news-depth-alpha));
   transform: translateY(-2px);
 }
 
 .news-card-visual {
   overflow: hidden;
   aspect-ratio: 4 / 3;
-  border: 1px solid rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 22px;
-  box-shadow: 0 10px 24px rgba(54, 77, 118, 0.14);
+  box-shadow: 0 10px 24px rgba(12, 8, 10, 0.3);
 }
 
 .news-card-visual img {
@@ -883,7 +912,7 @@
 }
 
 .news-card-title:hover {
-  color: #187bd7;
+  color: #e8d54f;
 }
 
 .news-card-summary {
@@ -908,16 +937,16 @@
 
 .news-badge {
   padding: 5px 10px;
-  border: 1px solid rgba(20, 190, 219, 0.3);
+  border: 1px solid rgba(232, 213, 79, 0.35);
   border-radius: 999px;
-  color: #087285;
-  background: rgba(105, 230, 237, 0.18);
+  color: #e8d54f;
+  background: rgba(232, 213, 79, 0.14);
 }
 
 .news-source::before,
 .news-time::before {
   margin-right: 10px;
-  color: rgba(104, 120, 150, 0.66);
+  color: rgba(214, 206, 201, 0.66);
   content: "•";
 }
 
@@ -926,11 +955,11 @@
   width: 48px;
   height: 48px;
   place-items: center;
-  border: 1px solid rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 50%;
   color: var(--news-ink);
-  background: rgba(255, 255, 255, 0.34);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
 .news-sr-only {
@@ -950,7 +979,7 @@
   .news-tab,
   .news-mode-panel,
   .news-card {
-    background-color: rgba(255, 255, 255, 0.92);
+    background-color: rgba(52, 47, 50, 0.94);
   }
 }
 

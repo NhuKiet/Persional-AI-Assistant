@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel
 
 
@@ -6,6 +8,10 @@ class ResearchRequest(BaseModel):
     session_id: str = "default"
     provider: str | None = None
     model: str | None = None
+    # Which sources to search: academic = arXiv/Semantic Scholar/HF papers,
+    # web = Tavily/DuckDuckGo, code = Stack Overflow + web. Fewer sources is
+    # also fewer paid search calls.
+    focus: Literal["all", "academic", "web", "code"] = "all"
 
 
 class DeepDiveRequest(BaseModel):

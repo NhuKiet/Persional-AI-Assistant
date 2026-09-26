@@ -28,8 +28,8 @@
   transition: color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
   white-space: nowrap;
 }
-.artifact-thumb:hover        { color: var(--text); border-color: rgba(255,255,255,0.2); }
-.artifact-thumb-active       { border-color: var(--accent-coding); color: var(--accent-coding); background: rgba(168,230,163,0.06); }
+.artifact-thumb:hover        { color: var(--text); border-color: var(--border2); }
+.artifact-thumb-active       { border-color: var(--accent-coding); color: var(--accent-coding); background: color-mix(in srgb, var(--ok) 6%, transparent); }
 
 /* Main viewer */
 .artifact-viewer {
@@ -86,7 +86,7 @@
   border-radius: 6px;
   transition: color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
 }
-.artifact-dl:hover { color: var(--text); border-color: rgba(255,255,255,0.2); }
+.artifact-dl:hover { color: var(--text); border-color: var(--border2); }
 
 
 /* ══════════════════════════════════════════════════════════════
@@ -117,7 +117,7 @@
   text-align: center;
   min-height: 220px;
 }
-.pdf-drop-zone:hover      { border-color: rgba(255,140,105,0.5); background: rgba(255,140,105,0.04); }
+.pdf-drop-zone:hover      { border-color: color-mix(in srgb, var(--accent-pdf) 50%, transparent); background: color-mix(in srgb, var(--accent-pdf) 4%, transparent); }
 .pdf-drop-loading         { opacity: 0.7; cursor: wait; }
 
 .pdf-drop-icon  { font-size: 48px; line-height: 1; margin-bottom: 4px; }

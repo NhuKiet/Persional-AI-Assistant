@@ -21,6 +21,8 @@ interface PdfAssistantPanelProps {
   onSummarize: () => void;
   onRemovePin: (index: number) => void;
   onOpenSource: (source: PdfSource) => void;
+  /** Questions generated from this document; replace the general ones. */
+  docSuggestions?: string[];
 }
 
 export default function PdfAssistantPanel({
@@ -38,10 +40,13 @@ export default function PdfAssistantPanel({
   onSummarize,
   onRemovePin,
   onOpenSource,
+  docSuggestions = [],
 }: PdfAssistantPanelProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const busy = streaming || summarizing;
-  const suggestions = useMemo(() => shuffle(SUGGESTIONS.pdf), []);
+  const general = useMemo(() => shuffle(SUGGESTIONS.pdf), []);
+  const fromDocument = docSuggestions.length > 0;
+  const suggestions = fromDocument ? docSuggestions : general;
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -83,7 +88,7 @@ export default function PdfAssistantPanel({
       <div className="chat-area chat-active" style={{ paddingTop: 8 }}>
         {messages.length === 0 ? (
           <div className="tool-suggestions">
-            <p className="tool-suggestions-label">Thử hỏi ngay</p>
+            <p className="tool-suggestions-label">{fromDocument ? "Gợi ý từ tài liệu" : "Thử hỏi ngay"}</p>
             {suggestions.map((suggestion) => (
               <button
                 className="tool-suggestion-pill"
@@ -130,14 +135,14 @@ export default function PdfAssistantPanel({
             className="input-send"
             disabled={busy || !input.trim()}
             onClick={() => onSend(input)}
-            style={{ background: busy ? "#2a2a2e" : accentColor }}
+            style={{ background: busy ? "var(--bg4)" : accentColor }}
             type="button"
           >
             {streaming ? (
-              <span style={{ fontSize: 12, color: "#fff" }}>■</span>
+              <span style={{ fontSize: 12, color: "var(--text)" }}>■</span>
             ) : (
               <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true">
-                <path d="M1 7.5h13M8 1.5l6 6-6 6" stroke="#000" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M1 7.5h13M8 1.5l6 6-6 6" stroke="var(--bg)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             )}
           </button>

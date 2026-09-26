@@ -1,15 +1,24 @@
+import asyncio
 import logging
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 
 from backend.app.core.config import settings
+from backend.app.core.rate_limit import rate_limit
 from backend.app.features.pdf.processor import PDF_DIR
 from backend.app.features.pdf.repository import PdfRepository
-from backend.app.features.pdf.schemas import PDFChatRequest, PDFSummarizeRequest, SessionHistoryResponse
+from backend.app.features.pdf.schemas import (
+    PDFChatRequest,
+    PDFSuggestRequest,
+    PDFSuggestResponse,
+    PDFSummarizeRequest,
+    SessionHistoryResponse,
+)
 from backend.app.features.pdf.prompts import PDF_SYSTEM, SUMMARY_SYSTEM
 from backend.app.features.pdf.service import PdfService, SessionBusyError
 from backend.app.shared.session_locks import log_concurrent_rejection
+from backend.app.shared.model_guard import require_allowed_model
 from backend.app.shared.sse import sse
 
 
@@ -46,9 +55,13 @@ async def upload_pdf(file: UploadFile = File(...)):
     if len(content) > MAX_PDF_BYTES:
         raise HTTPException(status_code=400, detail="File quá lớn (tối đa 50MB)")
 
-    destination = _repository.save(filename, content)
+    # Writing up to 50 MB and parsing it with PyMuPDF are both blocking —
+    # run them on a worker thread, not the event loop.
+    destination = await asyncio.to_thread(_repository.save, filename, content)
     try:
-        document = _service._processor.extract(filename)
+        document = await asyncio.to_thread(_service._processor.extract, filename)
+        # Same name, possibly new content: forget suggestions for the old one.
+        _service.forget_document(filename)
         _service._doc_cache[filename] = document
         return {
             "filename": filename,
@@ -75,11 +88,13 @@ async def raw_pdf(filename: str):
     return FileResponse(str(path), media_type="application/pdf")
 
 
+# Plain `def`, not `async def`: the history store is synchronous psycopg, so
+# FastAPI must run this on its threadpool (tests/test_event_loop_blocking.py).
 @router.delete("/api/pdf/file/{filename}")
-async def delete_pdf(filename: str, session_id: str = "default"):
+def delete_pdf(filename: str, session_id: str = "default"):
     filename = _check_filename(filename)
     _repository.delete(filename)
-    _service._doc_cache.pop(filename, None)
+    _service.forget_document(filename)
     # Conversation history is keyed by session_id, NOT filename — two
     # sessions can open the same filename, and clearing by filename would
     # wipe the other session's chat history.
@@ -87,7 +102,7 @@ async def delete_pdf(filename: str, session_id: str = "default"):
     return {"deleted": filename}
 
 
-@router.post("/api/pdf/stream")
+@router.post("/api/pdf/stream", dependencies=[Depends(rate_limit("expensive"))])
 async def pdf_chat_stream(request: PDFChatRequest):
     if not request.message.strip():
         raise HTTPException(status_code=400, detail="Message required")
@@ -97,6 +112,7 @@ async def pdf_chat_stream(request: PDFChatRequest):
             detail=f"Message quá dài (giới hạn {settings.MAX_MESSAGE_CHARS} ký tự).",
         )
     _check_filename(request.filename)
+    require_allowed_model(request.provider, request.model)
 
     try:
         lock = _service.begin_session(request.session_id)
@@ -118,9 +134,29 @@ async def pdf_chat_stream(request: PDFChatRequest):
     )
 
 
-@router.post("/api/pdf/summarize")
+@router.post(
+    "/api/pdf/suggestions",
+    response_model=PDFSuggestResponse,
+    dependencies=[Depends(rate_limit("expensive"))],
+)
+async def pdf_suggestions(request: PDFSuggestRequest):
+    """Questions about this document for the empty chat panel — one LLM
+    call per file, then cached until the file is deleted or re-uploaded."""
+    _check_filename(request.filename)
+    require_allowed_model(request.provider, request.model)
+    try:
+        questions = await asyncio.to_thread(
+            _service.suggest_questions, request.filename, request.provider, request.model,
+        )
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Không tìm thấy tài liệu") from None
+    return PDFSuggestResponse(questions=questions)
+
+
+@router.post("/api/pdf/summarize", dependencies=[Depends(rate_limit("expensive"))])
 async def pdf_summarize(request: PDFSummarizeRequest):
     _check_filename(request.filename)
+    require_allowed_model(request.provider, request.model)
 
     try:
         lock = _service.begin_session(request.session_id)
@@ -143,7 +179,7 @@ async def pdf_summarize(request: PDFSummarizeRequest):
 
 
 @router.get("/api/pdf/sessions/{session_id}", response_model=SessionHistoryResponse)
-async def get_pdf_session_history(session_id: str):
+def get_pdf_session_history(session_id: str):
     """Read-only session history restore. Never touches the session lock."""
     messages, revision = _service._conv_manager.get_history_with_revision(session_id)
     if not messages:

@@ -350,3 +350,43 @@ describe("NewsPage", () => {
     expect(await screen.findByText(/Vừa mới cập nhật/i)).toBeInTheDocument();
   });
 });
+
+describe("NewsPage — older items and link safety", () => {
+  const item = (n: number, url = `https://example.com/${n}`) => ({ ...SAMPLE_ITEM, url, title_vi: `Tin ${n}` });
+
+  it("offers Xem thêm while older items exist, and appends them", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      const offset = Number(new URL(String(url)).searchParams.get("offset") ?? 0);
+      return offset === 0
+        ? jsonResponse({ items: [item(1), item(2)], limit: 20, offset: 0, has_more: true })
+        : jsonResponse({ items: [item(3)], limit: 20, offset, has_more: false });
+    }));
+    renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Xem thêm" }));
+
+    expect(await screen.findByText("Tin 3")).toBeInTheDocument();
+    expect(screen.getByText("Tin 1")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Xem thêm" })).toBeNull();
+  });
+
+  it("does not show Xem thêm when everything is already listed", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () =>
+      jsonResponse({ items: [item(1)], limit: 20, offset: 0, has_more: false }),
+    ));
+    renderPage();
+
+    await screen.findByText("Tin 1");
+    expect(screen.queryByRole("button", { name: "Xem thêm" })).toBeNull();
+  });
+
+  it("never turns a non-http(s) article URL into a link", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () =>
+      jsonResponse({ items: [item(1, "javascript://x.com/%0Aalert(1)")], limit: 20, offset: 0, has_more: false }),
+    ));
+    renderPage();
+
+    const title = await screen.findByText("Tin 1");
+    expect(title.closest("a")).toBeNull();
+  });
+});

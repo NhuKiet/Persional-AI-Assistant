@@ -1,7 +1,7 @@
-/** Nội dung portfolio hiển thị trong quyển sách lật ở trang chủ.
+/** Nội dung portfolio hiển thị trong carousel ở trang chủ.
  *
- *  Tách khỏi component để sửa nội dung không phải đụng vào logic lật trang —
- *  thêm một trang = thêm một phần tử vào PORTFOLIO_PAGES, không sửa gì khác.
+ *  Tách khỏi component để sửa nội dung không phải đụng vào logic carousel —
+ *  thêm một thẻ = thêm một phần tử vào PORTFOLIO_PAGES, không sửa gì khác.
  *
  *  Song ngữ: mọi chuỗi người dùng đọc được đều là `Bi` (vi + en). Không dùng
  *  hệ i18n nào vì cả app chỉ có đúng chỗ này cần hai thứ tiếng — kéo về một
@@ -201,9 +201,9 @@ export const PORTFOLIO_PAGES: PortfolioPage[] = [
   },
 ];
 
-/** Vài dòng giới thiệu năng lực cốt lõi, đứng NGAY TRÊN quyển sách. Ngắn có
- *  chủ đích: phần này để người đọc lướt trong hai giây rồi quyết định có mở
- *  sách ra đọc kỹ không. */
+/** Vài dòng giới thiệu năng lực cốt lõi, đứng NGAY TRÊN carousel. Ngắn có
+ *  chủ đích: phần này để người đọc lướt trong hai giây rồi quyết định có
+ *  trượt qua các thẻ bên dưới đọc kỹ không. */
 export const CORE_FEATURES: { k: Bi; v: Bi }[] = [
   {
     k: { vi: "Nghiên cứu", en: "Research" },

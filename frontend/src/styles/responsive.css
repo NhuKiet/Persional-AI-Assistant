@@ -45,6 +45,7 @@
   .resize-divider            { display: none; }
   .phase-label               { display: none; }
   .mode-hint                 { display: none; }
+  .sandbox-badge-limits      { display: none; }
 
   .input-bar {
     gap: 5px;

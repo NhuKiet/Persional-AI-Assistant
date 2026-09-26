@@ -1,13 +1,28 @@
+import logging
 import threading
 from collections.abc import AsyncIterator
 
 from backend.app.core.config import settings
-from backend.app.shared.conversation_store import ConversationManager
+from backend.app.shared.conversation_store import ConversationManager, StorageUnavailableError
 from backend.app.features.chat.prompts import prompt_for
 from backend.app.features.chat.schemas import ChatRequest
 from backend.app.shared.session_locks import KeyedLockRegistry, SessionBusyError
 
 __all__ = ["ChatService", "SessionBusyError"]
+
+logger = logging.getLogger(__name__)
+
+# Same shape as research's storage error, so every feature reports a dead
+# history DB the same way. Two wordings: before the answer nothing was sent;
+# after it the answer is on screen and only saving it failed.
+_STORAGE_ERROR = {
+    "type": "error", "code": "storage_unavailable",
+    "message": "Không thể kết nối kho lịch sử — kiểm tra database rồi thử lại.",
+}
+_SAVE_ERROR = {
+    "type": "error", "code": "storage_unavailable",
+    "message": "Câu trả lời chưa được lưu vào lịch sử — không kết nối được database.",
+}
 
 
 class ChatService:
@@ -32,11 +47,18 @@ class ChatService:
             raise ValueError("message exceeds MAX_MESSAGE_CHARS")
 
         system = prompt_for(request.tool, request.context)
-        async for token in self._conversations.chat_stream(
-            session_id=request.session_id,
-            message=request.message,
-            system=system,
-            provider=request.provider,
-            model=request.model,
-        ):
-            yield {"type": "token", "content": token}
+        answered = False
+        try:
+            async for token in self._conversations.chat_stream(
+                session_id=request.session_id,
+                message=request.message,
+                system=system,
+                provider=request.provider,
+                model=request.model,
+                replace_last=request.replace_last,
+            ):
+                answered = True
+                yield {"type": "token", "content": token}
+        except StorageUnavailableError as e:
+            logger.error("[STORAGE] chat history unavailable: %s", e, exc_info=True)
+            yield _SAVE_ERROR if answered else _STORAGE_ERROR

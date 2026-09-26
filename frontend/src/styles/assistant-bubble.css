@@ -16,8 +16,10 @@
   width: 56px;
   height: 56px;
   border-radius: 50%;
-  border: 1px solid var(--border2);
-  background: var(--bg2);
+  border: 1px solid var(--secondary-glass-edge);
+  background: var(--secondary-glass-surface);
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
   color: var(--text);
   font-size: 22px;
   cursor: pointer;
@@ -38,9 +40,12 @@
   height: min(480px, calc(100vh - 120px));
   display: flex;
   flex-direction: column;
-  border-radius: 18px;
+  border-radius: var(--r-lg);
   border: 1px solid var(--border2);
-  background: var(--bg2);
+  /* Popup nổi trên mọi trang, đè lên chữ của trang bên dưới: bề mặt gần đục. */
+  background: var(--float-surface);
+  backdrop-filter: var(--float-blur);
+  -webkit-backdrop-filter: var(--float-blur);
   box-shadow: var(--shadow-2);
   overflow: hidden;
 }
@@ -115,7 +120,7 @@
 
 .bubble-msg-error {
   align-self: flex-start;
-  background: rgba(255, 133, 133, 0.12);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
   color: var(--danger);
 }
 

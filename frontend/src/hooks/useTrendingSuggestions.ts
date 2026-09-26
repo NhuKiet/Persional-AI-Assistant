@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { API } from "../lib/api";
+import { API, apiFetch } from "../lib/api";
 
 /** Tiêu đề paper nổi bật hôm nay (HuggingFace daily papers), lấy 1 lần mỗi
  *  khi trang Research mount — trộn vào danh sách gợi ý tĩnh để vừa gợi ý chủ
@@ -10,7 +10,7 @@ export function useTrendingSuggestions(): string[] {
 
   useEffect(() => {
     let cancelled = false;
-    fetch(`${API}/api/research/trending`)
+    apiFetch(`${API}/api/research/trending`)
       .then(r => (r.ok ? r.json() : { suggestions: [] }))
       .then(data => {
         if (!cancelled && Array.isArray(data.suggestions)) setTitles(data.suggestions);

@@ -33,6 +33,17 @@ GROUNDING_RULE = (
 )
 
 
+# Summaries only: the synthesizer numbers the sources in the context in the
+# order `references` is built, and the frontend turns `[n]` into a link to
+# references[n - 1] (see citations.py). Other sections don't cite inline.
+CITATION_RULE = (
+    "Cite sources inline by their bracketed number from the Sources list, "
+    "e.g. [2] or [1][3], right after the sentence or clause they support. "
+    "Use only numbers that appear in the Sources list — never invent one — "
+    "and do not add a separate reference list at the end."
+)
+
+
 def _footer(*rules: str) -> str:
     """Join non-empty rule blocks into one trailing paragraph, consistently."""
     return "\n".join(r for r in rules if r)
@@ -67,7 +78,7 @@ def summary_short_medium_prompt(query: str, ctx: str) -> str:
         f"1. A 2-3 sentence summary — cover the main topic and key insight\n"
         f"2. A 2-paragraph overview — explain context, methods, and findings\n"
         f"Give each as plain prose. Do not prefix either with a label.\n\n"
-        f"{_footer(GROUNDING_RULE, LANGUAGE_RULE)}"
+        f"{_footer(CITATION_RULE, GROUNDING_RULE, LANGUAGE_RULE)}"
     )
 
 
@@ -81,7 +92,7 @@ def summary_short_medium_text_prompt(query: str, ctx: str) -> str:
         f"Write TWO things:\n"
         f"1. A 2-3 sentence summary starting with 'SUMMARY:' — cover the main topic and key insight\n"
         f"2. A 2-paragraph overview starting with 'OVERVIEW:' — explain context, methods, and findings\n\n"
-        f"{_footer(GROUNDING_RULE, LANGUAGE_RULE)}"
+        f"{_footer(CITATION_RULE, GROUNDING_RULE, LANGUAGE_RULE)}"
     )
 
 
@@ -94,8 +105,8 @@ def summary_detailed_prompt(query: str, ctx: str) -> str:
         f"- Paragraph 2-3: Core findings, methods, and key developments from the sources\n"
         f"- Paragraph 4: Specific data points, numbers, benchmarks if available\n"
         f"- Paragraph 5-6: Current trends, limitations, and future directions\n"
-        f"Be specific. Cite source names when referencing data. Do not repeat yourself.\n\n"
-        f"{_footer(GROUNDING_RULE, LANGUAGE_RULE)}"
+        f"Be specific. Do not repeat yourself.\n\n"
+        f"{_footer(CITATION_RULE, GROUNDING_RULE, LANGUAGE_RULE)}"
     )
 
 
@@ -162,8 +173,8 @@ def rag_synthesis_prompt(query: str, ctx: str) -> str:
         f"Question: {query}\n\n"
         f"Use the sources below as your knowledge base:\n{ctx}\n\n"
         f"Write a thorough answer covering: what it is, how it works, key components, benefits, limitations, and current trends. "
-        f"Be specific and natural. Do not use JSON or special markers.\n\n"
-        f"{_footer(GROUNDING_RULE, LANGUAGE_RULE)}"
+        f"Be specific and natural. Do not use JSON.\n\n"
+        f"{_footer(CITATION_RULE, GROUNDING_RULE, LANGUAGE_RULE)}"
     )
 
 

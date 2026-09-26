@@ -1,5 +1,5 @@
 import { useRef, useCallback, useEffect } from "react";
-import { API } from "../lib/api";
+import { API, apiFetch } from "../lib/api";
 import { parseSSE, readErrorResponse } from "../lib/sse";
 import type { ModelSelection } from "../types";
 
@@ -17,6 +17,9 @@ export interface ResearchPatchState {
 }
 
 type ResearchPatch = Partial<ResearchPatchState> | ((prev: ResearchPatchState) => Partial<ResearchPatchState>);
+
+/** Which sources to search — must match ResearchRequest.focus on the backend. */
+export type ResearchFocus = "all" | "academic" | "web" | "code";
 
 const SESSION_BUSY_NOTICE = "Phiên đang bận (một tab/luồng khác đang gửi tin). Thử lại sau vài giây.";
 
@@ -37,15 +40,18 @@ export function useResearch() {
     sessionId: string,
     onUpdate: (patch: ResearchPatch) => void,
     model: ModelSelection | null = null,
+    focus: ResearchFocus = "all",
   ) => {
     if (!query.trim()) return;
     onUpdate({ phase: "searching", progress: [], errMsg: "" });
     try {
       abortRef.current = new AbortController();
-      const res = await fetch(`${API}/api/research/stream`, {
+      const res = await apiFetch(`${API}/api/research/stream`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         signal: abortRef.current.signal,
-        body: JSON.stringify({ query, session_id: sessionId, provider: model?.provider ?? null, model: model?.model ?? null }),
+        body: JSON.stringify({
+          query, session_id: sessionId, provider: model?.provider ?? null, model: model?.model ?? null, focus,
+        }),
       });
       if (res.status === 409) {
         onUpdate({ phase: "error", errMsg: SESSION_BUSY_NOTICE });

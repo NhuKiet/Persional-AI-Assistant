@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from backend.app.core import capabilities
 from backend.app.core.config import settings
 from backend.app.core.llm import get_llm
+from backend.app.features.research.citations import remove_citations, strip_invalid_citations
 from backend.app.features.research.grounding import (
     ClaimAuditor, compute_confidence, derive_limitations, extract_claims,
 )
@@ -255,9 +256,11 @@ class Synthesizer:
         max_chars  = self.budget.max_chars if max_chars is None else max_chars
         per_source = self.budget.per_source_chars if per_source is None else per_source
         parts, total = [], 0
-        for s in sources:
+        # Numbered in list order — the order _make_papers_and_refs builds
+        # `references` in — so a summary's [n] is references[n - 1].
+        for number, s in enumerate(sources, start=1):
             content_preview = s.content[:per_source]
-            chunk = f"[{s.source.upper()}] {s.title}\n{frame_untrusted(content_preview)}"
+            chunk = f"[{number}] [{s.source.upper()}] {s.title}\n{frame_untrusted(content_preview)}"
             if total + len(chunk) > max_chars:
                 remaining = max_chars - total
                 if remaining > 200:
@@ -565,7 +568,9 @@ class Synthesizer:
 
         ctx = self._ctx(sources)
 
-        raw = self._call(prompts.rag_synthesis_prompt(query, ctx)).strip()
+        raw = strip_invalid_citations(
+            self._call(prompts.rag_synthesis_prompt(query, ctx)).strip(), len(sources),
+        )
         logger.info("[RAG SYNTH] LLM raw: %d chars", len(raw))
 
         # Toàn bộ response là summary_detailed
@@ -591,18 +596,18 @@ class Synthesizer:
         for line in raw.splitlines():
             line = line.strip()
             if re.match(r"^[-•*]\s+", line) and len(line) > 20:
-                out.key_points.append(f"[FINDING] {re.sub(r'^[-•*]\s+', '', line)}")
+                out.key_points.append(f"[FINDING] {remove_citations(re.sub(r'^[-•*]\s+', '', line))}")
         # Nếu LLM không dùng bullets thì tạo từ các câu quan trọng
         if not out.key_points:
             out.key_points = [
-                f"[FINDING] {s.strip()}" for s in sentences
+                f"[FINDING] {remove_citations(s.strip())}" for s in sentences
                 if len(s.strip()) > 40
             ]
         out.key_points = out.key_points[:8]
 
         # follow_up_questions — detect câu hỏi trong response nếu có
         out.follow_up_questions = [
-            s.strip() for s in sentences
+            remove_citations(s.strip()) for s in sentences
             if s.strip().endswith("?") and len(s.strip()) > 15
         ][:4]
 
@@ -660,6 +665,11 @@ class Synthesizer:
                     future.result()
                 except Exception as e:
                     logger.error("Step '%s' failed: %s", step_name, e, exc_info=True)
+                if step_name == "summaries":
+                    # Before the section is shown, so a citation past the
+                    # end never reaches the reader even briefly.
+                    for field in ("summary_short", "summary_medium", "summary_detailed"):
+                        setattr(out, field, strip_invalid_citations(getattr(out, field), len(ranked)))
                 yield step_name
 
         logger.info(

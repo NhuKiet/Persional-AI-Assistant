@@ -1,13 +1,15 @@
 import logging
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from backend.app.core.config import settings
+from backend.app.core.rate_limit import rate_limit
 from backend.app.shared.conversation_store import ConversationManager
 from backend.app.features.chat.schemas import ChatRequest, SessionHistoryResponse
 from backend.app.features.chat.service import ChatService, SessionBusyError
 from backend.app.shared.session_locks import log_concurrent_rejection
+from backend.app.shared.model_guard import require_allowed_model
 from backend.app.shared.sse import sse
 
 
@@ -19,7 +21,7 @@ _conv_manager = ConversationManager()
 _service = ChatService(conversations=_conv_manager)
 
 
-@router.post("/api/chat/stream")
+@router.post("/api/chat/stream", dependencies=[Depends(rate_limit("expensive"))])
 async def chat_stream(req: ChatRequest):
     """Streaming chat with session memory + optional summary context."""
     if len(req.message) + len(req.context) > settings.MAX_MESSAGE_CHARS:
@@ -29,6 +31,7 @@ async def chat_stream(req: ChatRequest):
                 f"Nội dung quá dài (giới hạn {settings.MAX_MESSAGE_CHARS} ký tự)."
             ),
         )
+    require_allowed_model(req.provider, req.model)
 
     try:
         lock = _service.begin_session(req.session_id)
@@ -53,15 +56,17 @@ async def chat_stream(req: ChatRequest):
     )
 
 
+# Plain `def`, not `async def`: the history store is synchronous psycopg, so
+# FastAPI must run this on its threadpool (tests/test_event_loop_blocking.py).
 @router.delete("/api/chat/session/{session_id}")
-async def clear_session(session_id: str):
+def clear_session(session_id: str):
     """Clear chat history for a session."""
     _conv_manager.clear_session(session_id)
     return {"cleared": session_id}
 
 
 @router.get("/api/chat/sessions/{session_id}", response_model=SessionHistoryResponse)
-async def get_chat_session_history(session_id: str):
+def get_chat_session_history(session_id: str):
     """Read-only session history restore. Never touches the session lock."""
     messages, revision = _conv_manager.get_history_with_revision(session_id)
     if not messages:

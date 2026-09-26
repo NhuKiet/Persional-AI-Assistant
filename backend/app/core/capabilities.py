@@ -31,8 +31,12 @@ RERANKER = "reranker"
 # missing checkpoint and a working one look identical from outside until
 # someone uploads an image.
 HMER = "hmer"
+# The Docker sandbox that runs generated code. Without it the coding agent
+# still plans and writes code but can never run it — which the page should
+# say up front rather than after a whole plan-and-generate round.
+EXECUTOR = "executor"
 
-CAPABILITIES = (LLM, EMBEDDINGS, KNOWLEDGE_STORE, RERANKER, HMER)
+CAPABILITIES = (LLM, EMBEDDINGS, KNOWLEDGE_STORE, RERANKER, HMER, EXECUTOR)
 
 OK = "ok"
 DEGRADED = "degraded"

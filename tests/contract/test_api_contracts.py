@@ -16,6 +16,12 @@ import backend.app.features.research.service as research_service
 import backend.app.shared.conversation_store as conv_store
 from tests.fake_session_store import FakeSessionStore
 from tests.fake_synth import StreamingSynthFake
+from backend.app.core.csrf import CLIENT_HEADER
+
+
+def _client():
+    # Same as the real frontend: state-changing calls carry the CSRF header.
+    return TestClient(app, headers={CLIENT_HEADER: "test"})
 
 
 PUBLIC_ROUTES = {
@@ -37,6 +43,7 @@ PUBLIC_ROUTES = {
     ("POST", "/api/research/deep-dive"),
     ("GET", "/api/research/trending"),
     ("GET", "/api/research/sessions/{session_id}"),
+    ("GET", "/api/coding/status"),
     ("POST", "/api/coding/upload"),
     ("DELETE", "/api/coding/file/{filename}"),
     ("POST", "/api/coding/stream"),
@@ -50,6 +57,7 @@ PUBLIC_ROUTES = {
     ("DELETE", "/api/pdf/file/{filename}"),
     ("POST", "/api/pdf/stream"),
     ("POST", "/api/pdf/summarize"),
+    ("POST", "/api/pdf/suggestions"),
     ("GET", "/api/pdf/sessions/{session_id}"),
     ("GET", "/api/news"),
     ("POST", "/api/news/refresh"),
@@ -130,7 +138,7 @@ def test_chat_stream_serializes_token_and_error_events(monkeypatch):
         yield "contract token"
 
     monkeypatch.setattr(chat_router._conv_manager, "chat_stream", token_stream)
-    token_events = _sse_events(TestClient(app).post(
+    token_events = _sse_events(_client().post(
         "/api/chat/stream", json={"message": "hello"}
     ))
 
@@ -142,7 +150,7 @@ def test_chat_stream_serializes_token_and_error_events(monkeypatch):
         raise RuntimeError("provider unavailable")
 
     monkeypatch.setattr(chat_router._conv_manager, "chat_stream", failing_stream)
-    error_events = _sse_events(TestClient(app).post(
+    error_events = _sse_events(_client().post(
         "/api/chat/stream", json={"message": "hello"}
     ))
 
@@ -166,7 +174,7 @@ def test_research_stream_serializes_research_event_shapes(monkeypatch):
     monkeypatch.setattr(
         research_router, "_service", research_service.ResearchService(agent=FakeAgent())
     )
-    events = _sse_events(TestClient(app).post(
+    events = _sse_events(_client().post(
         "/api/research/stream", json={"query": "contract query"}
     ))
 
@@ -191,7 +199,7 @@ def test_research_stream_serializes_error_events(monkeypatch):
     monkeypatch.setattr(
         research_router, "_service", research_service.ResearchService(agent=FailingAgent())
     )
-    events = _sse_events(TestClient(app).post(
+    events = _sse_events(_client().post(
         "/api/research/stream", json={"query": "contract query"}
     ))
 
@@ -203,7 +211,7 @@ def test_research_deep_dive_serializes_token_then_done(monkeypatch):
         yield "grounded answer"
 
     monkeypatch.setattr(research_service, "astream_chat", fake_astream_chat)
-    events = _sse_events(TestClient(app).post("/api/research/deep-dive", json={
+    events = _sse_events(_client().post("/api/research/deep-dive", json={
         "question": "What does the source say?", "source_content": "Evidence",
     }))
 
@@ -220,7 +228,7 @@ def test_research_deep_dive_serializes_error_events(monkeypatch):
         raise RuntimeError("source unavailable")
 
     monkeypatch.setattr(research_service, "astream_chat", failing_astream_chat)
-    events = _sse_events(TestClient(app).post("/api/research/deep-dive", json={
+    events = _sse_events(_client().post("/api/research/deep-dive", json={
         "question": "What does the source say?", "source_content": "Evidence",
     }))
 
@@ -263,7 +271,7 @@ def test_research_stream_serializes_knowledge_decision_event(monkeypatch, tmp_pa
         research_router, "_service", research_service.ResearchService(agent=agent)
     )
 
-    events = _sse_events(TestClient(app).post(
+    events = _sse_events(_client().post(
         "/api/research/stream", json={"query": "cached query"}
     ))
 
@@ -310,7 +318,7 @@ def test_coding_stream_serializes_agent_event_shapes(monkeypatch):
     monkeypatch.setattr(coding_router._service._agent, "run", fake_run)
     monkeypatch.setattr(coding_router._conv_manager, "get_history", lambda *_args: [])
     monkeypatch.setattr(coding_router._conv_manager, "add_turn", lambda *_args, **_kwargs: None)
-    events = _sse_events(TestClient(app).post(
+    events = _sse_events(_client().post(
         "/api/coding/stream", json={"message": "make a script", "session_id": "contract"}
     ))
 
@@ -342,7 +350,7 @@ def test_coding_stream_chat_only_serializes_token_and_minimal_done(monkeypatch):
     monkeypatch.setattr(coding_router._conv_manager, "get_history", lambda *_args: [])
     monkeypatch.setattr(coding_router._conv_manager, "add_turn", lambda *_args, **_kwargs: None)
 
-    events = _sse_events(TestClient(app).post("/api/coding/stream", json={
+    events = _sse_events(_client().post("/api/coding/stream", json={
         "message": "explain this", "session_id": "contract", "chat_only": True,
     }))
 
@@ -372,7 +380,7 @@ def test_coding_stream_serializes_corrective_code_event(monkeypatch, tmp_path):
     monkeypatch.setattr(coding_router._conv_manager, "get_history", lambda *_args: [])
     monkeypatch.setattr(coding_router._conv_manager, "add_turn", lambda *_args, **_kwargs: None)
 
-    events = _sse_events(TestClient(app).post("/api/coding/stream", json={
+    events = _sse_events(_client().post("/api/coding/stream", json={
         "message": "make it work", "session_id": "corrective-contract",
     }))
 
@@ -394,7 +402,7 @@ def test_coding_stream_serializes_agent_error_events(monkeypatch):
 
     monkeypatch.setattr(coding_router._service._agent, "run", failing_run)
     monkeypatch.setattr(coding_router._conv_manager, "get_history", lambda *_args: [])
-    events = _sse_events(TestClient(app).post(
+    events = _sse_events(_client().post(
         "/api/coding/stream", json={"message": "make a script"}
     ))
 
@@ -404,6 +412,7 @@ def test_coding_stream_serializes_agent_error_events(monkeypatch):
 def test_pdf_stream_and_summary_serialize_token_then_done(monkeypatch):
     monkeypatch.setattr(pdf_router._service, "_get_doc", lambda _filename: object())
     monkeypatch.setattr(pdf_router._service._processor, "retrieve", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(pdf_router._service._processor, "select_context_chunks", lambda _doc, chunks: chunks)
     monkeypatch.setattr(
         pdf_router._service._processor, "build_context_from_chunks", lambda *_args: "context"
     )
@@ -413,7 +422,7 @@ def test_pdf_stream_and_summary_serialize_token_then_done(monkeypatch):
     monkeypatch.setattr(pdf_router._service, "_stream_llm", lambda *_args, **_kwargs: iter(["pdf token"]))
     monkeypatch.setattr(pdf_router._service._conv_manager, "get_history", lambda *_args: [])
     monkeypatch.setattr(pdf_router._service._conv_manager, "add_turn", lambda *_args, **_kwargs: None)
-    client = TestClient(app)
+    client = _client()
 
     stream_events = _sse_events(client.post("/api/pdf/stream", json={
         "message": "Explain it", "filename": "contract.pdf",
@@ -437,7 +446,7 @@ def test_pdf_stream_serializes_error_events(monkeypatch):
         raise FileNotFoundError
 
     monkeypatch.setattr(pdf_router._service, "_get_doc", missing_document)
-    events = _sse_events(TestClient(app).post("/api/pdf/stream", json={
+    events = _sse_events(_client().post("/api/pdf/stream", json={
         "message": "Explain it", "filename": "contract.pdf",
     }))
 
@@ -450,7 +459,7 @@ def test_pdf_summarize_serializes_error_events(monkeypatch):
         raise RuntimeError("PDF index unavailable")
 
     monkeypatch.setattr(pdf_router._service, "_get_doc", failing_document_lookup)
-    events = _sse_events(TestClient(app).post("/api/pdf/summarize", json={
+    events = _sse_events(_client().post("/api/pdf/summarize", json={
         "filename": "contract.pdf",
     }))
 

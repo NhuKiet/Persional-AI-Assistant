@@ -118,6 +118,25 @@ class Settings(BaseSettings):
     EXECUTOR_CPUS: str = "1.0"
     EXECUTOR_PIDS: int = 128
 
+    # ── Mạng ────────────────────────────────────────────────────────
+    # Danh sách Host header được phục vụ (TrustedHostMiddleware), phân tách
+    # bằng dấu phẩy. Chặn DNS rebinding: trang evil.com trỏ DNS về 127.0.0.1
+    # thì trình duyệt coi mọi request là cùng origin, nhưng vẫn gửi
+    # "Host: evil.com". Deploy sau domain riêng thì thêm domain đó vào đây;
+    # "*.example.com" khớp mọi subdomain.
+    ALLOWED_HOSTS: str = "localhost,127.0.0.1"
+
+    # Giới hạn số request tốn tiền/GPU mỗi client mỗi phút (core/rate_limit.py).
+    # Research nặng hơn hẳn (một request = nhiều search API + nhiều lượt LLM)
+    # nên có ngưỡng riêng, thấp hơn.
+    RATE_LIMIT_ENABLED: bool = True
+    RATE_LIMIT_PER_MINUTE: int = 30
+    RATE_LIMIT_RESEARCH_PER_MINUTE: int = 6
+
+    @property
+    def allowed_hosts(self) -> list[str]:
+        return [h.strip() for h in self.ALLOWED_HOSTS.split(",") if h.strip()]
+
     # ── Assistant bubble (bridge sang ai-agent, dự án riêng) ──────────
     # ai-agent chạy bridge_server.py trên máy này; xem README của ai-agent.
     BRIDGE_URL: str = "http://127.0.0.1:8766"
@@ -157,6 +176,27 @@ class Settings(BaseSettings):
                 f"RERANKER_DEVICE '{v}' không hợp lệ. "
                 f"Chọn một trong: {sorted(_VALID_HMER_DEVICES)}"
             )
+        return v
+
+    @field_validator("RATE_LIMIT_PER_MINUTE", "RATE_LIMIT_RESEARCH_PER_MINUTE")
+    @classmethod
+    def _check_rate_limit(cls, v: int) -> int:
+        if v < 1:
+            raise ValueError("Rate limit phải >= 1 (muốn tắt thì đặt RATE_LIMIT_ENABLED=false).")
+        return v
+
+    @field_validator("ALLOWED_HOSTS")
+    @classmethod
+    def _check_allowed_hosts(cls, v: str) -> str:
+        hosts = [h.strip() for h in v.split(",") if h.strip()]
+        if not hosts:
+            raise ValueError("ALLOWED_HOSTS rỗng — mọi request sẽ bị từ chối.")
+        for host in hosts:
+            wildcard_ok = host == "*" or (host.startswith("*.") and len(host) > 2)
+            if "*" in host and not (wildcard_ok and "*" not in host[1:]):
+                raise ValueError(
+                    f"ALLOWED_HOSTS '{host}' không hợp lệ. Wildcard chỉ dạng '*.example.com'."
+                )
         return v
 
     @field_validator("DEFAULT_PROVIDER")

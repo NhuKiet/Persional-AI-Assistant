@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { HmerExplanation } from "../../lib/hmerApi";
+import { DOUBT_THRESHOLD } from "../../lib/hmerDoubt";
 
 /** One token per step: slow enough to see each region light up, fast enough
  *  that a 27-token expression plays in about ten seconds. */
@@ -142,6 +143,7 @@ export function EvidenceView({ imageUrl, alt, status, explanation, error }: Evid
             {tokens.map((token, index) => {
               const flat = evidence.no_evidence[index];
               const prob = probs[index] ?? 0;
+              const doubtful = prob < DOUBT_THRESHOLD;
               return (
                 <button
                   key={index}
@@ -149,9 +151,9 @@ export function EvidenceView({ imageUrl, alt, status, explanation, error }: Evid
                     chips.current[index] = el;
                   }}
                   type="button"
-                  className={`hmer-token${flat ? " is-flat" : ""}${active === index ? " is-active" : ""}`}
+                  className={`hmer-token${flat ? " is-flat" : ""}${doubtful ? " is-doubtful" : ""}${active === index ? " is-active" : ""}`}
                   aria-pressed={active === index}
-                  aria-label={`${token}, xác suất ${prob.toFixed(2)}${flat ? ", không có vùng riêng" : ""}`}
+                  aria-label={`${token}, xác suất ${prob.toFixed(2)}${doubtful ? ", mô hình ít chắc" : ""}${flat ? ", không có vùng riêng" : ""}`}
                   onMouseEnter={() => choose(index)}
                   onFocus={() => choose(index)}
                   onKeyDown={(event) => onChipKeyDown(event, index)}

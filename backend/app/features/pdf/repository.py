@@ -1,5 +1,7 @@
 from pathlib import Path
 
+from backend.app.shared.files import contained_path, safe_filename
+
 
 class PdfRepository:
     def __init__(self, directory: Path):
@@ -8,12 +10,10 @@ class PdfRepository:
 
     @staticmethod
     def validate_filename(filename: str | None) -> str:
-        if not filename or "/" in filename or "\\" in filename or ".." in filename:
-            raise ValueError("Invalid filename")
-        return filename
+        return safe_filename(filename)
 
     def resolve(self, filename: str | None) -> Path:
-        return self._directory / self.validate_filename(filename)
+        return contained_path(self._directory, filename)
 
     def save(self, filename: str, content: bytes) -> Path:
         path = self.resolve(filename)

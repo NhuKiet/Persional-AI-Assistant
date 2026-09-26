@@ -72,6 +72,15 @@ class MissingProviderKey(ValueError):
     """
 
 
+class ModelNotAllowed(ValueError):
+    """A client asked for a (provider, model) pair this server doesn't offer.
+
+    The UI only ever offers `available_models()`, but provider/model arrive
+    in the request body — without this check any caller could name a pricier
+    model outside MODEL_REGISTRY and get_llm would build it.
+    """
+
+
 def _content_text(content) -> str:
     """Normalize LangChain message content into a plain string.
 
@@ -178,6 +187,25 @@ def get_llm(
         api_key=settings.OPENAI_API_KEY,
         base_url=settings.OPENAI_BASE_URL,
         **temp_kwargs,
+    )
+
+
+def check_model_allowed(provider: str | None, model: str | None) -> None:
+    """Raise ModelNotAllowed unless the pair is one GET /api/models lists, or
+    the server's own default (the operator chose it in .env, so it needn't be
+    in the registry). Resolves the pair the way get_llm would, so omitting
+    the model can't smuggle in something get_llm would then pick."""
+    requested = (provider or settings.DEFAULT_PROVIDER).lower()
+    resolved = _resolve_model(requested, model)
+
+    default_provider = settings.DEFAULT_PROVIDER.lower()
+    if (requested, resolved) == (default_provider, _resolve_model(default_provider, None)):
+        return
+    if any(m["provider"] == requested and m["model"] == resolved for m in available_models()):
+        return
+    raise ModelNotAllowed(
+        f"Model {requested}/{resolved} không có trong danh sách được phép — "
+        "chọn một model từ GET /api/models."
     )
 
 

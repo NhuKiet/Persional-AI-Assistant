@@ -1,5 +1,11 @@
 import os
 
+# Set before anything imports backend.app.core.config: TrustedHostMiddleware
+# is built from settings when backend.app.main is imported, and TestClient
+# sends "Host: testserver". tests/test_network_exposure.py checks the real
+# default (loopback only) against a fresh Settings.
+os.environ["ALLOWED_HOSTS"] = "localhost,127.0.0.1,testserver"
+
 import pytest
 
 from tests.fake_session_store import FakeSessionStore
@@ -51,3 +57,15 @@ def _reset_capability_registry():
     capabilities.reset()
     yield
     capabilities.reset()
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limiter():
+    """The limiter is module-global and every TestClient is the same client
+    ("testclient"): without a reset, hits from earlier tests add up and an
+    unrelated test gets a 429 depending on collection order."""
+    from backend.app.core.rate_limit import limiter
+
+    limiter.reset()
+    yield
+    limiter.reset()
