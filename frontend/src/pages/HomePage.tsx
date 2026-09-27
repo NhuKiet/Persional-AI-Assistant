@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import ModelPicker from "../components/ModelPicker";
 import TimeWeatherWidget from "../components/TimeWeatherWidget";
 import mainlogo from "../assets/mainlogo.png";
@@ -34,10 +34,14 @@ export function HomePage() {
   // LandingPage điều hướng tới đây kèm state.prefill khi người dùng gõ ngay ở
   // ô nhập trên trang chủ rồi bấm gửi. Gửi đúng một lần khi mount, sau đó xoá
   // state qua navigate(replace) — nếu không xoá, bấm Back rồi Forward (hoặc
-  // F5 giữ state qua history) sẽ gửi lại tin nhắn cũ lần nữa.
+  // F5 giữ state qua history) sẽ gửi lại tin nhắn cũ lần nữa. Ref chặn lần
+  // chạy thứ hai của StrictMode (dev): effect đó vẫn thấy state cũ trong
+  // closure, không có ref thì câu hỏi bị gửi hai lần.
+  const prefillSent = useRef(false);
   useEffect(() => {
     const prefill = (location.state as { prefill?: string } | null)?.prefill;
-    if (prefill) {
+    if (prefill && !prefillSent.current) {
+      prefillSent.current = true;
       handleSend(prefill);
       navigate(location.pathname, { replace: true, state: null });
     }

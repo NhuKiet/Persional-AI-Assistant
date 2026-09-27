@@ -5,11 +5,13 @@
  * vào cấu trúc nội bộ. Nhờ vậy test sống sót qua refactor: nếu tách file làm
  * vỡ một page, test đỏ; nếu chỉ dời code, test vẫn xanh.
  */
-import { render, screen, waitFor } from "@testing-library/react";
+import { StrictMode } from "react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../App.tsx";
-import { TOOLS, VISIBLE_TOOLS } from "../config/tools";
+import { FEATURES } from "../config/features";
+import { TOOLS, VISIBLE_TOOLS, toolPath } from "../config/tools";
 
 const MODELS = {
   models: [{ provider: "ollama", model: "llama3", label: "llama3 (local)" }],
@@ -70,22 +72,72 @@ function openToolUrl(path) {
 // vẫn chạy đúng. Một smoke test gắn vào câu chữ marketing sẽ hỏng mỗi lần
 // marketing đổi ý, nên ở đây kiểm h1 theo role thay vì theo nội dung.
 describe("Trang chủ (\"/\") — landing, không phải chat", () => {
-  // Landing giờ là hero "Capability Reactor" (canvas 3D + nav); không còn ô
-  // nhập chat hay bảng công cụ trực tiếp trên "/" — lối vào duy nhất là CTA
-  // "Mở trợ lý" dẫn sang /chat, nơi ToolDock liệt kê các tool đang hiện (xem
-  // describe "điều hướng sang từng tool" bên dưới, đi qua /chat trước).
-  it("hiện headline và CTA vào trợ lý", async () => {
+  // Ba lối vào phần chính: nút "Mở trợ lý" trên thanh trên cùng (luôn thấy,
+  // kể cả trên điện thoại khi thẻ trợ lý nằm dưới portfolio), ô hỏi nhanh
+  // trong thẻ trợ lý, và lối tắt thẳng vào từng công cụ đang bật.
+  it("hiện headline và nút vào trợ lý trên thanh trên cùng", async () => {
     render(<App />);
-    expect(await screen.findByRole("button", { name: /Mở trợ lý/i })).toBeInTheDocument();
+    const nav = await screen.findByRole("navigation", { name: "Điều hướng chính" });
+    expect(within(nav).getByRole("link", { name: /Mở trợ lý/i })).toHaveAttribute("href", "/chat");
     expect(await screen.findByRole("heading", { level: 1 })).toBeInTheDocument();
   });
 
-  it("bấm CTA điều hướng sang /chat", async () => {
+  it("bấm nút trên thanh điều hướng sang /chat", async () => {
     const user = userEvent.setup();
     render(<App />);
-    await user.click(await screen.findByRole("button", { name: /Mở trợ lý/i }));
+    await user.click(await screen.findByRole("link", { name: /Mở trợ lý/i }));
     expect(await screen.findByPlaceholderText(/Hỏi KiNg bất cứ điều gì/i)).toBeInTheDocument();
     expect(window.location.pathname).toBe("/chat");
+  });
+
+  // StrictMode chạy effect hai lần khi mount (như `npm run dev`): câu hỏi
+  // mang từ trang chủ sang vẫn chỉ được gửi một lần.
+  it("hỏi nhanh ở trang chủ: sang /chat và gửi đúng câu đó, một lần", async () => {
+    const user = userEvent.setup();
+    render(<StrictMode><App /></StrictMode>);
+
+    await user.type(await screen.findByRole("textbox", { name: "Hỏi KiNg" }), "RAG là gì?{Enter}");
+
+    const streams = () => globalThis.fetch.mock.calls.filter(([u]) => String(u).includes("/api/chat/stream"));
+    await waitFor(() => expect(streams()).not.toHaveLength(0));
+    expect(window.location.pathname).toBe("/chat");
+    expect(streams()).toHaveLength(1);
+    expect(JSON.parse(streams()[0][1].body)).toMatchObject({ message: "RAG là gì?" });
+  });
+
+  it("ô hỏi nhanh để trống thì chỉ mở trợ lý", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(await screen.findByRole("button", { name: "Gửi câu hỏi cho KiNg" }));
+    expect(window.location.pathname).toBe("/chat");
+    expect(globalThis.fetch.mock.calls.some(([u]) => String(u).includes("/api/chat/stream"))).toBe(false);
+  });
+
+  it("phím / đưa con trỏ vào ô hỏi nhanh", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    const ask = await screen.findByRole("textbox", { name: "Hỏi KiNg" });
+
+    await user.keyboard("/");
+
+    expect(ask).toHaveFocus();
+    expect(ask).toHaveValue("");
+  });
+
+  it("có lối tắt vào thẳng đúng các công cụ đang bật", async () => {
+    render(<App />);
+    const shortcuts = await screen.findByRole("navigation", { name: "Vào thẳng công cụ" });
+    const hrefs = within(shortcuts).getAllByRole("link").map(a => a.getAttribute("href"));
+    const expected = VISIBLE_TOOLS.map(toolPath).concat(FEATURES.news ? ["/news"] : []);
+    expect(hrefs).toEqual(expected);
+  });
+
+  it("bấm lối tắt Research mở thẳng trang Research", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    const shortcuts = await screen.findByRole("navigation", { name: "Vào thẳng công cụ" });
+    await user.click(within(shortcuts).getByRole("link", { name: /Nghiên cứu/i }));
+    expect(await screen.findByPlaceholderText(/Nhập chủ đề nghiên cứu/i)).toBeInTheDocument();
   });
 });
 

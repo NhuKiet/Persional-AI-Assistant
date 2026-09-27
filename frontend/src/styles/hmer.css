@@ -394,10 +394,10 @@
   white-space: pre-wrap;
   resize: vertical;
 }
+/* Cùng kiểu focus với ô chat chính (chat.css): viền mảnh đổi sắc, không vòng. */
 .hmer-code:focus {
   outline: none;
-  border-color: var(--accent-hmer);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-hmer) 22%, transparent);
+  border-color: color-mix(in srgb, var(--accent-hmer) 70%, var(--border2));
 }
 
 .hmer-doubt { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; color: var(--text3); }

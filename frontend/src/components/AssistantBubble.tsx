@@ -9,7 +9,8 @@ interface BubbleMessage {
 }
 
 /** Bong bóng chat nổi cho ai-agent (bridge sang dự án Telegram bot riêng) —
- *  tách biệt hoàn toàn với CTA "Mở trợ lý" (đi /chat, chat riêng của KiNg).
+ *  tách biệt hoàn toàn với CTA "Mở trợ lý" (link trên thanh trên cùng của
+ *  trang chủ, đi /chat, chat riêng của KiNg).
  *  State chỉ sống trong component, mất khi reload trang.
  *
  *  Tên hiển thị là "Trợ lý nhanh", KHÔNG phải "Trợ lý cá nhân" như trước: nhãn

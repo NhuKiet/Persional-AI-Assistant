@@ -249,7 +249,8 @@
   font: 14px/1.6 var(--sans); color: var(--text);
   background: var(--bg3); border: 1px solid var(--border2); border-radius: 14px; padding: 10px 14px;
 }
-.msg-edit-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+/* Cùng kiểu focus với ô chat chính: viền mảnh đổi sắc, không vòng bao ngoài. */
+.msg-edit-input:focus { outline: none; border-color: color-mix(in srgb, var(--accent) 55%, var(--border2)); }
 .msg-edit-actions { display: flex; justify-content: flex-end; gap: 6px; }
 
 /* "Tin mới ↓": dính đáy khung cuộn khi người đọc đã cuộn lên giữa lúc stream. */
@@ -417,22 +418,22 @@ a.cite-num:focus-visible, button.cite-num:focus-visible { outline: 2px solid var
   filter: blur(5px);
   pointer-events: none;
 }
-/* Focus: viền mảnh 1px đổi sang màu nhấn của trang (--composer-accent — cùng
-   màu nút gửi) + một quầng sáng mềm trong mờ bên ngoài. Người dùng bỏ vòng
-   đặc 3px --focus-ring trước đây: trên ô viên thuốc lớn nhất màn hình, nó
-   thành một khung dày cộp. Con trỏ nhấp nháy + viền đổi màu + quầng sáng vẫn
-   đủ để thấy ô đang được chọn; các nút nhỏ trong ô vẫn giữ vòng --focus-ring
-   khi focus bằng bàn phím.
+/* Focus: chỉ viền mảnh 1px ngả nhẹ về màu nhấn + một quầng rất mờ. KHÔNG có
+   vòng đặc bao ngoài: vòng 3px --focus-ring rồi vòng 4px màu nhấn trước đây
+   đều thành một khung dày cộp trên ô viên thuốc lớn nhất màn hình (người dùng
+   chê "thô" cả hai lần). Đo ô chat của ChatGPT và Perplexity (2026-09): viền
+   0.8px trung tính, khi focus hoặc không đổi gì, hoặc chỉ đậm lên chút ít —
+   con trỏ nhấp nháy là tín hiệu chính. Các nút nhỏ trong ô vẫn giữ vòng
+   --focus-ring khi focus bằng bàn phím.
    Order matters: --composer-shadow is itself a comma-list with its own
    nested color-mix() — some engines mis-resolve color-mix() terms placed
    AFTER it in the same box-shadow list (verified: swapping order fixes it —
    the ring silently computed to transparent). Keep the color-mix() glow
    layers first. */
 .input-bar:focus-within {
-  border-color: color-mix(in srgb, var(--composer-accent) 60%, var(--composer-edge));
+  border-color: color-mix(in srgb, var(--composer-accent) 32%, var(--composer-edge));
   box-shadow:
-    0 0 0 4px color-mix(in srgb, var(--composer-accent) 12%, transparent),
-    0 0 28px color-mix(in srgb, var(--composer-accent) 14%, transparent),
+    0 0 24px color-mix(in srgb, var(--composer-accent) 9%, transparent),
     var(--composer-shadow);
 }
 .input-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }

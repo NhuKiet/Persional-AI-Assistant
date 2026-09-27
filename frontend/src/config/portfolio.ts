@@ -201,16 +201,32 @@ export const PORTFOLIO_PAGES: PortfolioPage[] = [
   },
 ];
 
-/** Vài dòng giới thiệu năng lực cốt lõi, đứng NGAY TRÊN carousel. Ngắn có
- *  chủ đích: phần này để người đọc lướt trong hai giây rồi quyết định có
- *  trượt qua các thẻ bên dưới đọc kỹ không. */
-export const CORE_FEATURES: { k: Bi; v: Bi }[] = [
-  {
+/** Lối tắt vào thẳng từng công cụ trong thẻ "Trợ lý cá nhân" ở trang chủ:
+ *  một nhãn và một dòng nói công cụ làm gì — đủ để lướt hai giây là biết bấm
+ *  vào đâu. Khoá theo id trong TOOLS (config/tools.ts), cộng "news".
+ *
+ *  Trang chủ chỉ hiện công cụ ĐANG BẬT (VISIBLE_TOOLS, FEATURES.news) mà có
+ *  mục ở đây — bật lại một công cụ đang ẩn thì thêm mục cho nó, nếu không nó
+ *  vẫn vắng mặt trên trang chủ. Mỗi dòng nên vừa một dòng ở bề ngang thẻ. */
+export const SHORTCUT_COPY: Record<string, { k: Bi; v: Bi }> = {
+  research: {
     k: { vi: "Nghiên cứu", en: "Research" },
-    v: { vi: "7 nguồn song song, tổng hợp có trích dẫn", en: "7 sources in parallel, cited synthesis" },
+    v: { vi: "7 nguồn song song, có trích dẫn", en: "7 sources in parallel, cited" },
   },
-  {
-    k: { vi: "Tài liệu", en: "Documents" },
-    v: { vi: "Hỏi đáp trực tiếp trên PDF, ghim ngữ cảnh", en: "Chat over PDFs, pin context" },
+  coding: {
+    k: { vi: "Viết code", en: "Coding" },
+    v: { vi: "Lên kế hoạch, viết và chạy thử code", en: "Plan, write and run code" },
   },
-];
+  pdf: {
+    k: { vi: "Tài liệu PDF", en: "PDF documents" },
+    v: { vi: "Hỏi đáp trên PDF, dẫn đúng trang", en: "Ask your PDF, answers cite pages" },
+  },
+  hmer: {
+    k: { vi: "Công thức", en: "Formulas" },
+    v: { vi: "Ảnh công thức viết tay → LaTeX", en: "Handwritten maths photo → LaTeX" },
+  },
+  news: {
+    k: { vi: "Tin AI", en: "AI news" },
+    v: { vi: "Tin mới về AI, gom theo chủ đề", en: "Fresh AI news, grouped by topic" },
+  },
+};

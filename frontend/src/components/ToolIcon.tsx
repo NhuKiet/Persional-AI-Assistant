@@ -12,7 +12,8 @@
 import type { ReactElement } from "react";
 
 interface ToolIconProps {
-  /** id trong TOOLS (research | coding | homework | essay | email | pdf | hmer).
+  /** id trong TOOLS (research | coding | homework | essay | email | pdf | hmer),
+   *  hoặc "news" cho lối tắt trang chủ.
    *  Id không có hình thì không vẽ gì — thêm tool mới vào TOOLS thì phải thêm
    *  hình vào PATHS, nếu không nút của nó ở dock sẽ là một ô trống. */
   tool: string;
@@ -68,6 +69,16 @@ const PATHS: Record<string, ReactElement> = {
       <path d="M3.4 12.9 5.6 11.7 8.8 19 12.2 5h8.4" strokeLinecap="round" strokeLinejoin="round" />
       <path d="M13.3 9.6c.9-.3 1.7.2 2.2 1.3l1.6 3.4c.5 1.1 1.3 1.6 2.3 1.3" strokeLinecap="round" strokeLinejoin="round" />
       <path d="M19.2 9.7c-.9.1-1.6.7-2.3 1.9l-1.8 3.2c-.6 1-1.3 1.4-2.1 1.2" strokeLinecap="round" strokeLinejoin="round" />
+    </>
+  ),
+  /* Tin AI (không nằm trong TOOLS — trang /news riêng, dùng ở lối tắt trang
+     chủ): tờ báo gập, ô ảnh bên trái và các dòng chữ. */
+  news: (
+    <>
+      <path d="M5.2 5.4h11.4v11.8a2 2 0 0 0 2 2H7.2a2 2 0 0 1-2-2V5.4Z" strokeLinejoin="round" />
+      <path d="M16.6 9.2h2.2v8a2 2 0 0 1-2 2" strokeLinejoin="round" />
+      <rect x="8" y="8.2" width="3.8" height="3.4" rx=".6" />
+      <path d="M13.8 8.8h.4M13.8 11h.4M8 14.6h5.8" strokeLinecap="round" />
     </>
   ),
 };

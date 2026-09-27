@@ -1,9 +1,12 @@
-import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import mainlogo from "../assets/mainlogo.png";
 import { MoonPhase } from "../components/MoonPhase";
 import { PortfolioCarousel } from "../components/PortfolioCarousel";
-import { CORE_FEATURES, type Lang } from "../config/portfolio";
+import { ToolIcon } from "../components/ToolIcon";
+import { FEATURES } from "../config/features";
+import { SHORTCUT_COPY, type Lang } from "../config/portfolio";
+import { VISIBLE_TOOLS, toolPath } from "../config/tools";
 import { useTheme } from "../hooks/useTheme";
 import { createCompass, readCalendar } from "../three/compass";
 import type { CompassHandle, CompassReadout } from "../three/compass";
@@ -32,6 +35,20 @@ const ATOM_BG = { dark: 0x2a2629, light: 0x2a2629 };
 const CALENDAR_REFRESH_MS = 10 * 60 * 1000;
 /** Nửa tháng giao hội: tuổi trăng dưới mức này là trăng đang tròn dần. */
 const HALF_SYNODIC_DAYS = 29.530588853 / 2;
+
+/** Lối tắt trong thẻ trợ lý: đúng các công cụ đang bật, theo thứ tự của dock
+ *  ở /chat, cộng trang tin nếu bật. Công cụ không có chữ trong SHORTCUT_COPY
+ *  thì không hiện (xem ghi chú ở đó). */
+const SHORTCUTS = [
+  ...VISIBLE_TOOLS.map(tool => ({ id: tool.id, path: toolPath(tool) })),
+  ...(FEATURES.news ? [{ id: "news", path: "/news" }] : []),
+].flatMap(s => (SHORTCUT_COPY[s.id] ? [{ ...s, ...SHORTCUT_COPY[s.id] }] : []));
+
+/** Phím "/" chỉ nhảy vào ô hỏi khi người dùng không đang gõ ở chỗ khác. */
+function isTyping(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null;
+  return !!el && (el.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName));
+}
 
 /** Chú giải sáu vành, từ ngoài vào trong — khớp LAYERS trong
  *  three/compass/config.js. Kim nào màu gì: xem applyTheme() trong index.ts. */
@@ -64,8 +81,29 @@ export function LandingPage() {
   // Nút VI/EN nằm trong carousel portfolio nhưng chi phối cả dải năng lực
   // trong thẻ "Trợ lý cá nhân", nên ngôn ngữ phải do trang chủ giữ.
   const [lang, setLang] = useState<Lang>("vi");
+  const askRef = useRef<HTMLInputElement>(null);
+  // Đã cuộn khỏi đỉnh: thanh dính nổi đè lên nội dung, nên viên trạng thái
+  // (chỉ để trang trí) lui đi, còn logo và nút "Mở trợ lý" ở lại.
+  const [scrolled, setScrolled] = useState(false);
 
-  const goToChat = () => navigate("/chat");
+  // Hỏi ngay từ trang chủ: /chat nhận câu hỏi qua state.prefill và gửi nó
+  // (HomePage). Ô trống thì chỉ mở trợ lý.
+  const ask = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const question = askRef.current?.value.trim() ?? "";
+    navigate("/chat", question ? { state: { prefill: question } } : undefined);
+  };
+
+  // "/" để bắt đầu gõ câu hỏi — quy ước quen thuộc của ô tìm kiếm trên web.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "/" || event.ctrlKey || event.metaKey || event.altKey || isTyping(event.target)) return;
+      event.preventDefault();
+      askRef.current?.focus();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   useEffect(() => {
     const id = window.setInterval(() => setCal(readCalendar()), CALENDAR_REFRESH_MS);
@@ -97,18 +135,28 @@ export function LandingPage() {
 
   return (
     <div className="atom-landing-frame">
-      <div className="atom-landing">
+      <div className="atom-landing" onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 24)}>
         <div className="atom-page">
-          <nav className="atom-nav">
+          {/* Thanh trên cùng dính khi cuộn: lối vào trợ lý luôn trong tầm
+              tay, kể cả trên điện thoại khi thẻ trợ lý nằm dưới portfolio. */}
+          <nav className={`atom-nav${scrolled ? " is-scrolled" : ""}`} aria-label="Điều hướng chính">
             <div className="atom-brand atom-glass">
               <img src={mainlogo} alt="" className="atom-brand-logo" />
               <span className="logo-name-sm">KiNg</span>
             </div>
             <div className="atom-nav-right">
-              <span className="atom-status atom-glass">
+              <span className="atom-status atom-glass" aria-hidden={scrolled || undefined}>
                 <span className="atom-status-dot" aria-hidden="true" />
                 Lõi xử lý trực tuyến · liên tục
               </span>
+              <Link to="/chat" className="atom-cta atom-cta--nav">
+                <span className="atom-cta-text">
+                  Mở trợ lý
+                  <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                    <path d="M2.5 8h11M9 3.5 13.5 8 9 12.5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </span>
+              </Link>
               <button type="button" className="atom-theme-toggle atom-glass" onClick={toggle}
                 aria-label="Đổi giao diện sáng/tối"
                 title={theme === "dark" ? "Chuyển sang giao diện sáng" : "Chuyển sang giao diện tối"}>
@@ -130,17 +178,37 @@ export function LandingPage() {
                 duy nhất — luôn sẵn sàng, luôn học hỏi.
               </p>
               <div className="atom-intro-foot">
-                <button type="button" className="atom-cta" onClick={goToChat}>
-                  <span className="atom-cta-text">Mở trợ lý</span>
-                </button>
-                <div className="atom-core">
-                  {CORE_FEATURES.map(f => (
-                    <div className="atom-core-row" key={f.k.vi}>
-                      <span className="atom-core-k">{f.k[lang]}</span>
-                      <span className="atom-core-v">{f.v[lang]}</span>
-                    </div>
+                <form className="atom-ask" onSubmit={ask}>
+                  <input
+                    ref={askRef}
+                    className="atom-ask-input"
+                    name="q"
+                    aria-label="Hỏi KiNg"
+                    placeholder="Hỏi KiNg bất cứ điều gì…"
+                    autoComplete="off"
+                    enterKeyHint="send"
+                  />
+                  <kbd className="atom-ask-kbd" title="Nhấn / để gõ câu hỏi">/</kbd>
+                  <button type="submit" className="atom-ask-send" aria-label="Gửi câu hỏi cho KiNg">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                      <path d="M2.5 8h11M9 3.5 13.5 8 9 12.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                </form>
+                <nav className="atom-core" aria-label="Vào thẳng công cụ">
+                  {SHORTCUTS.map(s => (
+                    <Link className="atom-core-link" to={s.path} key={s.id}>
+                      <span className="atom-core-icon"><ToolIcon tool={s.id} size={17} /></span>
+                      <span className="atom-core-text">
+                        <span className="atom-core-k">{s.k[lang]}</span>
+                        <span className="atom-core-v">{s.v[lang]}</span>
+                      </span>
+                      <svg className="atom-core-arrow" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                        <path d="M6 3.5 10.5 8 6 12.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </Link>
                   ))}
-                </div>
+                </nav>
               </div>
             </section>
 
