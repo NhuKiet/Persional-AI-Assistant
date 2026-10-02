@@ -31,6 +31,8 @@ def _get_backend():
         _backend = OpenAIEmbeddings(
             model=settings.OPENAI_EMBEDDING_MODEL,
             api_key=settings.OPENAI_API_KEY,
+            timeout=settings.LLM_TIMEOUT,  # same deadline as chat (core/llm.py)
+            max_retries=settings.LLM_MAX_RETRIES,
         )
         logger.info("OpenAI embeddings ready: %s", settings.OPENAI_EMBEDDING_MODEL)
     return _backend

@@ -1,7 +1,29 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import { LandingPage } from "./LandingPage";
+
+// The 3D scene (three.js) is a lazy chunk: stand in for it to see when it is
+// built and torn down.
+const compass = vi.hoisted(() => ({ create: vi.fn(), dispose: vi.fn() }));
+vi.mock("../three/compass", () => ({
+  createCompass: (...args: unknown[]) => {
+    compass.create(...args);
+    return { setBackgroundColor: vi.fn(), dispose: compass.dispose };
+  },
+}));
+
+it("shows the calendar at once and builds the 3D scene after, then disposes it on leave", async () => {
+  compass.create.mockClear();
+  compass.dispose.mockClear();
+  const view = render(<MemoryRouter><LandingPage /></MemoryRouter>);
+
+  expect(screen.getByRole("region", { name: "Lịch thiên văn hôm nay" })).toHaveTextContent("°");
+  await waitFor(() => expect(compass.create).toHaveBeenCalledTimes(1));
+
+  view.unmount();
+  expect(compass.dispose).toHaveBeenCalledTimes(1);
+});
 
 function renderLanding() {
   const view = render(<MemoryRouter><LandingPage /></MemoryRouter>);

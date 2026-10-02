@@ -7,9 +7,10 @@ RUN npm ci
 
 COPY . .
 
-# Vite nhúng biến VITE_* vào bundle LÚC BUILD (không phải runtime). Truyền
-# endpoint backend qua build arg; mặc định localhost cho compose chạy máy nhà.
-ARG VITE_API_URL=http://localhost:8000
+# Vite nhúng biến VITE_* vào bundle LÚC BUILD (không phải runtime). Mặc định
+# rỗng: trang gọi "/api/…" cùng origin, nginx chuyển sang backend (nginx.conf)
+# — cần cho cookie đăng nhập. Chỉ đặt khi backend buộc phải ở origin khác.
+ARG VITE_API_URL=
 ENV VITE_API_URL=$VITE_API_URL
 RUN npm run build
 

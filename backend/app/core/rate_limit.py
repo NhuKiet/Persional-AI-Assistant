@@ -25,6 +25,7 @@ _WINDOW_SECONDS = 60.0
 _TIER_LIMITS = {
     "expensive": "RATE_LIMIT_PER_MINUTE",
     "research": "RATE_LIMIT_RESEARCH_PER_MINUTE",
+    "login": "RATE_LIMIT_LOGIN_PER_MINUTE",
 }
 
 

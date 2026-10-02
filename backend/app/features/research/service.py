@@ -10,7 +10,7 @@ from backend.app.features.research.search.crawl import _crawl_url
 from backend.app.features.research.security import frame_untrusted, UNTRUSTED_GUARD
 from backend.app.features.research.synthesizer import NO_SUMMARY_FALLBACK
 from backend.app.shared.conversation_store import ConversationManager
-from backend.app.shared.session_locks import KeyedLockRegistry, SessionBusyError
+from backend.app.shared.session_locks import KeyedLockRegistry, SessionBusyError, SessionLease
 
 __all__ = ["ResearchService", "SessionBusyError"]
 
@@ -70,7 +70,7 @@ class ResearchService:
         # Single-worker only — see backend/app/shared/session_locks.py.
         self._locks = KeyedLockRegistry()
 
-    def begin_session(self, session_id: str) -> threading.Lock:
+    def begin_session(self, session_id: str) -> SessionLease:
         """Reserve exclusive mutation rights for a session for the lifetime of
         one stream. Raises SessionBusyError if another stream already holds it."""
         lock = self._locks.try_acquire(session_id)
@@ -78,7 +78,7 @@ class ResearchService:
             raise SessionBusyError(session_id)
         return lock
 
-    def end_session(self, lock: threading.Lock) -> None:
+    def end_session(self, lock: SessionLease) -> None:
         self._locks.release(lock)
 
     def get_history_with_revision(self, session_id: str) -> tuple[list[dict], int]:

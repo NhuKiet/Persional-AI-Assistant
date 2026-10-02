@@ -6,6 +6,8 @@ import "./styles.css";
 import { TOOLS } from "./config/tools";
 import { AssistantBubble } from "./components/AssistantBubble";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { RequireOwner } from "./components/RequireOwner";
+import { AuthProvider } from "./hooks/useAuth";
 import { HomePage } from "./pages/HomePage";
 import { LandingPage } from "./pages/LandingPage";
 
@@ -20,6 +22,7 @@ const PDFPage      = lazy(() => import("./pages/PdfPage").then(m => ({ default: 
 const NewsPage    = lazy(() => import("./pages/NewsPage").then(m => ({ default: m.NewsPage })));
 const ToolPage     = lazy(() => import("./pages/ToolPage").then(m => ({ default: m.ToolPage })));
 const HmerPage     = lazy(() => import("./pages/HmerPage").then(m => ({ default: m.HmerPage })));
+const LoginPage    = lazy(() => import("./pages/LoginPage").then(m => ({ default: m.LoginPage })));
 
 /** Fallback trong lúc chunk route đang tải. Spinner tự chứa (dùng keyframe
  *  `spin` toàn cục + token màu) để không phụ thuộc CSS của trang chưa tải. */
@@ -59,10 +62,13 @@ export function AppRoutes() {
     <Routes>
       <Route path="/"             element={guarded(<LandingPage />)} />
       <Route path="/chat"         element={guarded(<HomePage />, "Trò chuyện")} />
-      <Route path="/research"     element={guarded(<ResearchPage />, "Research")} />
-      <Route path="/coding"       element={guarded(<CodingPage />, "Coding")} />
+      {/* Chỉ chủ trợ lý: khách thấy lời giải thích + nút đăng nhập (backend
+          cũng từ chối các API này với khách — backend/app/core/auth.py). */}
+      <Route path="/research"     element={guarded(<RequireOwner feature="Research"><ResearchPage /></RequireOwner>, "Research")} />
+      <Route path="/coding"       element={guarded(<RequireOwner feature="Coding"><CodingPage /></RequireOwner>, "Coding")} />
       <Route path="/pdf"          element={guarded(<PDFPage />, "PDF Chat")} />
-      <Route path="/news"         element={guarded(<NewsPage />, "News")} />
+      <Route path="/news"         element={guarded(<RequireOwner feature="Tin AI"><NewsPage /></RequireOwner>, "News")} />
+      <Route path="/login"        element={guarded(<LoginPage />, "Đăng nhập")} />
       <Route path="/hmer"         element={guarded(<HmerPage />, "Công thức viết tay")} />
       <Route path="/tool/:toolId" element={guarded(<ToolRoute />)} />
       <Route path="*"             element={<Navigate to="/" replace />} />
@@ -73,8 +79,10 @@ export function AppRoutes() {
 export default function App() {
   return (
     <BrowserRouter>
-      <AppRoutes />
-      <AssistantBubble />
+      <AuthProvider>
+        <AppRoutes />
+        <AssistantBubble />
+      </AuthProvider>
     </BrowserRouter>
   );
 }

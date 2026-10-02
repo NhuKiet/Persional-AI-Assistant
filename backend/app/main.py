@@ -11,13 +11,16 @@ from backend.app.features.chat.router import router as chat_router
 from backend.app.features.coding.router import router as coding_router
 from backend.app.features.hmer.router import router as hmer_router
 from backend.app.features.models.router import router as models_router
+from backend.app.features.auth.router import router as auth_router
 from backend.app.features.news.router import router as news_router
 from backend.app.features.pdf.router import router as pdf_router
 from backend.app.features.research.router import router as research_router
 from backend.app.core.config import settings
+from backend.app.core.auth import AccessPolicyMiddleware
 from backend.app.core.csrf import RequireClientHeaderMiddleware
 from backend.app.core.lifespan import lifespan
 from backend.app.core import capabilities
+from backend.app.shared import latency
 from backend.app.shared.conversation_store import StorageUnavailableError
 
 
@@ -35,6 +38,9 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Innermost: owner or guest, and what a guest may not do (core/auth.py).
+# Runs after the Host, CORS and CSRF checks below have passed.
+app.add_middleware(AccessPolicyMiddleware)
 # Added before CORS so CORS wraps it: the 403 still carries CORS headers and
 # the frontend can read it. See core/csrf.py.
 app.add_middleware(RequireClientHeaderMiddleware)
@@ -62,6 +68,7 @@ app.include_router(assistant_bubble_router)
 app.include_router(coding_router)
 app.include_router(pdf_router)
 app.include_router(models_router)
+app.include_router(auth_router)
 app.include_router(hmer_router)
 app.include_router(news_router)
 
@@ -98,3 +105,10 @@ async def health():
 @app.get("/health/capabilities")
 async def health_capabilities():
     return capabilities.snapshot()
+
+
+@app.get("/health/latency")
+async def health_latency():
+    """p50/p95 per feature and stage (first token, each research source,
+    synthesis, total) over recent runs — see shared/latency.py."""
+    return latency.latency.snapshot()

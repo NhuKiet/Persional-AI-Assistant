@@ -2,14 +2,20 @@ import asyncio
 import datetime
 import logging
 import threading
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import AsyncGenerator
 
+from psycopg import Connection
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 from psycopg_pool import ConnectionPool
 
 from backend.app.core.config import settings
 from backend.app.core.llm import astream_chat
+# StorageUnavailableError lives with the circuit breaker that also raises it;
+# re-exported here, where main.py and the routers have always imported it.
+from backend.app.shared.db_health import StorageUnavailableError, database
 
 
 logger = logging.getLogger(__name__)
@@ -18,11 +24,6 @@ MAX_HISTORY = settings.MAX_HISTORY
 
 _DEFAULT_PROFILE_ID = "00000000-0000-0000-0000-000000000001"
 
-
-class StorageUnavailableError(RuntimeError):
-    """The history store could not be read or written (DB down, pool
-    timeout). Raised by `ConversationManager.chat_stream` so callers can
-    tell the user it was the database — not the LLM — that failed."""
 
 
 class _SupabaseSessionStore:
@@ -73,6 +74,15 @@ class _SupabaseSessionStore:
                     self._pool = pool
         return self._pool
 
+    @contextmanager
+    def _connection(self) -> Iterator[Connection]:
+        """A pooled connection, behind the shared circuit breaker: while the
+        database is down this fails at once instead of waiting out the pool's
+        open/connect timeouts on every call (see shared/db_health.py)."""
+        with database.guard():
+            with self._get_pool().connection() as conn:
+                yield conn
+
     def close(self) -> None:
         if self._pool is not None:
             self._pool.close()
@@ -82,7 +92,7 @@ class _SupabaseSessionStore:
         return self.load_with_revision(key)[0]
 
     def load_with_revision(self, key: str) -> tuple[list[dict], int]:
-        with self._get_pool().connection() as conn:
+        with self._connection() as conn:
             session = conn.execute(
                 "select id, revision from sessions where user_id = %s and client_key = %s",
                 (_DEFAULT_PROFILE_ID, key),
@@ -102,7 +112,7 @@ class _SupabaseSessionStore:
         # anything inside raises — do not call conn.commit() in this
         # method, doing so would split this into two transactions and
         # defeat the atomicity this whole design exists for.
-        with self._get_pool().connection() as conn:
+        with self._connection() as conn:
             conn.execute(
                 """
                 insert into sessions (user_id, client_key)
@@ -134,7 +144,7 @@ class _SupabaseSessionStore:
             )
 
     def delete(self, key: str) -> None:
-        with self._get_pool().connection() as conn:
+        with self._connection() as conn:
             conn.execute(
                 "delete from sessions where user_id = %s and client_key = %s",
                 (_DEFAULT_PROFILE_ID, key),
@@ -142,7 +152,7 @@ class _SupabaseSessionStore:
 
     def cleanup_old(self, max_age_days: int = 30) -> int:
         cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=max_age_days)
-        with self._get_pool().connection() as conn:
+        with self._connection() as conn:
             rows = conn.execute(
                 """
                 delete from sessions
@@ -170,33 +180,41 @@ def _without_last_exchange(history: list[dict]) -> list[dict]:
 
 
 class ConversationManager:
-    def __init__(self, namespace: str = "chat"):
+    def __init__(self, namespace: str = "chat", store=None):
         self.namespace = namespace
+        # None = the shared Postgres store, looked up on every call so tests
+        # can swap the module-level `_store`. Guests get an in-memory store
+        # instead (shared/guest_store.py): nothing they type is persisted.
+        self._own_store = store
+
+    @property
+    def _store(self):
+        return self._own_store if self._own_store is not None else _store
 
     def _key(self, session_id: str) -> str:
         return f"{self.namespace}:{session_id}"
 
     def get_history(self, session_id: str) -> list[dict]:
-        return _store.load(self._key(session_id))
+        return self._store.load(self._key(session_id))
 
     def get_history_with_revision(self, session_id: str) -> tuple[list[dict], int]:
-        return _store.load_with_revision(self._key(session_id))
+        return self._store.load_with_revision(self._key(session_id))
 
     def add_turns(self, session_id: str, turns: list[tuple[str, object]]) -> None:
         """Append several turns with one read and one write, so a
         user/assistant exchange is saved together or not at all."""
         key = self._key(session_id)
-        history = _store.load(key)
+        history = self._store.load(key)
         history.extend({"role": role, "content": content} for role, content in turns)
         if len(history) > MAX_HISTORY:
             history = history[-MAX_HISTORY:]
-        _store.save(key, history)
+        self._store.save(key, history)
 
     def add_turn(self, session_id: str, role: str, content: str) -> None:
         self.add_turns(session_id, [(role, content)])
 
     def replace_history(self, session_id: str, messages: list[dict]) -> None:
-        _store.save(self._key(session_id), messages[-MAX_HISTORY:])
+        self._store.save(self._key(session_id), messages[-MAX_HISTORY:])
 
     # For code on the event loop. The store is synchronous psycopg and, with
     # the DB down, blocks for seconds (pool open 3 s, connect 5 s): run it on
@@ -211,7 +229,7 @@ class ConversationManager:
         await asyncio.to_thread(self.replace_history, session_id, messages)
 
     def clear_session(self, session_id: str) -> None:
-        _store.delete(self._key(session_id))
+        self._store.delete(self._key(session_id))
 
     async def chat_stream(
         self,

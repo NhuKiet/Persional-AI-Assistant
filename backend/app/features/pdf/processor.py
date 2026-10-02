@@ -63,8 +63,11 @@ class PDFDocument:
 
 class PDFProcessor:
 
-    def __init__(self):
-        PDF_DIR.mkdir(parents=True, exist_ok=True)
+    def __init__(self, directory: Path | None = None):
+        # Guests' uploads live in their own folder (features/pdf/router.py).
+        # PDF_DIR is read here, not bound as a default, so it can be patched.
+        self._directory = directory if directory is not None else PDF_DIR
+        self._directory.mkdir(parents=True, exist_ok=True)
 
     def extract(self, filename: str) -> PDFDocument:
         try:
@@ -74,7 +77,7 @@ class PDFProcessor:
                 "PyMuPDF chưa được cài. Chạy: pip install pymupdf"
             )
 
-        path = PDF_DIR / filename
+        path = self._directory / filename
         if not path.exists():
             raise FileNotFoundError(f"PDF không tồn tại: {filename}")
 

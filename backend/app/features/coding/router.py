@@ -2,7 +2,7 @@ import asyncio
 import logging
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse
 
 from backend.app.core.config import settings
 from backend.app.core.rate_limit import rate_limit
@@ -13,8 +13,9 @@ from backend.app.features.coding.service import CodingService, SessionBusyError
 from backend.app.features.coding.uploads import UploadService
 from backend.app.shared.conversation_store import ConversationManager
 from backend.app.shared.session_locks import log_concurrent_rejection
+from backend.app.shared.latency import timed
 from backend.app.shared.model_guard import require_allowed_model
-from backend.app.shared.sse import sse
+from backend.app.shared.sse import LeasedStreamingResponse, sse
 
 
 logger = logging.getLogger(__name__)
@@ -75,13 +76,14 @@ async def coding_stream(req: CodingRequest):
 
     async def generate():
         try:
-            async for event in _service.stream(req):
+            async for event in timed("coding", _service.stream(req)):
                 yield sse(event)
         finally:
             _service.end_session(lock)
 
-    return StreamingResponse(
+    return LeasedStreamingResponse(
         generate(),
+        lease=lock,
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

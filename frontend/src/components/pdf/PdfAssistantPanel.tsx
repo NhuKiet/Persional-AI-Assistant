@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, type KeyboardEvent } from "react";
 import { MicButton } from "../MicButton";
 import { shuffle, SUGGESTIONS } from "../../config/tools";
+import { displayPdfName } from "../../lib/pdfUrls";
 import type { ChatMessage, PdfSource } from "../../types";
 import ContextPins from "./ContextPins";
 import PdfMessage from "./PdfMessage";
@@ -65,7 +66,7 @@ export default function PdfAssistantPanel({
         <div className="pdf-info-left">
           <span className="pdf-info-icon">📄</span>
           <div>
-            <p className="pdf-info-name">{filename}</p>
+            <p className="pdf-info-name">{displayPdfName(filename)}</p>
             <p className="pdf-info-meta">
               {totalPages} trang · {(totalChars / 1000).toFixed(1)}K ký tự
             </p>

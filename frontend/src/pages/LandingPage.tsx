@@ -8,8 +8,12 @@ import { FEATURES } from "../config/features";
 import { SHORTCUT_COPY, type Lang } from "../config/portfolio";
 import { VISIBLE_TOOLS, toolPath } from "../config/tools";
 import { useTheme } from "../hooks/useTheme";
-import { createCompass, readCalendar } from "../three/compass";
-import type { CompassHandle, CompassReadout } from "../three/compass";
+import "@fontsource/noto-serif-sc/chinese-simplified-400.css";
+import "@fontsource/noto-serif-sc/latin-400.css";
+// Chỉ phần lịch (tính toán thuần) nạp cùng trang; cảnh 3D (three.js) nạp
+// lười trong effect bên dưới — xem three/compass/readout.ts.
+import { readCalendar, type CompassReadout } from "../three/compass/readout";
+import type { CompassHandle } from "../three/compass";
 
 /** Trang chủ — bố cục dashboard kính (glassmorphism), cuộn dọc:
  *
@@ -110,23 +114,34 @@ export function LandingPage() {
     return () => window.clearInterval(id);
   }, []);
 
+  // Cảnh 3D nạp lười: trang (chữ, thẻ, nút) hiện trước, three.js tải sau.
+  // Nạp hỏng (mất mạng giữa chừng) thì cũng rơi về quả cầu dự phòng như khi
+  // máy không có WebGL.
+  const themeRef = useRef(theme);
+  themeRef.current = theme;
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const handle = createCompass(canvas, {
-      backgroundColor: ATOM_BG[theme],
-      onFail: () => {
-        canvas.style.display = "none";
-        if (failedRef.current) failedRef.current.style.display = "flex";
-      },
-    });
-    handleRef.current = handle;
-    canvas.classList.add("ready");
+    let disposed = false;
+    const fail = () => {
+      canvas.style.display = "none";
+      if (failedRef.current) failedRef.current.style.display = "flex";
+    };
+    import("../three/compass")
+      .then(({ createCompass }) => {
+        if (disposed) return;
+        handleRef.current = createCompass(canvas, { backgroundColor: ATOM_BG[themeRef.current], onFail: fail });
+        canvas.classList.add("ready");
+      })
+      .catch((err) => {
+        console.warn("[compass] không nạp được cảnh 3D", err);
+        if (!disposed) fail();
+      });
     return () => {
-      handle.dispose();
+      disposed = true;
+      handleRef.current?.dispose();
       handleRef.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {

@@ -1,6 +1,12 @@
 import "@testing-library/jest-dom/vitest";
-import { cleanup } from "@testing-library/react";
+import { cleanup, configure } from "@testing-library/react";
 import { afterEach, vi } from "vitest";
+
+// findBy*/waitFor chờ tối đa bao lâu. Mặc định 1s không đủ cho các test render
+// cả <App />: route là lazy chunk, và khi cả bộ chạy song song (máy bận) việc
+// biên dịch chunk đó có lúc quá 1s — mỗi lần chạy lại fail một nhóm test khác
+// nhau, dù chạy riêng thì qua. 5s vẫn đủ ngắn để một lỗi thật fail nhanh.
+configure({ asyncUtilTimeout: 5000 });
 
 // Node 26 định nghĩa sẵn một localStorage experimental (cần --localstorage-file),
 // và nó che mất bản của jsdom => window.localStorage undefined. App đọc

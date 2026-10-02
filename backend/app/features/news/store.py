@@ -9,12 +9,16 @@ conversation_store's — different table, no reason to couple lifecycles.
 """
 import logging
 import threading
+from collections.abc import Iterator
+from contextlib import contextmanager
 
+from psycopg import Connection
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
 
 from backend.app.core.config import settings
 from backend.app.features.news.models import NewsItem
+from backend.app.shared.db_health import database
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +50,15 @@ class _SupabaseNewsStore:
                     self._pool = pool
         return self._pool
 
+    @contextmanager
+    def _connection(self) -> Iterator[Connection]:
+        """A pooled connection, behind the shared circuit breaker: while the
+        database is down this fails at once instead of waiting out the pool's
+        open/connect timeouts on every call (see shared/db_health.py)."""
+        with database.guard():
+            with self._get_pool().connection() as conn:
+                yield conn
+
     def close(self) -> None:
         if self._pool is not None:
             self._pool.close()
@@ -54,7 +67,7 @@ class _SupabaseNewsStore:
     def existing_urls(self, candidate_urls: list[str]) -> set[str]:
         if not candidate_urls:
             return set()
-        with self._get_pool().connection() as conn:
+        with self._connection() as conn:
             rows = conn.execute(
                 "select url from news_items where url = any(%s)",
                 (candidate_urls,),
@@ -65,7 +78,7 @@ class _SupabaseNewsStore:
         if not items:
             return 0
         inserted = 0
-        with self._get_pool().connection() as conn:
+        with self._connection() as conn:
             with conn.cursor() as cur:
                 for i in items:
                     cur.execute(
@@ -84,7 +97,7 @@ class _SupabaseNewsStore:
         return inserted
 
     def list_items(self, topic: str | None, limit: int, offset: int) -> tuple[list[NewsItem], bool]:
-        with self._get_pool().connection() as conn:
+        with self._connection() as conn:
             base_sql = """
                 select url, title, title_vi, summary_vi, source, topic, published_at, fetched_at
                 from news_items
@@ -113,7 +126,7 @@ class _SupabaseNewsStore:
             return items, has_more
 
     def prune_older_than(self, days: int) -> int:
-        with self._get_pool().connection() as conn:
+        with self._connection() as conn:
             rows = conn.execute(
                 "delete from news_items where fetched_at < now() - (%s || ' days')::interval returning id",
                 (days,),

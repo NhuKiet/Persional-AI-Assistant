@@ -39,6 +39,7 @@ Server-Sent Events.
 - [Cài đặt & chạy local](#-cài-đặt--chạy-local)
 - [Chạy bằng Docker Compose](#-chạy-bằng-docker-compose)
 - [Sandbox thực thi code](#-sandbox-thực-thi-code)
+- [Đăng nhập & dùng thử](#-đăng-nhập--dùng-thử)
 - [Cấu hình (.env)](#️-cấu-hình-env)
 - [API](#-api)
 - [Kiểm thử & CI](#-kiểm-thử--ci)
@@ -390,13 +391,26 @@ Mỗi lần chạy sinh một container tạm, sống đúng trong thời gian t
 
 ---
 
+## 🔐 Đăng nhập & dùng thử
+
+Đặt `OWNER_PASSWORD` trong `.env` để bật đăng nhập (trang `/login`):
+
+- **Chủ trợ lý** đăng nhập bằng mật khẩu đó và dùng được mọi thứ. Phiên là cookie `HttpOnly`, `SameSite=Strict`, có chữ ký, sống `SESSION_DAYS` ngày.
+- **Khách** không cần đăng nhập, được thử **Chat, PDF, Công thức viết tay**: `GUEST_DAILY_LIMIT` lượt mỗi 24 giờ mỗi IP, luôn chạy trên model `GUEST_PROVIDER`/`GUEST_MODEL`, lịch sử chỉ giữ trong RAM (không ghi DB), file PDF/ảnh để riêng (khách không đọc được file của chủ và của nhau). Research, Coding, bong bóng trợ lý, lịch sử phiên và `/docs` chỉ dành cho chủ.
+- Phân quyền **chặn mặc định** (`backend/app/core/auth.py`): route mới thêm mà không khai báo cho khách thì chỉ chủ dùng được.
+- Không đặt `OWNER_PASSWORD` = chế độ mở như trước — chỉ được phép khi `ALLOWED_HOSTS` là máy này; mở ra ngoài mà thiếu mật khẩu thì backend không khởi động.
+
+Frontend gọi backend **cùng origin** (`/api/…`): dev qua proxy của Vite, Docker qua nginx (`frontend/nginx.conf`) — cần để cookie đăng nhập đi kèm cả request trình duyệt tự gửi (react-pdf, `<img>`). Chạy sau HTTPS thì đặt `COOKIE_SECURE=true`.
+
+---
+
 ## ⚙️ Cấu hình (.env)
 
 `.env.example` là nguồn tham chiếu đầy đủ, có chú thích từng biến. Tóm tắt theo nhóm:
 
 | Nhóm | Biến tiêu biểu |
 |---|---|
-| **LLM** | `DEFAULT_PROVIDER` · `DEFAULT_MODEL` · `OLLAMA_URL` · `OLLAMA_MODEL` · `LLM_NUM_GPU` · `LLM_TIMEOUT` |
+| **LLM** | `DEFAULT_PROVIDER` · `DEFAULT_MODEL` · `OLLAMA_URL` · `OLLAMA_MODEL` · `LLM_NUM_GPU` · `LLM_TIMEOUT` · `LLM_MAX_RETRIES` |
 | **API key** | `ANTHROPIC_API_KEY` · `OPENAI_API_KEY` · `OPENAI_BASE_URL` |
 | **Tìm kiếm** | `TAVILY_API_KEY` (cần cho web search) · `S2_API_KEY` (tuỳ chọn, nới rate limit) |
 | **Knowledge store** | `WEAVIATE_URL` · `WEAVIATE_API_KEY` · `OPENAI_EMBEDDING_MODEL` · `KNOWLEDGE_*` |
@@ -405,6 +419,7 @@ Mỗi lần chạy sinh một container tạm, sống đúng trong thời gian t
 | **Coding** | `CODE_TIMEOUT` · `MAX_DEBUG_ITER` · `ENABLE_AUTO_INSTALL` · `EXECUTOR_*` |
 | **Giới hạn** | `MAX_MESSAGE_CHARS` · `MAX_UPLOAD_MB` · `MAX_HISTORY` · `RATE_LIMIT_ENABLED` · `RATE_LIMIT_PER_MINUTE` · `RATE_LIMIT_RESEARCH_PER_MINUTE` |
 | **Mạng** | `ALLOWED_HOSTS` (Host header được phục vụ, mặc định chỉ loopback) |
+| **Đăng nhập** | `OWNER_PASSWORD` · `SESSION_SECRET` · `SESSION_DAYS` · `COOKIE_SECURE` · `GUEST_ENABLED` · `GUEST_DAILY_LIMIT` · `GUEST_PROVIDER` · `GUEST_MODEL` · `GUEST_MAX_UPLOAD_MB` · `RATE_LIMIT_LOGIN_PER_MINUTE` |
 | **PDF** | `PDF_MAX_CONTEXT` · `PDF_CHUNK_SIZE` · `PDF_CHUNK_OVERLAP` |
 | **Bubble** | `BRIDGE_URL` · `BRIDGE_TOKEN` |
 
@@ -444,7 +459,8 @@ Hai lớp chặn đốt tiền:
 | **News** | `GET /api/news` · `POST /api/news/refresh` |
 | **Models** | `GET /api/models` |
 | **Bubble** | `POST /api/bubble/chat` · `POST /api/bubble/reset` |
-| **Health** | `GET /health` |
+| **Health** | `GET /health` · `GET /health/capabilities` · `GET /health/latency` (p50/p95 theo tính năng và bước: token đầu tiên, từng nguồn research, tổng) |
+| **Đăng nhập** | `POST /api/auth/login` · `POST /api/auth/logout` · `GET /api/auth/me` (vai trò, số lượt dùng thử còn lại) |
 
 ---
 

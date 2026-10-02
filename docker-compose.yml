@@ -5,9 +5,10 @@ services:
   backend:
     build: .
     ports:
-      # Chỉ nghe trên loopback: API chưa có auth. "8000:8000" trần sẽ bind
-      # 0.0.0.0 — cả mạng LAN gọi được, và Docker còn vượt qua firewall máy
-      # host (ufw). Muốn mở ra ngoài thì phải có auth + reverse proxy trước.
+      # Chỉ nghe trên loopback: trình duyệt đi qua nginx của frontend (cùng
+      # origin, cookie đăng nhập). "8000:8000" trần sẽ bind 0.0.0.0 — cả mạng
+      # LAN gọi được, và Docker còn vượt qua firewall máy host (ufw). Mở ra
+      # ngoài thì đặt OWNER_PASSWORD + ALLOWED_HOSTS và đặt HTTPS phía trước.
       - "127.0.0.1:8000:8000"
     env_file:
       - .env
@@ -41,10 +42,8 @@ services:
   frontend:
     build:
       context: ./frontend
-      args:
-        # Trình duyệt (không phải container) gọi backend, nên localhost:8000
-        # đúng khi backend map ra cổng 8000 của host ở trên.
-        VITE_API_URL: http://localhost:8000
+      # Không đặt VITE_API_URL: trang gọi "/api/…" cùng origin và nginx
+      # (frontend/nginx.conf) chuyển sang backend — cookie đăng nhập mới chạy.
     ports:
       - "127.0.0.1:5173:80"
     depends_on:

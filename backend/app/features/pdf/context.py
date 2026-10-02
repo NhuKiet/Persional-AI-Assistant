@@ -6,6 +6,8 @@ list content-block khi có ảnh để LangChain gửi cho vision model.
 """
 from __future__ import annotations
 
+from backend.app.shared.untrusted import frame_untrusted
+
 __all__ = ["build_multimodal_content", "has_image_pin"]
 
 
@@ -39,10 +41,12 @@ def build_multimodal_content(
     pins = pins or []
     text_pins = _format_text_pins(pins)
 
-    text_block = f"[Ngữ cảnh từ tài liệu]\n{doc_context}\n"
+    # Văn bản tài liệu và các đoạn ghim (cũng là chữ trong tài liệu) nằm trong
+    # khung không tin cậy; câu hỏi của người dùng đứng ngoài, sau khung.
+    document = f"[Ngữ cảnh từ tài liệu]\n{doc_context}\n"
     if text_pins:
-        text_block += f"\n[Vùng người dùng khoanh]\n{text_pins}\n"
-    text_block += f"\n{user_text}"
+        document += f"\n[Vùng người dùng khoanh]\n{text_pins}\n"
+    text_block = f"{frame_untrusted(document)}\n\n{user_text}"
 
     if not has_image_pin(pins):
         return text_block

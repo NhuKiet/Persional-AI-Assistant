@@ -45,3 +45,15 @@ def contained_path(directory: Path, name: str | None) -> Path:
     if path.resolve().parent != root:
         raise ValueError("Invalid filename")
     return path
+
+
+def prune_oldest(directory: Path, pattern: str, keep: int) -> list[Path]:
+    """Delete all but the `keep` newest files matching `pattern` in
+    `directory`; return what was deleted. Bounds folders that anyone can add
+    to, such as the guests' uploads."""
+    files = sorted(directory.glob(pattern), key=lambda p: p.stat().st_mtime, reverse=True)
+    removed = []
+    for path in files[keep:]:
+        path.unlink(missing_ok=True)
+        removed.append(path)
+    return removed

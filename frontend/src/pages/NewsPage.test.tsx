@@ -356,7 +356,7 @@ describe("NewsPage — older items and link safety", () => {
 
   it("offers Xem thêm while older items exist, and appends them", async () => {
     vi.stubGlobal("fetch", vi.fn(async (url: string) => {
-      const offset = Number(new URL(String(url)).searchParams.get("offset") ?? 0);
+      const offset = Number(new URL(String(url), "http://localhost").searchParams.get("offset") ?? 0);
       return offset === 0
         ? jsonResponse({ items: [item(1), item(2)], limit: 20, offset: 0, has_more: true })
         : jsonResponse({ items: [item(3)], limit: 20, offset, has_more: false });

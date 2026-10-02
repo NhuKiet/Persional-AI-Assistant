@@ -244,8 +244,12 @@ def test_upload_rejects_oversized_file_by_declared_size_without_reading():
             read_calls["n"] += 1
             return b"x" * self.size
 
+    class _OwnerRequest:
+        class state:
+            role = "owner"
+
     with pytest.raises(HTTPException) as exc_info:
-        asyncio.run(pdf_router.upload_pdf(file=_FakeUploadFile()))
+        asyncio.run(pdf_router.upload_pdf(request=_OwnerRequest(), file=_FakeUploadFile()))
 
     assert exc_info.value.status_code == 400
     assert read_calls["n"] == 0

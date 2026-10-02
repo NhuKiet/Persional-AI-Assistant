@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { GuestBanner } from "./GuestBanner";
 import { Sidebar } from "./Sidebar";
 import type { Session } from "../lib/storage";
 
@@ -47,6 +48,7 @@ export function AppShell({ children, ...sidebarProps }: AppShellProps) {
             </svg>
           </button>
         )}
+        <GuestBanner />
         {children}
       </div>
     </div>

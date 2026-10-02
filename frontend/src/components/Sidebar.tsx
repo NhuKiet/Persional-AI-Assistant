@@ -1,5 +1,8 @@
 import mainlogo from "../assets/mainlogo.png";
-import { useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { loginHref } from "./GuestBanner";
+import { useAuth } from "../hooks/useAuth";
+import { logout } from "../lib/auth";
 
 import { FEATURES } from "../config/features";
 import { ACCENT } from "../config/theme";
@@ -25,6 +28,9 @@ export function Sidebar({ open, onToggle, sessions, activeId, onSelect, onDelete
   const accentColor = toolColor || ACCENT;
   const newBtnLabel = toolLabel ? `${toolLabel} mới` : "Chat mới";
   const { theme, toggle } = useTheme();
+  const { state: auth, set: setAuth } = useAuth();
+  const { pathname } = useLocation();
+  const guest = auth.auth && auth.role === "guest";
   return (
     <>
       {open && <div className="sb-overlay" onClick={onToggle} />}
@@ -65,10 +71,13 @@ export function Sidebar({ open, onToggle, sessions, activeId, onSelect, onDelete
         </button>
 
         <div className="sb-list">
-          {sessions.length === 0 && (
+          {guest && (
+            <p className="sb-empty">Khi dùng thử, lịch sử không được lưu lại.</p>
+          )}
+          {!guest && sessions.length === 0 && (
             <p className="sb-empty">Chưa có cuộc trò chuyện nào</p>
           )}
-          {groups.map(group => (
+          {!guest && groups.map(group => (
             <div key={group.label} className="sb-group">
               <p className="sb-group-label">{group.label}</p>
               {group.items.map(s => (
@@ -92,9 +101,12 @@ export function Sidebar({ open, onToggle, sessions, activeId, onSelect, onDelete
               : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round"/></svg>}
             <span>{theme === "dark" ? "Giao diện sáng" : "Giao diện tối"}</span>
           </button>
-          {sessions.length > 0 && (
+          {!guest && sessions.length > 0 && (
             <button className="sb-clear-all" onClick={onClearAll}>Xóa tất cả lịch sử</button>
           )}
+          {auth.auth && (auth.role === "owner"
+            ? <button className="sb-auth" onClick={async () => setAuth(await logout())}>Đăng xuất</button>
+            : <Link className="sb-auth" to={loginHref(pathname)}>Đăng nhập</Link>)}
         </div>
       </aside>
     </>

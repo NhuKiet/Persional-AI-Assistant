@@ -1,8 +1,10 @@
+import asyncio
 import logging
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 
+from backend.app.core.auth import is_guest
 from backend.app.core.config import settings
 from backend.app.core.rate_limit import rate_limit
 from backend.app.features.hmer.schemas import (
@@ -12,12 +14,21 @@ from backend.app.features.hmer.schemas import (
     RecognizeResponse,
     StatusResponse,
 )
-from backend.app.features.hmer.service import HmerService, RecognizerUnavailable
+from backend.app.features.hmer.service import HMER_DIR, HmerService, RecognizerUnavailable
+from backend.app.shared.files import prune_oldest
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["hmer"])
 _service = HmerService()
+# Guests: same model and GPU queue, images kept in their own folder — out of
+# the owner's gallery, and out of reach of a guest's explain call.
+_guest_service = _service.for_directory(HMER_DIR / "guest")
+GUEST_MAX_IMAGES = 100
+
+
+def _for(request: Request) -> HmerService:
+    return _guest_service if is_guest(request) else _service
 
 MAX_IMAGE_BYTES = settings.HMER_MAX_IMAGE_MB * 1024 * 1024
 
@@ -37,9 +48,10 @@ async def hmer_status():
     response_model=RecognizeResponse,
     dependencies=[Depends(rate_limit("expensive"))],
 )
-async def recognize(file: UploadFile = File(...)):
+async def recognize(request: Request, file: UploadFile = File(...)):
+    service = _for(request)
     try:
-        filename = _service.validate_filename(file.filename)
+        filename = service.validate_filename(file.filename)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -61,7 +73,7 @@ async def recognize(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail="File rỗng")
 
     try:
-        stored_name, recognition = await _service.recognize(filename, content)
+        stored_name, recognition = await service.recognize(filename, content)
     except RecognizerUnavailable as exc:
         # 503 with the operator-facing reason: a missing checkpoint or an
         # uninstalled package is a deployment state, not a bad request.
@@ -72,6 +84,8 @@ async def recognize(file: UploadFile = File(...)):
             status_code=500, detail=f"Nhận dạng thất bại: {exc}"
         ) from exc
 
+    if service is _guest_service:
+        await asyncio.to_thread(prune_oldest, HMER_DIR / "guest", "*.*", GUEST_MAX_IMAGES)
     return RecognizeResponse(
         filename=stored_name,
         latex=recognition.latex,
@@ -86,14 +100,14 @@ async def recognize(file: UploadFile = File(...)):
     response_model=ExplainResponse,
     dependencies=[Depends(rate_limit("expensive"))],
 )
-async def explain(request: ExplainRequest):
+async def explain(request: ExplainRequest, http: Request):
     """Which regions of the image each token of `latex` rests on.
 
     A separate call from recognize so the LaTeX never waits for the ~65
     extra forward passes this takes.
     """
     try:
-        explanation = await _service.explain(request.filename, request.latex)
+        explanation = await _for(http).explain(request.filename, request.latex)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Không tìm thấy ảnh") from exc
     except ValueError as exc:

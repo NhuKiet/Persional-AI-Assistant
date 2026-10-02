@@ -9,6 +9,7 @@ from backend.app.core.llm import invoke_chat, stream_chat
 from backend.app.shared.conversation_store import ConversationManager
 from backend.app.features.pdf import prompts
 from backend.app.features.pdf.context import build_multimodal_content, has_image_pin
+from backend.app.shared.untrusted import frame_untrusted
 from backend.app.features.pdf.processor import (
     MAP_OUTPUT_CHARS,
     REDUCE_INPUT_CHARS,
@@ -16,7 +17,7 @@ from backend.app.features.pdf.processor import (
 )
 from backend.app.features.pdf.schemas import PDFChatRequest, PDFSummarizeRequest
 from backend.app.features.pdf.sources import serialize_sources
-from backend.app.shared.session_locks import KeyedLockRegistry, SessionBusyError
+from backend.app.shared.session_locks import KeyedLockRegistry, SessionBusyError, SessionLease
 
 __all__ = ["PdfService", "SessionBusyError"]
 
@@ -71,7 +72,7 @@ class PdfService:
         # one registry: only one of the two may run at a time per session.
         self._locks = KeyedLockRegistry()
 
-    def begin_session(self, session_id: str) -> threading.Lock:
+    def begin_session(self, session_id: str) -> SessionLease:
         """Reserve exclusive mutation rights for a session for the lifetime of
         one stream. Raises SessionBusyError if another stream already holds it."""
         lock = self._locks.try_acquire(session_id)
@@ -79,7 +80,7 @@ class PdfService:
             raise SessionBusyError(session_id)
         return lock
 
-    def end_session(self, lock: threading.Lock) -> None:
+    def end_session(self, lock: SessionLease) -> None:
         self._locks.release(lock)
 
     def _get_doc(self, filename: str):
@@ -141,6 +142,16 @@ class PdfService:
 
         loop = asyncio.get_running_loop()
         queue: asyncio.Queue[dict] = asyncio.Queue()
+        # Once the client is gone nobody reads the queue: the thread stops at
+        # its next token and saves nothing. It saves the answer itself, so it
+        # holds its own share of the session lease until it has stopped —
+        # otherwise a new question on this session could write concurrently.
+        cancelled = threading.Event()
+        lease = self._locks.share(request.session_id)
+
+        def emit(event: dict) -> None:
+            if not cancelled.is_set():
+                loop.call_soon_threadsafe(queue.put_nowait, event)
 
         def run() -> None:
             try:
@@ -155,10 +166,7 @@ class PdfService:
                     sorted(included, key=lambda c: c.score, reverse=True), limit=len(included),
                 )
                 if sources:
-                    loop.call_soon_threadsafe(
-                        queue.put_nowait,
-                        {"type": "sources", "sources": sources},
-                    )
+                    emit({"type": "sources", "sources": sources})
                 context = self._processor.build_context_from_chunks(document, included)
                 content = build_multimodal_content(request.message, context, request.pins)
                 history = self._conv_manager.get_history(request.session_id)
@@ -171,9 +179,13 @@ class PdfService:
                     provider=request.provider,
                     model=request.model,
                 ):
+                    if cancelled.is_set():
+                        return  # abandoned: don't finish, don't save half an answer
                     full_response += token
-                    loop.call_soon_threadsafe(queue.put_nowait, {"type": "token", "content": token})
+                    emit({"type": "token", "content": token})
 
+                if cancelled.is_set():
+                    return
                 image_note = " [+ảnh khoanh vùng]" if has_image_pin(request.pins) else ""
                 self._conv_manager.add_turn(
                     request.session_id, role="user", content=request.message + image_note
@@ -181,30 +193,33 @@ class PdfService:
                 self._conv_manager.add_turn(
                     request.session_id, role="assistant", content=full_response
                 )
-                loop.call_soon_threadsafe(queue.put_nowait, {"type": "done", "message": "ok"})
+                emit({"type": "done", "message": "ok"})
             except FileNotFoundError:
-                loop.call_soon_threadsafe(
-                    queue.put_nowait,
-                    {
-                        "type": "error",
-                        "code": "pdf_not_found",
-                        "message": f"File '{request.filename}' không tìm thấy. Upload lại nhé.",
-                    },
-                )
+                emit({
+                    "type": "error",
+                    "code": "pdf_not_found",
+                    "message": f"File '{request.filename}' không tìm thấy. Upload lại nhé.",
+                })
             except Exception as exc:
                 logger.error("PDF chat error: %s", exc, exc_info=True)
-                loop.call_soon_threadsafe(queue.put_nowait, {"type": "error", "message": str(exc)})
+                emit({"type": "error", "message": str(exc)})
+            finally:
+                if lease is not None:
+                    lease.release()
 
         threading.Thread(target=run, daemon=True).start()
-        while True:
-            try:
-                event = await asyncio.wait_for(queue.get(), timeout=300)
-                yield event
-                if event.get("type") in ("done", "error"):
+        try:
+            while True:
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=300)
+                    yield event
+                    if event.get("type") in ("done", "error"):
+                        break
+                except asyncio.TimeoutError:
+                    yield {"type": "error", "message": "Timeout (5 phút)"}
                     break
-            except asyncio.TimeoutError:
-                yield {"type": "error", "message": "Timeout (5 phút)"}
-                break
+        finally:
+            cancelled.set()  # finished, timed out, or the client left
 
     def _map_summarize(self, chunk_text: str, request: PDFSummarizeRequest, system: str) -> str:
         """Map step: summarize one bounded chunk (<= MAP_CHUNK_CHARS) into at
@@ -212,7 +227,7 @@ class PdfService:
         once per chunk before the streamed reduce step."""
         prompt = (
             f"Tóm tắt đoạn tài liệu sau trong tối đa {MAP_OUTPUT_CHARS} ký tự, "
-            f"giữ lại các ý và số liệu quan trọng nhất:\n\n{chunk_text}"
+            f"giữ lại các ý và số liệu quan trọng nhất:\n\n{frame_untrusted(chunk_text)}"
         )
         summary = invoke_chat(prompt, system=system, provider=request.provider, model=request.model)
         return summary[:MAP_OUTPUT_CHARS]
@@ -220,24 +235,35 @@ class PdfService:
     async def summarize_events(self, request: PDFSummarizeRequest, system: str) -> AsyncIterator[dict]:
         loop = asyncio.get_running_loop()
         queue: asyncio.Queue[dict] = asyncio.Queue()
+        # Summaries aren't saved to the session, but each map step is an LLM
+        # call: stop spending them once nobody is waiting for the result.
+        cancelled = threading.Event()
+
+        def emit(event: dict) -> None:
+            if not cancelled.is_set():
+                loop.call_soon_threadsafe(queue.put_nowait, event)
 
         def run() -> None:
             try:
                 document = self._get_doc(request.filename)
 
                 if self._processor.exceeds_summary_scope(document):
-                    loop.call_soon_threadsafe(queue.put_nowait, {
+                    emit({
                         "type": "pdf.summary_scope_rejected",
                         "message": SCOPE_LIMIT_MESSAGE,
                     })
-                    loop.call_soon_threadsafe(queue.put_nowait, {"type": "done", "message": "ok"})
+                    emit({"type": "done", "message": "ok"})
                     return
 
                 # Bounded map-reduce: summarize each chunk independently
                 # (map), then fold the bounded set of map-summaries into one
                 # final streamed summary (reduce).
                 map_chunks = self._processor.map_chunks(document)
-                map_summaries = [self._map_summarize(chunk, request, system) for chunk in map_chunks]
+                map_summaries = []
+                for chunk in map_chunks:
+                    if cancelled.is_set():
+                        return
+                    map_summaries.append(self._map_summarize(chunk, request, system))
                 reduce_input = "\n\n".join(map_summaries)[:REDUCE_INPUT_CHARS]
                 logger.info(
                     "PDF summarize: %d map chunk(s), reduce input %d chars",
@@ -248,30 +274,33 @@ class PdfService:
                     "role": "user",
                     "content": (
                         "Tổng hợp các tóm tắt từng phần sau đây thành một bản tóm tắt "
-                        f"mạch lạc, duy nhất cho toàn bộ tài liệu:\n\n{reduce_input}"
+                        f"mạch lạc, duy nhất cho toàn bộ tài liệu:\n\n{frame_untrusted(reduce_input)}"
                     ),
                 }]
-                full_response = ""
                 for token in self._stream_llm(
                     messages,
                     system,
                     provider=request.provider,
                     model=request.model,
                 ):
-                    full_response += token
-                    loop.call_soon_threadsafe(queue.put_nowait, {"type": "token", "content": token})
-                loop.call_soon_threadsafe(queue.put_nowait, {"type": "done", "message": "ok"})
+                    if cancelled.is_set():
+                        return
+                    emit({"type": "token", "content": token})
+                emit({"type": "done", "message": "ok"})
             except Exception as exc:
                 logger.error("PDF summarize error: %s", exc, exc_info=True)
-                loop.call_soon_threadsafe(queue.put_nowait, {"type": "error", "message": str(exc)})
+                emit({"type": "error", "message": str(exc)})
 
         threading.Thread(target=run, daemon=True).start()
-        while True:
-            try:
-                event = await asyncio.wait_for(queue.get(), timeout=300)
-                yield event
-                if event.get("type") in ("done", "error"):
+        try:
+            while True:
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=300)
+                    yield event
+                    if event.get("type") in ("done", "error"):
+                        break
+                except asyncio.TimeoutError:
+                    yield {"type": "error", "message": "Timeout"}
                     break
-            except asyncio.TimeoutError:
-                yield {"type": "error", "message": "Timeout"}
-                break
+        finally:
+            cancelled.set()  # finished, timed out, or the client left

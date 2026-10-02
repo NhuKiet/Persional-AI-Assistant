@@ -83,7 +83,9 @@ export async function readErrorResponse(response: Response): Promise<string> {
   if (text) {
     try {
       const data = JSON.parse(text) as Record<string, unknown>;
-      const msg = data?.detail ?? data?.message ?? data?.error;
+      // `message` first: some errors carry a machine code in `detail`
+      // ("guest_quota_exceeded") and the sentence for people in `message`.
+      const msg = data?.message ?? data?.detail ?? data?.error;
       if (typeof msg === "string" && msg) return msg;
     } catch {
       // not JSON — fall through to raw text

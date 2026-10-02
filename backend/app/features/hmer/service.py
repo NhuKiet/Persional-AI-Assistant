@@ -33,6 +33,14 @@ class HmerService:
         # KiNg is a single-user assistant, so a queue is the right trade.
         self._lock = asyncio.Lock()
 
+    def for_directory(self, directory: Path) -> "HmerService":
+        """The same model and the same GPU queue, storing images elsewhere —
+        guests' images stay out of the owner's gallery and out of reach of
+        guests' explain calls on the owner's images."""
+        other = HmerService(recognizer=self._recognizer, repository=HmerRepository(directory))
+        other._lock = self._lock
+        return other
+
     def status(self) -> dict:
         return self._recognizer.status()
 

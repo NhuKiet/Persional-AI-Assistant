@@ -1,6 +1,7 @@
 """api_models.py — liệt kê model LLM khả dụng cho frontend."""
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 
+from backend.app.core.auth import guest_model, is_guest
 from backend.app.core.config import settings
 from backend.app.core.llm import available_models
 
@@ -8,8 +9,17 @@ router = APIRouter(tags=["models"])
 
 
 @router.get("/api/models")
-async def list_models():
+async def list_models(request: Request):
     models = available_models()
+    if is_guest(request):
+        # A guest runs on one model, whatever it picks (core/auth.py): offer
+        # just that one so the picker doesn't promise a choice.
+        provider, model = guest_model()
+        entry = next(
+            (m for m in models if m["provider"] == provider and m["model"] == model),
+            {"provider": provider, "model": model, "label": model},
+        )
+        return {"models": [entry], "default": {"provider": provider, "model": model}}
     if settings.DEFAULT_MODEL:
         default = {"provider": settings.DEFAULT_PROVIDER, "model": settings.DEFAULT_MODEL}
     elif models:

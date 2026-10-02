@@ -160,12 +160,16 @@ def get_llm(
     if capabilities_for(provider, model).supports_temperature:
         temp_kwargs["temperature"] = temperature
 
+    # Every client gets a deadline: a provider that stops answering must end
+    # the request (and free its session lock) instead of hanging it for the
+    # SDK default of ~10 minutes per attempt. See LLM_TIMEOUT in config.py.
     if provider == "ollama":
         from langchain_ollama import ChatOllama
         return ChatOllama(
             model=model,
             base_url=settings.OLLAMA_URL,
             num_gpu=settings.LLM_NUM_GPU,
+            client_kwargs={"timeout": settings.LLM_TIMEOUT},
             **temp_kwargs,
         )
 
@@ -176,6 +180,8 @@ def get_llm(
         return ChatAnthropic(
             model=model,
             api_key=settings.ANTHROPIC_API_KEY,
+            default_request_timeout=settings.LLM_TIMEOUT,
+            max_retries=settings.LLM_MAX_RETRIES,
             **temp_kwargs,
         )
 
@@ -186,6 +192,8 @@ def get_llm(
         model=model,
         api_key=settings.OPENAI_API_KEY,
         base_url=settings.OPENAI_BASE_URL,
+        timeout=settings.LLM_TIMEOUT,
+        max_retries=settings.LLM_MAX_RETRIES,
         **temp_kwargs,
     )
 

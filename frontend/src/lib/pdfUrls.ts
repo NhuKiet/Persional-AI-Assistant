@@ -9,3 +9,10 @@ export function pdfRawUrl(filename: string): string {
 export function pdfDeleteUrl(filename: string, sessionId: string): string {
   return `${API}/api/pdf/file/${encodeURIComponent(filename)}?session_id=${encodeURIComponent(sessionId)}`;
 }
+
+/** The name to show for an uploaded PDF. A guest's upload is stored as
+ *  "<16 hex>_<name>" so guests can't open each other's files by name
+ *  (backend/app/features/pdf/router.py); the prefix means nothing to people. */
+export function displayPdfName(filename: string): string {
+  return filename.replace(/^[0-9a-f]{16}_/, "");
+}

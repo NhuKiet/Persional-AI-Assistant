@@ -23,7 +23,7 @@ import {
   useChatHistory,
 } from "../hooks/useChatHistory";
 import { API, SESSION_ID, apiFetch } from "../lib/api";
-import { pdfDeleteUrl, pdfRawUrl } from "../lib/pdfUrls";
+import { displayPdfName, pdfDeleteUrl, pdfRawUrl } from "../lib/pdfUrls";
 import { applyPdfStreamEvent, type PdfStreamEvent } from "../lib/pdfStreamState";
 import { parseSSE, readErrorResponse } from "../lib/sse";
 import { getPersistedSessionId, persistSessionId } from "../lib/storage";
@@ -285,7 +285,7 @@ export function PDFPage() {
     const aiId = nextMessageId();
     setMessages((current) => {
       if (current.length === 0) {
-        addSession(sessionId, `${uploadedPDF.filename}: ${text}`);
+        addSession(sessionId, `${displayPdfName(uploadedPDF.filename)}: ${text}`);
       }
       return [
         ...current,

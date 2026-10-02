@@ -25,4 +25,10 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
     CMD curl -fsS http://localhost:8000/health || exit 1
 
-CMD ["uv", "run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Browsers reach the backend through the frontend's nginx, which sets
+# X-Forwarded-For to the real client IP (overwriting whatever the client
+# sent). Trust it from any address: uvicorn's default (127.0.0.1 only) would
+# see every visitor as the nginx container — one shared guest quota and one
+# shared rate limit for everybody. The backend port itself is published on
+# loopback only (docker-compose.yml).
+CMD ["uv", "run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips", "*"]

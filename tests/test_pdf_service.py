@@ -1,4 +1,5 @@
 import asyncio
+import re
 
 import pytest
 
@@ -202,8 +203,11 @@ def test_summarize_reduce_input_bounded_by_map_output_limits(monkeypatch):
 
     events = _summarize_events(svc, PDFSummarizeRequest(filename="small.pdf"))
 
-    # 3 chunks, each truncated to MAP_OUTPUT_CHARS before being folded into the reduce prompt
-    assert captured["reduce_prompt"].count("S") == 3 * MAP_OUTPUT_CHARS
+    # 3 chunks, each truncated to MAP_OUTPUT_CHARS before being folded into the
+    # reduce prompt. Counted as whole runs: the untrusted-source markers around
+    # them contain the letter S too.
+    runs = [len(run) for run in re.findall(r"S{10,}", captured["reduce_prompt"])]
+    assert runs == [MAP_OUTPUT_CHARS] * 3
     tokens = [e for e in events if e["type"] == "token"]
     assert "".join(t["content"] for t in tokens) == "final-summary"
     assert any(e["type"] == "done" for e in events)

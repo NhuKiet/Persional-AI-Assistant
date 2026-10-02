@@ -100,7 +100,7 @@ function pagedFetch(pages: Record<number, { items: unknown[]; has_more: boolean 
   const urls: string[] = [];
   vi.stubGlobal("fetch", vi.fn(async (url: string) => {
     urls.push(String(url));
-    const offset = Number(new URL(String(url)).searchParams.get("offset") ?? 0);
+    const offset = Number(new URL(String(url), "http://localhost").searchParams.get("offset") ?? 0);
     return jsonResponse({ ...pages[offset], limit: 20, offset });
   }));
   return urls;
@@ -141,7 +141,7 @@ describe("useNews — loading more", () => {
     let releaseOld!: () => void;
     const held = new Promise<void>(r => { releaseOld = r; });
     vi.stubGlobal("fetch", vi.fn(async (url: string) => {
-      const u = new URL(String(url));
+      const u = new URL(String(url), "http://localhost");
       if (u.searchParams.get("offset") === "20") {
         await held;
         return jsonResponse({ items: page(100, 3), has_more: false, limit: 20, offset: 20 });
@@ -164,7 +164,7 @@ describe("useNews — loading more", () => {
 
   it("keeps the list when loading more fails", async () => {
     vi.stubGlobal("fetch", vi.fn(async (url: string) => {
-      const offset = new URL(String(url)).searchParams.get("offset");
+      const offset = new URL(String(url), "http://localhost").searchParams.get("offset");
       return offset === "20" ? jsonResponse({}, 503) : jsonResponse({ items: page(0, 20), has_more: true, limit: 20, offset: 0 });
     }));
     const { result } = renderHook(() => useNews(null));

@@ -5,6 +5,9 @@ import os
 # sends "Host: testserver". tests/test_network_exposure.py checks the real
 # default (loopback only) against a fresh Settings.
 os.environ["ALLOWED_HOSTS"] = "localhost,127.0.0.1,testserver"
+# Open mode (no login) unless a test turns it on: whatever the developer's .env
+# says, the suite must not depend on it. tests/test_auth_access.py covers login.
+os.environ["OWNER_PASSWORD"] = ""
 
 import pytest
 
@@ -69,3 +72,24 @@ def _reset_rate_limiter():
     limiter.reset()
     yield
     limiter.reset()
+
+
+@pytest.fixture(autouse=True)
+def _reset_guest_quota():
+    """Guest trial turns are counted per client in memory, like the limiter."""
+    from backend.app.core.auth import guest_quota
+
+    guest_quota.reset()
+    yield
+    guest_quota.reset()
+
+
+@pytest.fixture(autouse=True)
+def _reset_db_circuit_breaker():
+    """The database circuit breaker is module-global: a test that simulates an
+    outage would otherwise make every later database call fail fast."""
+    from backend.app.shared.db_health import database
+
+    database.reset()
+    yield
+    database.reset()

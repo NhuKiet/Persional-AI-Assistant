@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent, type KeyboardEvent } from "react";
+import { displayPdfName } from "../../lib/pdfUrls";
 import { clampPage } from "./pdfDocument";
 
 interface PdfToolbarProps {
@@ -81,7 +82,7 @@ export default function PdfToolbar({
         >
           Mục lục
         </button>
-        <span className="pdf-toolbar-filename" title={filename}>{filename}</span>
+        <span className="pdf-toolbar-filename" title={displayPdfName(filename)}>{displayPdfName(filename)}</span>
       </div>
 
       <div className="pdf-toolbar-navigation">

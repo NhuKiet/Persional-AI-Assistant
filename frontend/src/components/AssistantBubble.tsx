@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { useAuth } from "../hooks/useAuth";
 import { API, apiFetch } from "../lib/api";
 import { Markdown } from "./Markdown";
 
@@ -19,7 +20,14 @@ interface BubbleMessage {
  *  app.smoke.test.jsx fail thật với "Found multiple elements with role button
  *  and name /Mở trợ lý/i". Đổi tên ở đây phải giữ nguyên tắc: không chứa cụm
  *  "Mở trợ lý". */
+/** The bridge behind this bubble is the owner's own agent: guests don't get it
+ *  (the backend refuses /api/bubble/* to them too). */
 export function AssistantBubble() {
+  const { state } = useAuth();
+  return state.role === "guest" ? null : <AssistantBubbleInner />;
+}
+
+function AssistantBubbleInner() {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<BubbleMessage[]>([]);
   const [input, setInput] = useState("");

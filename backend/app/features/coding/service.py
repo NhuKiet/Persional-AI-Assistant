@@ -18,7 +18,7 @@ from backend.app.features.coding.prompts import CHAT_SYSTEM, CODE_PROMPT, DEBUG_
 from backend.app.features.coding.schemas import CodingRequest
 from backend.app.features.coding.uploads import session_sandbox
 from backend.app.shared.conversation_store import ConversationManager
-from backend.app.shared.session_locks import KeyedLockRegistry, SessionBusyError
+from backend.app.shared.session_locks import KeyedLockRegistry, SessionBusyError, SessionLease
 
 __all__ = ["CodingAgent", "CodingService", "SessionBusyError"]
 
@@ -411,7 +411,7 @@ class CodingService:
         # Single-worker only — see backend/app/shared/session_locks.py.
         self._locks = KeyedLockRegistry()
 
-    def begin_session(self, session_id: str):
+    def begin_session(self, session_id: str) -> SessionLease:
         """Reserve exclusive mutation rights for a session for the lifetime of
         one stream. Raises SessionBusyError if another stream already holds it."""
         lock = self._locks.try_acquire(session_id)
@@ -419,19 +419,29 @@ class CodingService:
             raise SessionBusyError(session_id)
         return lock
 
-    def end_session(self, lock) -> None:
+    def end_session(self, lock: SessionLease) -> None:
         self._locks.release(lock)
 
     async def stream(self, request: CodingRequest) -> AsyncIterator[dict]:
         loop = asyncio.get_running_loop()
         queue: asyncio.Queue[dict] = asyncio.Queue()
         cancel_event = threading.Event()
+        # The agent thread saves the turn itself, so it holds its own share of
+        # the session lease until it stops — a new request on this session
+        # must not write alongside a run whose client already left.
+        lease = self._locks.share(request.session_id)
+
+        def emit(event: dict) -> None:
+            if not cancel_event.is_set():
+                loop.call_soon_threadsafe(queue.put_nowait, event)
 
         def run_agent() -> None:
             try:
                 history = self._conversations.get_history(request.session_id)
 
                 def _persist(assistant_content: str) -> None:
+                    if cancel_event.is_set():
+                        return  # abandoned run: nobody saw this answer
                     self._conversations.add_turn(request.session_id, role="user", content=request.message)
                     self._conversations.add_turn(request.session_id, role="assistant", content=assistant_content)
 
@@ -439,22 +449,24 @@ class CodingService:
                     response_parts: list[str] = []
                     for token in self._agent.chat(request.message, history, provider=request.provider, model=request.model):
                         if cancel_event.is_set():
-                            loop.call_soon_threadsafe(queue.put_nowait, {"type": "cancelled", "message": "Đã hủy theo yêu cầu."})
                             return
                         response_parts.append(token)
-                        loop.call_soon_threadsafe(queue.put_nowait, {"type": "token", "content": token})
+                        emit({"type": "token", "content": token})
                     _persist("".join(response_parts))
-                    loop.call_soon_threadsafe(queue.put_nowait, {"type": "done", "success": True, "message": "", "iterations": 0})
+                    emit({"type": "done", "success": True, "message": "", "iterations": 0})
                 else:
                     assistant_content = "[agent run]"
                     for event in self._agent.run(request.message, history, request.session_id, request.uploaded_files, provider=request.provider, model=request.model, cancel_event=cancel_event):
                         if event.get("type") == "done":
                             assistant_content = event.get("message") or assistant_content
                             _persist(assistant_content)
-                        loop.call_soon_threadsafe(queue.put_nowait, event)
+                        emit(event)
             except Exception as exc:
                 logger.error("Coding agent error: %s", exc, exc_info=True)
-                loop.call_soon_threadsafe(queue.put_nowait, {"type": "error", "message": str(exc)})
+                emit({"type": "error", "message": str(exc)})
+            finally:
+                if lease is not None:
+                    lease.release()
 
         threading.Thread(target=run_agent, daemon=True).start()
         try:

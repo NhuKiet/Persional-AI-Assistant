@@ -5,13 +5,15 @@ import threading
 import time
 
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse
 
 from backend.app.core.rate_limit import rate_limit
 from backend.app.features.research.prompts import DEEP_DIVE_SYSTEM
 from backend.app.features.research.schemas import DeepDiveRequest, ResearchRequest, SessionHistoryResponse
 from backend.app.features.research.search.community import fetch_trending_papers
 from backend.app.features.research.service import ResearchService, SessionBusyError
+from backend.app.shared.latency import timed
+from backend.app.shared.sse import LeasedStreamingResponse
 from backend.app.shared.model_guard import require_allowed_model
 from backend.app.shared.session_locks import log_concurrent_rejection
 
@@ -58,13 +60,14 @@ async def research_stream(req: ResearchRequest):
 
     async def generate():
         try:
-            async for event in service.stream_events(req):
+            async for event in timed("research", service.stream_events(req)):
                 yield sse(event)
         finally:
             service.end_session(lock)
 
-    return StreamingResponse(
+    return LeasedStreamingResponse(
         generate(),
+        lease=lock,
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
@@ -86,13 +89,14 @@ async def deep_dive(req: DeepDiveRequest):
 
     async def generate():
         try:
-            async for event in service.deep_dive_events(req, DEEP_DIVE_SYSTEM):
+            async for event in timed("research_deep_dive", service.deep_dive_events(req, DEEP_DIVE_SYSTEM)):
                 yield sse(event)
         finally:
             service.end_session(lock)
 
-    return StreamingResponse(
+    return LeasedStreamingResponse(
         generate(),
+        lease=lock,
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
