@@ -1,7 +1,8 @@
 import logging
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from collections.abc import Callable, Iterator
+from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from concurrent.futures import TimeoutError as FutureTimeoutError
 from typing import Generator
 
@@ -35,7 +36,8 @@ logger = logging.getLogger(__name__)
 # the step list in synthesizer._run_sections_streaming; if a step there
 # starts writing another field, mirror it here.
 _STEP_FIELDS: dict[str, tuple[str, ...]] = {
-    "summaries":   ("summary_short", "summary_medium", "summary_detailed"),
+    "summaries":   ("summary_short", "summary_medium"),
+    "detailed":    ("summary_detailed",),
     "key_points":  ("key_points",),
     "comparison":  ("comparison_table",),
     "chart":       ("chart_data",),
@@ -95,6 +97,54 @@ _SOURCES = [
 # must never crash the whole run — a timeout here degrades to "whatever
 # completed" rather than propagating TimeoutError up through run()/run_streaming().
 _SEARCH_TIMEOUT_SECONDS = 60
+# Once a round has this many results, the sources still running get only
+# _SEARCH_GRACE_SECONDS more. Measured 2026-09-29: web results arrived after
+# ~4 s while rate-limited academic sources held the round open for the full
+# 60 s — for nothing.
+_ENOUGH_RESULTS = 4
+_SEARCH_GRACE_SECONDS = 10.0
+# A long wait still notices a cancel this often.
+_WAIT_TICK_SECONDS = 0.5
+
+# Shown when a run ends with no sources at all.
+_NO_SOURCES_NOTE = (
+    "Không tìm được nguồn nào cho câu hỏi này — các nguồn học thuật có thể đang "
+    "tạm giới hạn truy cập. Thử lại sau ít phút hoặc chọn nguồn khác."
+)
+
+
+def _gather(
+    futures: dict[Future, str], cancelled: Callable[[], bool],
+) -> Iterator[tuple[str, list[SearchResult], Exception | None]]:
+    """Yield (source name, results, error) as each search finishes.
+
+    Stops when all are done, when cancelled() turns true, or at the deadline:
+    _SEARCH_TIMEOUT_SECONDS, cut to _SEARCH_GRACE_SECONDS once the round has
+    _ENOUGH_RESULTS. The caller sees what didn't finish via `not f.done()`.
+    """
+    hard = time.monotonic() + _SEARCH_TIMEOUT_SECONDS
+    soft: float | None = None
+    found = 0
+    pending = set(futures)
+    while pending and not cancelled():
+        left = (hard if soft is None else min(hard, soft)) - time.monotonic()
+        if left <= 0:
+            return
+        done, pending = wait(pending, timeout=min(left, _WAIT_TICK_SECONDS), return_when=FIRST_COMPLETED)
+        for future in done:
+            try:
+                batch = future.result()
+            except Exception as e:  # noqa: BLE001 — one source failing never sinks the round
+                yield futures[future], [], e
+                continue
+            found += len(batch)
+            yield futures[future], batch, None
+        if soft is None and found >= _ENOUGH_RESULTS:
+            soft = time.monotonic() + _SEARCH_GRACE_SECONDS
+
+
+def _unfinished(futures: dict[Future, str]) -> list[str]:
+    return sorted({name for future, name in futures.items() if not future.done()})
 
 # Second-layer judge: submitted to the pool and polled so cancellation is
 # observed WHILE the call is in flight, not just before it starts.
@@ -214,26 +264,23 @@ class ResearchAgent:
         try:
             for name, attr, _ in searchers:
                 # Primary query
-                futures[ex.submit(_run_search, name, attr, query)] = (name, query)
+                futures[ex.submit(_run_search, name, attr, query)] = f"{name} [{query[:30]}]"
                 # Expansion queries — only for academic sources to avoid API overuse
                 if len(queries) > 1 and name in ("arxiv", "semantic"):
                     for eq in queries[1:]:
-                        futures[ex.submit(_run_search, name, attr, eq)] = (name, eq)
+                        futures[ex.submit(_run_search, name, attr, eq)] = f"{name} [{eq[:30]}]"
 
-            try:
-                for future in as_completed(futures, timeout=_SEARCH_TIMEOUT_SECONDS):
-                    name, q = futures[future]
-                    try:
-                        batch = future.result()
-                        with collect_lock:
-                            all_results.extend(batch)
-                        logger.info("  %s [%s] → %d results", name, q[:30], len(batch))
-                    except Exception as e:
-                        logger.warning("Source '%s' failed: %s", name, e)
-            except TimeoutError:
+            for label, batch, error in _gather(futures, lambda: False):
+                if error is not None:
+                    logger.warning("Source %s failed: %s", label, error)
+                    continue
+                with collect_lock:
+                    all_results.extend(batch)
+                logger.info("  %s → %d results", label, len(batch))
+            if left_behind := _unfinished(futures):
                 logger.warning(
-                    "[SEARCH] _search_all timed out after %ss — %d results collected so far",
-                    _SEARCH_TIMEOUT_SECONDS, len(all_results),
+                    "[SEARCH] _search_all went on without %s — %d results collected",
+                    ", ".join(left_behind), len(all_results),
                 )
         finally:
             # wait=False + cancel_futures: a plain `with ThreadPoolExecutor()`
@@ -528,35 +575,27 @@ class ResearchAgent:
                                     getattr(getattr(self, attr), "search"), eq, max(2, k // 2)
                                 )] = f"{name}[exp]"
 
-                    try:
-                        for future in as_completed(futures, timeout=_SEARCH_TIMEOUT_SECONDS):
-                            # Check between each completion instead of only at
-                            # the top-level checkpoints — otherwise a cancel
-                            # requested mid-search sits idle for up to
-                            # _SEARCH_TIMEOUT_SECONDS before it's noticed, and
-                            # the (expensive) synthesis phase still starts on
-                            # whatever had completed by then.
-                            if self._cancelled(cancel_event):
-                                cancelled_mid_search = True
-                                break
-                            name = futures[future]
-                            try:
-                                batch = future.result()
-                                with collect_lock:
-                                    raw_results.extend(batch)
-                                yield {"type": "source_done", "source": name, "count": len(batch)}
-                                logger.info("Streaming '%s' → %d results", name, len(batch))
-                            except Exception as e:
-                                logger.warning("Streaming '%s' failed: %s", name, e)
-                                yield {"type": "source_done", "source": name, "count": 0}
-                    except TimeoutError:
+                    # _gather checks the cancel flag while it waits — a cancel
+                    # mid-search must not sit idle until the round's deadline,
+                    # and synthesis must not start on whatever had completed.
+                    for name, batch, error in _gather(futures, lambda: self._cancelled(cancel_event)):
+                        if error is not None:
+                            logger.warning("Streaming '%s' failed: %s", name, error)
+                        else:
+                            with collect_lock:
+                                raw_results.extend(batch)
+                            logger.info("Streaming '%s' → %d results", name, len(batch))
+                        yield {"type": "source_done", "source": name, "count": len(batch)}
+                    if self._cancelled(cancel_event):
+                        cancelled_mid_search = True
+                    elif left_behind := _unfinished(futures):
                         logger.warning(
-                            "[SEARCH] streaming search timed out after %ss — %d raw results collected so far",
-                            _SEARCH_TIMEOUT_SECONDS, len(raw_results),
+                            "[SEARCH] went on without %s — %d raw results collected",
+                            ", ".join(left_behind), len(raw_results),
                         )
                         yield {
                             "type":    "status",
-                            "message": "Một số nguồn tìm kiếm quá thời gian — tiếp tục với kết quả đã có.",
+                            "message": f"Bỏ qua nguồn chậm ({', '.join(left_behind)}) — tiếp tục với kết quả đã có.",
                             "source":  "pipeline",
                             "degraded": True,
                         }
@@ -642,7 +681,10 @@ class ResearchAgent:
                 # ── Bounded gap-driven iteration (search path only) ─────────
                 rounds = 0
                 max_rounds = getattr(settings, "RESEARCH_MAX_ITERATIONS", 1)
-                while needs_iteration(output, rounds, max_rounds):
+                # No sources at all: the sources just failed (rate limits,
+                # timeouts), and a gap-filling round would hit the same ones
+                # for another full deadline — measured 60 s for nothing.
+                while all_sources and needs_iteration(output, rounds, max_rounds):
                     if self._cancelled(cancel_event):
                         yield _CANCEL
                         return
@@ -669,6 +711,9 @@ class ResearchAgent:
                     output.confidence = min(output.confidence, 0.4)
                 else:
                     output.confidence = 0.4
+
+            if not all_sources and _NO_SOURCES_NOTE not in output.limitations:
+                output.limitations.append(_NO_SOURCES_NOTE)
 
             output.query = original_query
 

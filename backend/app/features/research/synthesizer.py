@@ -200,6 +200,19 @@ def chart_is_supported(parsed, ctx: str) -> bool:
     return matched >= 2
 
 
+# Summary fields each streamed section writes (citations are checked per field).
+_SUMMARY_FIELDS = {
+    "summaries": ("summary_short", "summary_medium"),
+    "detailed":  ("summary_detailed",),
+}
+
+
+def _fill_detailed(out: ResearchOutput) -> None:
+    """No detailed summary came back: show the medium one in its place."""
+    if not out.summary_detailed:
+        out.summary_detailed = out.summary_medium
+
+
 class Synthesizer:
     def __init__(self, llm=None, capabilities=None):
         from backend.app.core.llm import capabilities_for
@@ -372,19 +385,22 @@ class Synthesizer:
     # ── Summary ───────────────────────────────────────────────────────────────
 
     def _make_summaries(self, query: str, ctx: str, out: ResearchOutput) -> None:
+        """All three summaries, blocking until both calls are done. The
+        streaming path runs the two halves as separate sections instead, so
+        the short summary shows while the detailed one is still being written."""
         with ThreadPoolExecutor(max_workers=2) as ex:
-            f_sm = ex.submit(
-                self._call_structured,
-                prompts.summary_short_medium_prompt(query, ctx),
-                output_schemas.SummaryShortMedium,
-                "medium",
-            )
-            f_detailed = ex.submit(
-                self._call, prompts.summary_detailed_prompt(query, ctx), "high",
-            )
-            parsed = f_sm.result()
-            raw2   = f_detailed.result()
+            short_medium = ex.submit(self._make_short_medium, query, ctx, out)
+            detailed = ex.submit(self._make_detailed, query, ctx, out)
+            short_medium.result()
+            detailed.result()
+        _fill_detailed(out)
 
+    def _make_short_medium(self, query: str, ctx: str, out: ResearchOutput) -> None:
+        parsed = self._call_structured(
+            prompts.summary_short_medium_prompt(query, ctx),
+            output_schemas.SummaryShortMedium,
+            "medium",
+        )
         if parsed is not None:
             out.summary_short  = _strip_label(parsed.short)
             out.summary_medium = _strip_label(parsed.medium)
@@ -402,12 +418,13 @@ class Synthesizer:
 
         if not out.summary_short:
             out.summary_short = NO_SUMMARY_FALLBACK
-        out.summary_detailed = raw2.strip() if raw2.strip() else out.summary_medium
+        logger.info("Summaries — short: %d, medium: %d chars", len(out.summary_short), len(out.summary_medium))
 
-        logger.info(
-            "Summaries — short: %d, medium: %d, detailed: %d chars",
-            len(out.summary_short), len(out.summary_medium), len(out.summary_detailed),
-        )
+    def _make_detailed(self, query: str, ctx: str, out: ResearchOutput) -> None:
+        # The long pole of synthesis (~20-30 s at "high" effort): its own
+        # section, so it doesn't hold back the short summary.
+        out.summary_detailed = self._call(prompts.summary_detailed_prompt(query, ctx), "high").strip()
+        logger.info("Summaries — detailed: %d chars", len(out.summary_detailed))
 
     # ── Key points ────────────────────────────────────────────────────────────
 
@@ -596,7 +613,8 @@ class Synthesizer:
         for line in raw.splitlines():
             line = line.strip()
             if re.match(r"^[-•*]\s+", line) and len(line) > 20:
-                out.key_points.append(f"[FINDING] {remove_citations(re.sub(r'^[-•*]\s+', '', line))}")
+                cleaned = remove_citations(re.sub(r"^[-•*]\s+", "", line))
+                out.key_points.append(f"[FINDING] {cleaned}")
         # Nếu LLM không dùng bullets thì tạo từ các câu quan trọng
         if not out.key_points:
             out.key_points = [
@@ -645,7 +663,8 @@ class Synthesizer:
 
         ctx = self._ctx(ranked)
         steps = [
-            ("summaries",    self._make_summaries,           (query, ctx, out)),
+            ("summaries",    self._make_short_medium,        (query, ctx, out)),
+            ("detailed",     self._make_detailed,            (query, ctx, out)),
             ("key_points",   self._make_key_points,          (query, ctx, out)),
             ("chart",        self._make_chart_data,          (query, ctx, out)),
             ("follow_ups",   self._make_follow_up_questions, (query, out)),
@@ -665,12 +684,12 @@ class Synthesizer:
                     future.result()
                 except Exception as e:
                     logger.error("Step '%s' failed: %s", step_name, e, exc_info=True)
-                if step_name == "summaries":
-                    # Before the section is shown, so a citation past the
-                    # end never reaches the reader even briefly.
-                    for field in ("summary_short", "summary_medium", "summary_detailed"):
-                        setattr(out, field, strip_invalid_citations(getattr(out, field), len(ranked)))
+                # Before the section is shown, so a citation past the end
+                # never reaches the reader even briefly.
+                for field in _SUMMARY_FIELDS.get(step_name, ()):
+                    setattr(out, field, strip_invalid_citations(getattr(out, field), len(ranked)))
                 yield step_name
+        _fill_detailed(out)
 
         logger.info(
             "Done — short: %r… | points: %d | papers: %d",

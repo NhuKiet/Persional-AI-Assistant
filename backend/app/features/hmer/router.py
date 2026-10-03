@@ -14,7 +14,7 @@ from backend.app.features.hmer.schemas import (
     RecognizeResponse,
     StatusResponse,
 )
-from backend.app.features.hmer.service import HMER_DIR, HmerService, RecognizerUnavailable
+from backend.app.features.hmer.service import HMER_DIR, HmerService, NotAnImage, RecognizerUnavailable
 from backend.app.shared.files import prune_oldest
 
 logger = logging.getLogger(__name__)
@@ -74,6 +74,8 @@ async def recognize(request: Request, file: UploadFile = File(...)):
 
     try:
         stored_name, recognition = await service.recognize(filename, content)
+    except NotAnImage as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RecognizerUnavailable as exc:
         # 503 with the operator-facing reason: a missing checkpoint or an
         # uninstalled package is a deployment state, not a bad request.

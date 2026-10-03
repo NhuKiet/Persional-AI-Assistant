@@ -40,7 +40,8 @@ def test_run_sections_streaming_yields_as_each_step_completes(monkeypatch):
         time.sleep(0.15)
         out.summary_short = "s"
 
-    monkeypatch.setattr(synth, "_make_summaries", slow_summaries)
+    monkeypatch.setattr(synth, "_make_short_medium", slow_summaries)
+    monkeypatch.setattr(synth, "_make_detailed", lambda q, c, out: time.sleep(0.15))
     monkeypatch.setattr(synth, "_make_key_points", lambda q, c, out: setattr(out, "key_points", ["k"]))
     monkeypatch.setattr(synth, "_make_follow_up_questions", lambda q, out: setattr(out, "follow_up_questions", ["f"]))
     monkeypatch.setattr(synth, "_make_chart_data", lambda q, c, out: None)
@@ -49,18 +50,19 @@ def test_run_sections_streaming_yields_as_each_step_completes(monkeypatch):
     out = ResearchOutput(query="q")
     steps = list(synth._run_sections_streaming("q", _sources(), out))
 
-    assert set(steps) == {"summaries", "key_points", "follow_ups", "chart", "papers"}
-    # The artificially slow step must not be the first thing to arrive —
+    assert set(steps) == {"summaries", "detailed", "key_points", "follow_ups", "chart", "papers"}
+    # The artificially slow steps must not be the first things to arrive —
     # a blocking implementation would have no ordering to assert at all
     # (only one yield, at the very end).
-    assert steps[0] != "summaries"
-    assert steps[-1] == "summaries"
+    assert steps[0] not in ("summaries", "detailed")
+    assert set(steps[-2:]) == {"summaries", "detailed"}
 
 
 def test_synthesize_grounded_streaming_is_progressive(monkeypatch):
     synth = _make_synth()
 
-    monkeypatch.setattr(synth, "_make_summaries", lambda q, c, out: setattr(out, "summary_short", "s"))
+    monkeypatch.setattr(synth, "_make_short_medium", lambda q, c, out: setattr(out, "summary_short", "s"))
+    monkeypatch.setattr(synth, "_make_detailed", lambda q, c, out: None)
     monkeypatch.setattr(synth, "_make_key_points", lambda q, c, out: setattr(out, "key_points", ["k"]))
     monkeypatch.setattr(synth, "_make_follow_up_questions", lambda q, out: setattr(out, "follow_up_questions", ["f"]))
     monkeypatch.setattr(synth, "_make_chart_data", lambda q, c, out: None)
@@ -69,8 +71,8 @@ def test_synthesize_grounded_streaming_is_progressive(monkeypatch):
 
     events = list(synth.synthesize_grounded_streaming("q", _sources()))
 
-    # 5 sections + grounding = 6 yields, not one.
-    assert len(events) == 6
+    # 6 sections + grounding = 7 yields, not one.
+    assert len(events) == 7
     assert events[-1][1] == "grounding"
     # Same `out` object mutated in place on every yield.
     assert all(out is events[0][0] for out, _ in events)
@@ -88,7 +90,8 @@ def test_synthesize_grounded_streaming_empty_sources_still_yields_once():
 
 def test_synthesize_grounded_blocking_wrapper_still_returns_final_output(monkeypatch):
     synth = _make_synth()
-    monkeypatch.setattr(synth, "_make_summaries", lambda q, c, out: setattr(out, "summary_short", "s"))
+    monkeypatch.setattr(synth, "_make_short_medium", lambda q, c, out: setattr(out, "summary_short", "s"))
+    monkeypatch.setattr(synth, "_make_detailed", lambda q, c, out: None)
     monkeypatch.setattr(synth, "_make_key_points", lambda q, c, out: setattr(out, "key_points", ["k"]))
     monkeypatch.setattr(synth, "_make_follow_up_questions", lambda q, out: None)
     monkeypatch.setattr(synth, "_make_chart_data", lambda q, c, out: None)
@@ -103,7 +106,8 @@ def test_synthesize_grounded_blocking_wrapper_still_returns_final_output(monkeyp
 def test_output_partial_slices_to_only_the_step_that_just_finished():
     out = ResearchOutput(query="q", summary_short="s", key_points=["a"], papers=[{"title": "p"}])
     partial = _output_partial(out, "summaries")
-    assert set(partial) == {"query", "summary_short", "summary_medium", "summary_detailed"}
+    assert set(partial) == {"query", "summary_short", "summary_medium"}
+    assert set(_output_partial(out, "detailed")) == {"query", "summary_detailed"}
     assert partial["summary_short"] == "s"
 
     partial_kp = _output_partial(out, "key_points")

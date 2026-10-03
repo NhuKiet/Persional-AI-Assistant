@@ -232,6 +232,19 @@ def test_recognize_rejects_non_image(client):
     assert response.status_code == 400
 
 
+def test_recognize_rejects_bytes_that_are_not_an_image(client, tmp_path):
+    # A .png name with something else inside used to fail deep in the model
+    # with a 500 — and left the junk file in the gallery folder.
+    response = client.post(
+        "/api/hmer/recognize",
+        files={"file": ("bai1.png", b"not-an-image", "image/png")},
+    )
+
+    assert response.status_code == 400
+    assert "ảnh" in response.json()["detail"]
+    assert not list(tmp_path.iterdir())
+
+
 def test_recognize_rejects_empty_file(client):
     response = client.post(
         "/api/hmer/recognize",

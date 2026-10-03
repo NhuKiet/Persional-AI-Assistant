@@ -204,9 +204,14 @@ def test_run_streaming_iterates_once_when_first_result_weak(monkeypatch):
     monkeypatch.setattr(ra, "_enrich_web_results", lambda r: r)
     monkeypatch.setattr(ra, "deduplicate_results", lambda r, threshold=0.92: r)
     monkeypatch.setattr(ra, "rerank_results", lambda q, r, top_k=15: r)
-    # ép các searcher inline trả rỗng để vòng 1 dùng nguồn tối thiểu
+    # Vòng 1 có đúng một nguồn (yếu) — với 0 nguồn thì không có vòng bù (xem
+    # test_research_latency.py: mọi nguồn vừa hỏng thì vòng bù chỉ đợi lại chúng).
+    one = SearchResult(source="web", title="t", url="u0", content="q")
+    from concurrent.futures import ThreadPoolExecutor
+    agent._pool = ThreadPoolExecutor(max_workers=2)  # a found source is stored in the background
     for attr in ("web", "arxiv", "semantic", "hf", "ddg", "so"):
-        setattr(agent, attr, type("S", (), {"search": lambda self, q, k=4: []})())
+        hits = [one] if attr == "web" else []
+        setattr(agent, attr, type("S", (), {"search": lambda self, q, k=4, hits=hits: hits})())
 
     events = list(agent.run_streaming("q"))
     iters = [e for e in events if e.get("type") == "iteration"]

@@ -1,4 +1,5 @@
 import asyncio
+import io
 import logging
 from pathlib import Path
 
@@ -12,11 +13,27 @@ from backend.app.features.hmer.recognizer import (
 )
 from backend.app.features.hmer.repository import HmerRepository
 
-__all__ = ["HmerService", "RecognizerUnavailable", "UnknownTokens"]
+__all__ = ["HmerService", "NotAnImage", "RecognizerUnavailable", "UnknownTokens"]
 
 logger = logging.getLogger(__name__)
 
 HMER_DIR = Path(settings.HMER_UPLOAD_DIR)
+
+
+class NotAnImage(ValueError):
+    """An upload with an image's name but not an image inside."""
+
+
+def _check_decodable(content: bytes) -> None:
+    """Refuse bytes no image decoder can read — before they are stored, and
+    before they fail deep inside the model as a 500."""
+    from PIL import Image, UnidentifiedImageError
+
+    try:
+        with Image.open(io.BytesIO(content)) as image:
+            image.verify()
+    except (UnidentifiedImageError, OSError, SyntaxError, ValueError) as exc:
+        raise NotAnImage("File không phải ảnh đọc được — hãy gửi ảnh PNG hoặc JPG.") from exc
 
 
 class HmerService:
@@ -62,6 +79,7 @@ class HmerService:
         The image is saved before recognition so a crash mid-inference still
         leaves the input that caused it on disk.
         """
+        _check_decodable(content)
         path = self._repository.save(filename, content)
 
         async with self._lock:
