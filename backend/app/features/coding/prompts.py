@@ -21,7 +21,7 @@ PLOT / CHART RULES (CRITICAL):
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 - For seaborn: same rules, use plt.savefig()
-- For plotly: fig.write_html("chart.html")
+- For plotly: fig.write_json("chart.plotly.json") — the app draws it interactively
 - ALWAYS print: print("Plot saved to plot.png")
 - Add plt.tight_layout() before saving
 

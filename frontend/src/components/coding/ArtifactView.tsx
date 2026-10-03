@@ -1,8 +1,15 @@
 import { useState } from "react";
 import { API } from "../../lib/api";
+import { isChartArtifact } from "../../lib/plotlyFigure";
+import { PlotlyChart } from "./PlotlyChart";
 
 interface ArtifactViewProps {
   artifacts: string[];
+}
+
+function iconFor(name: string): string {
+  if (isChartArtifact(name)) return "📈";
+  return name.endsWith(".html") ? "📊" : "🖼";
 }
 
 export function ArtifactView({ artifacts }: ArtifactViewProps) {
@@ -11,30 +18,34 @@ export function ArtifactView({ artifacts }: ArtifactViewProps) {
 
   const current = artifacts[selected];
   const isHtml  = current.endsWith(".html");
+  const isChart = isChartArtifact(current);
   const url     = `${API}/api/coding/artifact/${current}`;
+  const name    = current.split("/").pop() ?? current;
 
   return (
     <div className="artifact-wrap">
       {artifacts.length > 1 && (
         <div className="artifact-strip">
-          {artifacts.map((name, i) => (
-            <button key={name} className={`artifact-thumb ${i === selected ? "artifact-thumb-active" : ""}`}
+          {artifacts.map((artifact, i) => (
+            <button key={artifact} className={`artifact-thumb ${i === selected ? "artifact-thumb-active" : ""}`}
               onClick={() => setSelected(i)}>
-              {name.endsWith(".html") ? "📊" : "🖼"} {name}
+              {iconFor(artifact)} {artifact}
             </button>
           ))}
         </div>
       )}
 
       <div className="artifact-viewer">
-        {isHtml ? (
+        {isChart ? (
+          <PlotlyChart key={url} url={url} name={name} />
+        ) : isHtml ? (
           <iframe src={url} className="artifact-iframe" title={current} sandbox="allow-scripts" />
         ) : (
           <img src={url} alt={current} className="artifact-img" />
         )}
         <div className="artifact-footer">
           <span className="artifact-name">{current}</span>
-          <a href={url} download={current} className="artifact-dl">⬇ Tải xuống</a>
+          <a href={url} download={name} className="artifact-dl">⬇ Tải xuống</a>
         </div>
       </div>
     </div>

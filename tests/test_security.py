@@ -126,8 +126,8 @@ def test_executor_hides_server_secrets(monkeypatch):
     monkeypatch.setattr(ce, "executor_status", lambda **_: ce.ExecutorStatus(True, "ok"))
     captured = {}
 
-    def fake_run_docker(self, script_path, run_dir, timeout):
-        captured["argv"] = ce._docker_run_argv(script_path.name, run_dir, "king-exec-test")
+    def fake_run_docker(self, script_path, run_dir, timeout, keep_state=False):
+        captured["argv"] = ce._docker_run_argv(script_path.name, run_dir, "king-exec-test", keep_state=keep_state)
         return ce.ExecutionResult(stdout="", stderr="", exit_code=0, timed_out=False, duration=0.0)
 
     monkeypatch.setattr(ce.CodeExecutor, "_run_docker", fake_run_docker)

@@ -11,6 +11,7 @@ from pathlib import Path
 
 from backend.app.core import capabilities
 from backend.app.core.config import settings
+from backend.app.features.coding.session_state import RUNNER_SOURCE
 
 
 logger = logging.getLogger(__name__)
@@ -192,7 +193,7 @@ def _host_user_docker_args() -> list[str]:
     return ["--user", f"{uid}:{gid}"]
 
 
-def _docker_run_argv(script_name: str, run_dir: Path, name: str) -> list[str]:
+def _docker_run_argv(script_name: str, run_dir: Path, name: str, keep_state: bool = False) -> list[str]:
     """Build the `docker run` argv enforcing every global isolation constraint.
 
     512m RAM, 1.0 CPU, 128 PIDs, network off, read-only root with a 64m
@@ -200,7 +201,14 @@ def _docker_run_argv(script_name: str, run_dir: Path, name: str) -> list[str]:
     and (on POSIX hosts) a `--user` override matching the host UID/GID that
     owns the bind-mounted sandbox dir — see backend/app/core/config.py
     EXECUTOR_* settings and `_host_user_docker_args()`.
+
+    `keep_state` runs the script through state_runner.py, which restores the
+    session's variables first and saves them after. It goes in as `-c`
+    rather than baked into the image, so an image built before it existed
+    still works and the host never writes code into the sandbox to run.
     """
+    script = f"{CONTAINER_WORKDIR}/{script_name}"
+    command = ["python", "-c", RUNNER_SOURCE, script] if keep_state else ["python", script]
     return [
         "docker", "run", "--rm",
         "--name", name,
@@ -219,7 +227,7 @@ def _docker_run_argv(script_name: str, run_dir: Path, name: str) -> list[str]:
         "-v", f"{run_dir}:{CONTAINER_WORKDIR}:rw",
         "-w", CONTAINER_WORKDIR,
         settings.EXECUTOR_IMAGE,
-        "python", f"{CONTAINER_WORKDIR}/{script_name}",
+        *command,
     ]
 
 
@@ -262,7 +270,9 @@ class CodeExecutor:
     def __init__(self):
         SANDBOX_DIR.mkdir(parents=True, exist_ok=True)
 
-    def run(self, code: str, timeout: int = TIMEOUT_SEC, sandbox: Path | None = None, session_id: str | None = None) -> ExecutionResult:
+    def run(self, code: str, timeout: int = TIMEOUT_SEC, sandbox: Path | None = None, session_id: str | None = None, keep_state: bool = False) -> ExecutionResult:
+        """`keep_state`: the code sees the variables earlier successful runs
+        in this sandbox kept, and a successful run keeps its own (session_state.py)."""
         run_dir = (sandbox or SANDBOX_DIR).resolve()
         run_dir.mkdir(parents=True, exist_ok=True)
         if not hasattr(os, "getuid"):
@@ -301,7 +311,7 @@ class CodeExecutor:
         try:
             script_path.write_text(script_code, encoding="utf-8")
             _emit_execution_event("coding.execution_started", session_id, "docker")
-            result = self._run_docker(script_path, run_dir, timeout)
+            result = self._run_docker(script_path, run_dir, timeout, keep_state=keep_state)
             reason_code = "timeout" if result.timed_out else ("ok" if result.success else "nonzero_exit")
             _emit_execution_event("coding.execution_finished", session_id, reason_code)
             return result
@@ -311,11 +321,13 @@ class CodeExecutor:
             except Exception:
                 pass
 
-    def _run_docker(self, script_path: Path, run_dir: Path, timeout: int) -> ExecutionResult:
+    def _run_docker(self, script_path: Path, run_dir: Path, timeout: int, keep_state: bool = False) -> ExecutionResult:
         name = f"king-exec-{script_path.stem}"
-        argv = _docker_run_argv(script_path.name, run_dir, name)
+        argv = _docker_run_argv(script_path.name, run_dir, name, keep_state=keep_state)
         start = time.time()
-        proc = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        # The container writes UTF-8; text=True alone would decode with the
+        # host's locale (cp1252 on Windows) and garble Vietnamese output.
+        proc = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace")
         try:
             stdout, stderr = proc.communicate(timeout=timeout)
             return ExecutionResult(self._truncate(stdout or ""), self._truncate(stderr or ""), proc.returncode, False, time.time() - start)

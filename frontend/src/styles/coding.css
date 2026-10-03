@@ -377,6 +377,13 @@
 .output-stdout { color: var(--text); }
 .output-stderr { color: var(--danger); background: color-mix(in srgb, var(--danger) 3%, transparent); }
 
+/* Variables the run kept for the session's next request */
+.output-kept { padding: 8px 14px; border-top: 1px solid var(--border); font-size: 12px; color: var(--text2); }
+.output-kept summary { cursor: pointer; }
+.output-kept ul { margin: 6px 0 0; padding-left: 18px; }
+.output-kept li { margin: 2px 0; overflow-wrap: anywhere; }
+.output-kept code { font-family: var(--mono); color: var(--text); }
+
 .final-msg  { padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-top: 4px; }
 .final-ok   { background: color-mix(in srgb, var(--ok) 6%, transparent); border: 1px solid color-mix(in srgb, var(--ok) 15%, transparent); color: var(--accent-coding); }
 .final-fail { background: color-mix(in srgb, var(--danger) 5%, transparent); border: 1px solid color-mix(in srgb, var(--danger) 15%, transparent); color: var(--danger); }

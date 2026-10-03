@@ -462,3 +462,15 @@
   .hmer-page { padding: 20px 16px 48px; }
   .hmer-result { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Chèn cấu trúc (LatexEditor): những thứ mô hình hay đọc sai — ngoặc tập hợp,
+   xuống dòng, ma trận, hệ — bấm là có, ô đầu tiên được chọn sẵn để gõ đè. */
+.hmer-snippets { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px; }
+.hmer-snippet {
+  padding: 3px 9px; border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--border2); background: var(--bg2); color: var(--text2);
+  transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+}
+.hmer-snippet code { font-family: var(--mono); font-size: 12px; }
+.hmer-snippet:hover { background: var(--bg3); color: var(--text); border-color: color-mix(in srgb, var(--accent-hmer) 50%, var(--border2)); }
+.hmer-snippet:focus-visible { outline: 2px solid var(--accent-hmer); outline-offset: 1px; }

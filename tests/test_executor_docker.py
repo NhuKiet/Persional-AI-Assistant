@@ -80,7 +80,7 @@ def test_docker_mode_dispatches_to_docker_with_rewritten_chdir(monkeypatch, tmp_
 
     captured = {}
 
-    def fake_run_docker(self, script_path, run_dir, timeout):
+    def fake_run_docker(self, script_path, run_dir, timeout, keep_state=False):
         captured["script"] = Path(script_path).read_text(encoding="utf-8")
         return ce.ExecutionResult(stdout="ok", stderr="", exit_code=0,
                                   timed_out=False, duration=0.0)
@@ -97,7 +97,7 @@ def test_docker_mode_dispatches_to_docker_with_rewritten_chdir(monkeypatch, tmp_
 def test_docker_dispatch_logs_started_and_finished_events(monkeypatch, tmp_path, caplog):
     monkeypatch.setattr(ce, "executor_status", lambda **_: ce.ExecutorStatus(True, "ok"))
 
-    def fake_run_docker(self, script_path, run_dir, timeout):
+    def fake_run_docker(self, script_path, run_dir, timeout, keep_state=False):
         return ce.ExecutionResult(stdout="ok", stderr="", exit_code=0,
                                   timed_out=False, duration=0.01)
 
@@ -167,7 +167,7 @@ def test_run_does_not_widen_sandbox_permissions_when_host_user_override_availabl
     chmod_calls = []
     monkeypatch.setattr(Path, "chmod", lambda self, mode: chmod_calls.append(mode))
 
-    def fake_run_docker(self, script_path, run_dir, timeout):
+    def fake_run_docker(self, script_path, run_dir, timeout, keep_state=False):
         return ce.ExecutionResult(stdout="ok", stderr="", exit_code=0, timed_out=False, duration=0.0)
 
     monkeypatch.setattr(ce.CodeExecutor, "_run_docker", fake_run_docker)
@@ -185,7 +185,7 @@ def test_run_still_chmods_sandbox_without_host_getuid(monkeypatch, tmp_path):
     chmod_calls = []
     monkeypatch.setattr(Path, "chmod", lambda self, mode: chmod_calls.append(mode))
 
-    def fake_run_docker(self, script_path, run_dir, timeout):
+    def fake_run_docker(self, script_path, run_dir, timeout, keep_state=False):
         return ce.ExecutionResult(stdout="ok", stderr="", exit_code=0, timed_out=False, duration=0.0)
 
     monkeypatch.setattr(ce.CodeExecutor, "_run_docker", fake_run_docker)

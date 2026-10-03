@@ -61,6 +61,21 @@
   background: #fff;
 }
 
+/* Interactive chart drawn on the page (PlotlyChart) — Plotly's own colours assume white */
+.artifact-chart {
+  width: 100%;
+  height: 460px;
+  background: #fff;
+}
+
+.artifact-chart-error {
+  margin: 0;
+  padding: 10px 12px;
+  font-size: 13px;
+  color: var(--text2);
+  background: var(--bg3);
+}
+
 /* Footer bar */
 .artifact-footer {
   display: flex;

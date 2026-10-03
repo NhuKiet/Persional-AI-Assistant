@@ -7,9 +7,10 @@ from fastapi.responses import JSONResponse
 from backend.app.core.config import settings
 from backend.app.core.rate_limit import rate_limit
 from backend.app.features.coding.artifacts import ArtifactService, artifact_response
-from backend.app.features.coding.execution import executor_status
+from backend.app.features.coding.execution import SANDBOX_DIR, executor_status, safe_session_id
 from backend.app.features.coding.schemas import CodingRequest, SessionHistoryResponse
 from backend.app.features.coding.service import CodingService, SessionBusyError
+from backend.app.features.coding.session_state import clear_kept_variables
 from backend.app.features.coding.uploads import UploadService
 from backend.app.shared.conversation_store import ConversationManager
 from backend.app.shared.session_locks import log_concurrent_rejection
@@ -106,6 +107,8 @@ async def serve_artifact(filename: str):
 @router.delete("/api/coding/session/{session_id}")
 def clear_coding_session(session_id: str):
     _conv_manager.clear_session(session_id)
+    # The variables its runs kept go with the conversation (session_state.py).
+    clear_kept_variables(SANDBOX_DIR / safe_session_id(session_id))
     return {"cleared": session_id}
 
 

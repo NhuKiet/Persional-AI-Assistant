@@ -82,7 +82,7 @@ def test_run_propagates_provider_and_model_to_plan_call(monkeypatch):
         success = True
         unavailable = False
 
-    monkeypatch.setattr(agent.executor, "run", lambda code, sandbox=None, session_id=None: _FakeResult())
+    monkeypatch.setattr(agent.executor, "run", lambda code, sandbox=None, session_id=None, keep_state=False: _FakeResult())
 
     events = list(agent.run(
         "write hello world", [], "test-session",

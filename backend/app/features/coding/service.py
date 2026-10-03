@@ -16,6 +16,7 @@ from backend.app.features.coding.data_preview import describe_table
 from backend.app.features.coding.execution import CodeExecutor, detect_missing_packages, install_packages
 from backend.app.features.coding.prompts import CHAT_SYSTEM, CODE_PROMPT, DEBUG_PROMPT, PLAN_PROMPT, PLAN_SYSTEM, REVIEW_PROMPT, SYSTEM_PROMPT, TEST_PROMPT
 from backend.app.features.coding.schemas import CodingRequest
+from backend.app.features.coding.session_state import kept_variables_context, read_kept_variables
 from backend.app.features.coding.uploads import session_sandbox
 from backend.app.shared.conversation_store import ConversationManager
 from backend.app.shared.session_locks import KeyedLockRegistry, SessionBusyError, SessionLease
@@ -158,16 +159,16 @@ def _build_file_context(uploaded_files: list[dict]) -> str:
 def _build_plot_hint(request: str) -> str:
     plot_keywords = ["plot", "chart", "graph", "vẽ", "biểu đồ", "visualize", "histogram", "scatter", "bar", "line", "pie", "heatmap", "show", "display", "figure", "visualization"]
     if any(keyword in request.lower() for keyword in plot_keywords):
+        # Plotly, written as JSON: the page draws it interactively (hover,
+        # zoom, PNG download) — see CHART_SUFFIX in artifacts.py.
         return (
-            "IMPORTANT — visualization task:\n"
-            "  import matplotlib\n"
-            "  matplotlib.use('Agg')\n"
-            "  import matplotlib.pyplot as plt\n"
-            "  # ... create figure ...\n"
-            "  plt.tight_layout()\n"
-            "  plt.savefig('plot.png', dpi=150, bbox_inches='tight')\n"
-            "  print('Plot saved to plot.png')\n"
-            "NEVER use plt.show()\n"
+            "IMPORTANT — visualization task: build the chart with Plotly so it is interactive in the app:\n"
+            "  import plotly.express as px          # or: import plotly.graph_objects as go\n"
+            "  # ... build the figure `fig` ...\n"
+            "  fig.update_layout(title='...')\n"
+            "  fig.write_json('chart.plotly.json')\n"
+            "  print('Chart saved to chart.plotly.json')\n"
+            "NEVER call fig.show() or plt.show() — there is no display.\n"
         )
     return ""
 
@@ -212,10 +213,12 @@ class CodingAgent:
         cancel_event: "threading.Event | None" = None,
     ) -> Generator[dict, None, None]:
         history_str = _history_str(history)
-        file_context = _build_file_context(uploaded_files or [])
         plot_hint = _build_plot_hint(request)
         sandbox = _session_sandbox(session_id)
         sandbox_str = str(sandbox).replace("\\", "/")
+        # What the session already has — its files and the variables earlier
+        # runs kept — goes to the plan, code and debug prompts alike.
+        file_context = _build_file_context(uploaded_files or []) + kept_variables_context(sandbox)
 
         # uploaded_files is prompt context only: uploads already land in the
         # session sandbox (UploadService). Never treat its names as paths.
@@ -313,12 +316,13 @@ class CodingAgent:
                 yield {"type": "debugging", "iteration": iteration, "message": f"Debug lần {iteration}/{MAX_DEBUG_ITER}..."}
 
             snapshot_before = _sandbox_snapshot(sandbox)
-            result = self.executor.run(current_code, sandbox=sandbox, session_id=session_id)
+            result = self.executor.run(current_code, sandbox=sandbox, session_id=session_id, keep_state=True)
             artifacts = _collect_artifacts(snapshot_before, sandbox, session_id)
             if result.unavailable:
                 yield {"type": "done", "success": False, "message": "Trình thực thi code hiện không khả dụng. Vui lòng thử lại sau.", "iterations": iteration, "final_code": current_code, "artifacts": artifacts}
                 return
-            yield {"type": "output", "stdout": result.stdout, "stderr": result.stderr, "exit_code": result.exit_code, "duration": round(result.duration, 2), "timed_out": result.timed_out, "artifacts": artifacts}
+            kept = read_kept_variables(sandbox)["variables"] if result.success else []
+            yield {"type": "output", "stdout": result.stdout, "stderr": result.stderr, "exit_code": result.exit_code, "duration": round(result.duration, 2), "timed_out": result.timed_out, "artifacts": artifacts, "kept_variables": kept}
             if result.success:
                 break
 

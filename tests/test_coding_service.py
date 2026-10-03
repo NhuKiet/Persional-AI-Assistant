@@ -54,17 +54,8 @@ def test_coding_service_uses_injected_agent_factory():
 def test_coding_prompts_and_plot_hint_keep_original_literals():
     assert "NEVER call plt.show() — headless environment" in SYSTEM_PROMPT
     assert "safety — max 3 points" in REVIEW_PROMPT
-    assert _build_plot_hint("vẽ biểu đồ") == (
-        "IMPORTANT — visualization task:\n"
-        "  import matplotlib\n"
-        "  matplotlib.use('Agg')\n"
-        "  import matplotlib.pyplot as plt\n"
-        "  # ... create figure ...\n"
-        "  plt.tight_layout()\n"
-        "  plt.savefig('plot.png', dpi=150, bbox_inches='tight')\n"
-        "  print('Plot saved to plot.png')\n"
-        "NEVER use plt.show()\n"
-    )
+    # The plot hint itself is pinned in tests/test_coding_plotly.py.
+    assert "chart.plotly.json" in _build_plot_hint("vẽ biểu đồ")
 
 
 def test_coding_agent_keeps_user_visible_vietnamese_events(monkeypatch, tmp_path):
@@ -146,7 +137,7 @@ def test_agent_writes_only_py_suffixed_generated_files(monkeypatch, tmp_path):
         unavailable = False
 
     agent = CodingAgent()
-    monkeypatch.setattr(agent.executor, "run", lambda code, sandbox=None, session_id=None: _FakeResult())
+    monkeypatch.setattr(agent.executor, "run", lambda code, sandbox=None, session_id=None, keep_state=False: _FakeResult())
 
     events = list(agent.run("viết code", [], "s-ok"))
 
@@ -167,7 +158,7 @@ def test_agent_reports_safe_message_when_executor_unavailable(monkeypatch, tmp_p
 
     run_calls = []
 
-    def fake_run(code, sandbox=None, session_id=None, timeout=None):
+    def fake_run(code, sandbox=None, session_id=None, timeout=None, keep_state=False):
         run_calls.append(session_id)
         return ExecutionResult(
             stdout="", stderr="Code execution is currently unavailable.",
@@ -286,7 +277,7 @@ def test_agent_runs_declared_main_entry_for_multifile_execution(monkeypatch, tmp
     agent = CodingAgent()
     executed_code = []
 
-    def fake_run(code, sandbox=None, session_id=None):
+    def fake_run(code, sandbox=None, session_id=None, keep_state=False):
         executed_code.append(code)
         return _FakeResult()
 

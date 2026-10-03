@@ -16,6 +16,11 @@ RUN pip install --no-cache-dir \
         openpyxl \
         tabulate
 
+# Biểu đồ tương tác: code ghi fig.write_json('chart.plotly.json'), trang vẽ lại
+# bằng plotly.js (xem CHART_SUFFIX trong backend/app/features/coding/artifacts.py).
+# Layer riêng để thêm nó không phải cài lại cả bộ trên.
+RUN pip install --no-cache-dir plotly
+
 # UID/GID cố định, không phải root. `docker run` phía executor đã tự set
 # --cap-drop ALL + --security-opt no-new-privileges:true + --read-only +
 # --network none (xem backend/app/features/coding/execution.py); chạy dưới

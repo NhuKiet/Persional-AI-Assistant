@@ -13,10 +13,22 @@ from backend.app.features.coding.execution import SANDBOX_DIR, safe_session_id
 logger = logging.getLogger(__name__)
 
 ARTIFACT_EXTS = {".png", ".jpg", ".jpeg", ".svg", ".html", ".gif"}
+# An interactive chart: a Plotly figure written by fig.write_json() — data
+# and layout only, no script — which the page draws with plotly.js. Matched
+# on the full name so other JSON the code writes stays an ordinary file.
+CHART_SUFFIX = ".plotly.json"
 MIME_MAP = {
     ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
     ".gif": "image/gif", ".svg": "image/svg+xml", ".html": "text/html",
+    ".json": "application/json",
 }
+# Suffixes a served path may have; `_is_artifact` then narrows ".json" to charts.
+_SERVED_EXTS = ARTIFACT_EXTS | {".json"}
+
+
+def _is_artifact(name: str) -> bool:
+    name = name.lower()
+    return name.endswith(CHART_SUFFIX) or (Path(name).suffix in ARTIFACT_EXTS)
 
 # Artifact suffixes that must never be rendered inline by the browser: an
 # HTML/SVG artifact served inline could execute script in the app's origin.
@@ -101,6 +113,10 @@ def artifact_response(path: Path) -> Response:
                 "X-Content-Type-Options": "nosniff",
             },
         )
+    if suffix == ".json":
+        # Read by the page with fetch() and drawn by plotly.js — never
+        # rendered by the browser itself, and nosniff keeps it that way.
+        return FileResponse(str(path), media_type=media_type, headers={"X-Content-Type-Options": "nosniff"})
     return FileResponse(str(path), media_type=media_type)
 
 
@@ -115,7 +131,9 @@ class ArtifactService:
     def resolve(self, session_id: str, filename: str) -> Path:
         try:
             session_root = validate_relative_path(safe_session_id(session_id), SANDBOX_DIR, set())
-            path = validate_relative_path(filename, session_root, ARTIFACT_EXTS)
+            path = validate_relative_path(filename, session_root, _SERVED_EXTS)
+            if not _is_artifact(path.name):
+                raise _reject(400, "disallowed_suffix")
         except HTTPException as exc:
             emit_path_rejected(session_id, str(exc.detail))
             raise
@@ -135,7 +153,9 @@ class ArtifactService:
         try:
             if "/" in filename:
                 raise _reject(400, "nested_path_not_allowed")
-            path = validate_relative_path(filename, SANDBOX_DIR, ARTIFACT_EXTS)
+            path = validate_relative_path(filename, SANDBOX_DIR, _SERVED_EXTS)
+            if not _is_artifact(path.name):
+                raise _reject(400, "disallowed_suffix")
         except HTTPException as exc:
             emit_path_rejected("(root)", str(exc.detail))
             raise
@@ -147,7 +167,7 @@ class ArtifactService:
     def collect(snapshot_before: set[Path], sandbox: Path, session_id: str) -> list[str]:
         safe = safe_session_id(session_id)
         try:
-            return sorted(f"{safe}/{file.name}" for file in sandbox.iterdir() if file.suffix.lower() in ARTIFACT_EXTS and file not in snapshot_before)
+            return sorted(f"{safe}/{file.name}" for file in sandbox.iterdir() if _is_artifact(file.name) and file not in snapshot_before)
         except Exception as exc:
             logger.warning("Artifact scan error: %s", exc)
             return []
