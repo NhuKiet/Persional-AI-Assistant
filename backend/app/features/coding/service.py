@@ -20,6 +20,7 @@ from backend.app.features.coding.session_state import kept_variables_context, re
 from backend.app.features.coding.uploads import session_sandbox
 from backend.app.shared.conversation_store import ConversationManager
 from backend.app.shared.session_locks import KeyedLockRegistry, SessionBusyError, SessionLease
+from backend.app.shared.untrusted import UNTRUSTED_GUARD, frame_untrusted
 
 __all__ = ["CodingAgent", "CodingService", "SessionBusyError"]
 
@@ -144,16 +145,20 @@ def _collect_artifacts(snapshot_before: set[Path], sandbox: Path, session_id: st
 def _build_file_context(uploaded_files: list[dict]) -> str:
     if not uploaded_files:
         return ""
-    lines = ["Available data files (in working directory):"]
+    lines = []
     for file in uploaded_files:
-        name, size, preview = file.get("name", ""), file.get("size", 0), file.get("preview", "")
+        # Every field comes back from the browser with the request.
+        name, size, preview = str(file.get("name", ""))[:200], file.get("size", 0), str(file.get("preview") or "")
         lines.append(f"  - {name} ({size} bytes)")
         # Exact column names and types, so the code doesn't guess them.
         if table := describe_table(file.get("table")):
             lines.append(f"    Table: {table}")
         if preview:
             lines.append(f"    Preview: {preview[:200]}")
-    return "\n".join(lines) + "\n\n"
+    # File names, column names and previews are text from the user's files —
+    # a downloaded CSV can carry instructions aimed at the model.
+    listing = frame_untrusted("\n".join(lines))
+    return f"Available data files (in working directory). {UNTRUSTED_GUARD}\n{listing}\n\n"
 
 
 def _build_plot_hint(request: str) -> str:

@@ -85,6 +85,19 @@ def _reset_guest_quota():
 
 
 @pytest.fixture(autouse=True)
+def _reset_knowledge_store_pause():
+    """After a failure the knowledge store is skipped for a minute, module-wide:
+    a test that simulates one would otherwise make later tests skip it too.
+    Only touched if something already imported it — it pulls in the reranker."""
+    import sys
+
+    yield
+    store = sys.modules.get("backend.app.features.research.knowledge_store")
+    if store is not None:
+        store.reset_pause()
+
+
+@pytest.fixture(autouse=True)
 def _reset_db_circuit_breaker():
     """The database circuit breaker is module-global: a test that simulates an
     outage would otherwise make every later database call fail fast."""

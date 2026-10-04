@@ -62,6 +62,9 @@ class Settings(BaseSettings):
     KNOWLEDGE_OVERLAP: int = 50
     KNOWLEDGE_TOP_K: int = 40
     KNOWLEDGE_CANDIDATE_THRESHOLD: float = 0.65
+    # Giây tối đa chờ một lần tra knowledge store trước khi bỏ qua nó: đây là
+    # cache, tra ấm mất dưới 1s — chậm hơn mức này thì tìm mới nhanh hơn.
+    KNOWLEDGE_QUERY_TIMEOUT: float = 6.0
     KNOWLEDGE_COVERAGE_MIN: float = 0.6
     KNOWLEDGE_TTL_VOLATILE_DAYS: int = 7
     KNOWLEDGE_TTL_STABLE_DAYS: int = 180

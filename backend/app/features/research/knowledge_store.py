@@ -224,9 +224,47 @@ def _rerank(query: str, results: list[SearchResult]) -> list[SearchResult]:
 _client = None
 _client_lock = threading.Lock()
 
+# The store is a cache, so a Weaviate that is asleep, expired or slow must
+# cost a research request almost nothing. After any failure it is skipped for
+# RETRY_AFTER_SECONDS instead of retried on every call (a sleeping Weaviate
+# Cloud cluster took 0.9–1.6 s to answer 503, twice per request), and lookups
+# get a short deadline (the first one after a cluster woke took 22.7 s under
+# the client's 30 s default; a warm one takes under a second).
+RETRY_AFTER_SECONDS = 60.0
+_INIT_TIMEOUT_SECONDS = 5
+_INSERT_TIMEOUT_SECONDS = 90
+_clock = time.monotonic
+_retry_at = 0.0  # 0 = not paused
+
+
+class KnowledgeStoreUnavailable(RuntimeError):
+    """The store failed a moment ago and is being left alone for now."""
+
+
+def reset_pause() -> None:
+    """Test hook: forget any recent failure."""
+    global _retry_at
+    _retry_at = 0.0
+
+
+def _pause(error: BaseException) -> str:
+    """Skip the store for a while after `error`; returns what to report."""
+    global _retry_at
+    first = not _retry_at or _clock() >= _retry_at
+    _retry_at = _clock() + RETRY_AFTER_SECONDS
+    detail = f"{type(error).__name__}: {error}"
+    if "503" in detail or "no healthy upstream" in detail:
+        detail = f"Cluster Weaviate Cloud đang ngủ hoặc đã hết hạn (đánh thức/tạo lại trong console) — {detail}"
+    if first:
+        logger.warning("Knowledge store lỗi (%s) — bỏ qua trong %.0fs rồi mới thử lại.", detail, RETRY_AFTER_SECONDS)
+    return detail
+
 
 def _get_weaviate():
     global _client
+    wait = _retry_at - _clock()
+    if wait > 0:
+        raise KnowledgeStoreUnavailable(f"Knowledge store vừa lỗi — thử lại sau {math.ceil(wait)} giây.")
     if _client is not None:
         return _client
     with _client_lock:
@@ -235,15 +273,20 @@ def _get_weaviate():
         if not settings.WEAVIATE_URL or not settings.WEAVIATE_API_KEY:
             raise RuntimeError("WEAVIATE_URL / WEAVIATE_API_KEY chưa cấu hình.")
         import weaviate
-        from weaviate.classes.init import Auth
+        from weaviate.classes.init import AdditionalConfig, Auth, Timeout
         try:
             client = weaviate.connect_to_weaviate_cloud(
                 cluster_url=settings.WEAVIATE_URL,
                 auth_credentials=Auth.api_key(settings.WEAVIATE_API_KEY),
+                additional_config=AdditionalConfig(timeout=Timeout(
+                    init=_INIT_TIMEOUT_SECONDS,
+                    query=settings.KNOWLEDGE_QUERY_TIMEOUT,
+                    insert=_INSERT_TIMEOUT_SECONDS,
+                )),
             )
             _ensure_schema(client)
         except Exception as e:
-            capabilities.failed(capabilities.KNOWLEDGE_STORE, f"{type(e).__name__}: {e}")
+            capabilities.failed(capabilities.KNOWLEDGE_STORE, _pause(e))
             raise
         _client = client
         logger.info("Weaviate connected: %s", settings.WEAVIATE_URL)
@@ -427,7 +470,7 @@ class KnowledgeStore:
                 return_metadata=MetadataQuery(score=True),
             )
         except Exception as e:
-            capabilities.failed(capabilities.KNOWLEDGE_STORE, f"{type(e).__name__}: {e}")
+            capabilities.failed(capabilities.KNOWLEDGE_STORE, _pause(e))
             logger.warning("Weaviate hybrid query failed (non-fatal): %s", e)
             return []
         capabilities.ok(capabilities.KNOWLEDGE_STORE)
@@ -470,7 +513,7 @@ class KnowledgeStore:
                 return_metadata=MetadataQuery(score=True),
             )
         except Exception as e:
-            capabilities.failed(capabilities.KNOWLEDGE_STORE, f"{type(e).__name__}: {e}")
+            capabilities.failed(capabilities.KNOWLEDGE_STORE, _pause(e))
             logger.warning("Weaviate hybrid query failed (non-fatal): %s", e)
             return []
         capabilities.ok(capabilities.KNOWLEDGE_STORE)
@@ -496,7 +539,7 @@ class KnowledgeStore:
             total = col.aggregate.over_all(total_count=True).total_count or 0
         except Exception as e:
             # Unambiguously the store: the connection already succeeded.
-            capabilities.failed(capabilities.KNOWLEDGE_STORE, f"{type(e).__name__}: {e}")
+            capabilities.failed(capabilities.KNOWLEDGE_STORE, _pause(e))
             logger.warning("KnowledgeStore.size() failed: %s", e)
             return 0
 

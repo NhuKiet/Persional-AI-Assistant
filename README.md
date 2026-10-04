@@ -402,6 +402,20 @@ Mỗi lần chạy sinh một container tạm, sống đúng trong thời gian t
 
 Frontend gọi backend **cùng origin** (`/api/…`): dev qua proxy của Vite, Docker qua nginx (`frontend/nginx.conf`) — cần để cookie đăng nhập đi kèm cả request trình duyệt tự gửi (react-pdf, `<img>`). Chạy sau HTTPS thì đặt `COOKIE_SECURE=true`.
 
+> **Supabase local trên Windows + Docker Desktop:** `supabase start` mở Studio (`54323`, không có
+> đăng nhập), Postgres (`54322`, `postgres/postgres`) và API (`54321`, key `service_role` mặc định ai
+> cũng biết) trên **mọi địa chỉ mạng**. Cách bind `127.0.0.1` trong tài liệu Supabase (`--network-id`
+> + `host_binding_ipv4`) không có tác dụng trên Docker Desktop, vì cổng phía Windows do
+> `com.docker.backend.exe` mở. Nếu từng bấm "Allow" cho chương trình đó trên mạng Public, máy khác
+> cùng Wi-Fi vào được các cổng trên. Chặn bằng PowerShell **Run as Administrator** khi Docker Desktop
+> đang chạy (localhost không bị ảnh hưởng — tường lửa không lọc loopback):
+>
+> ```powershell
+> New-NetFirewallRule -DisplayName "Block LAN to Docker Desktop ports" -Direction Inbound -Action Block -Profile Any -Program (Get-Process com.docker.backend | Select-Object -First 1).Path
+> ```
+>
+> Kiểm tra từ điện thoại cùng Wi-Fi: `http://<IP-LAN-của-máy>:54323` phải **không** mở được.
+
 ---
 
 ## ⚙️ Cấu hình (.env)
