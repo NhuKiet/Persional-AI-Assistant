@@ -436,7 +436,7 @@ export function PDFPage() {
   };
 
   return (
-    <AppShell {...sidebarProps}>
+    <AppShell {...sidebarProps} blackhole>
       <div className="page tool-page page-entered">
         <header className="tool-header">
           <div className="tool-title-wrap">

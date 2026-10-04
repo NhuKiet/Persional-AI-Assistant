@@ -468,3 +468,26 @@
   height: 100%;
 }
 
+/* Nền hố đen + sao (BlackHoleBackdrop, chỉ theme tối). fixed + z-index âm: phủ
+   kín viewport — cả phía sau tấm kính sidebar — và nằm dưới mọi thứ, chỉ trên
+   --canvas-background của body. .app-main có overflow: hidden nhưng không cắt
+   được phần tử fixed (khối chứa của nó là viewport), miễn là không tổ tiên
+   nào có transform / filter. */
+.bh-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: #000;
+}
+.bh-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  transition: opacity 0.9s var(--ease);
+}
+/* Hố nằm giữa trang, nội dung (logo, ô nhập, thẻ kết quả, khung chat) nằm đè
+   lên nó; lõi đĩa lại gần trắng tuyệt đối — nên nó lùi hẳn về sau. */
+.bh-canvas.ready { opacity: 0.6; }
+

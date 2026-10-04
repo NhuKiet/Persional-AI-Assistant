@@ -7,6 +7,22 @@ beforeEach(() => {
   localStorage.clear();
 });
 
+/** Runs `run` with `localStorage` replaced on both globals the hook can reach. */
+function withLocalStorage(storage: unknown, run: () => void): void {
+  const original = window.localStorage;
+  const install = (value: unknown) => {
+    for (const target of [window, globalThis]) {
+      Object.defineProperty(target, "localStorage", { configurable: true, value });
+    }
+  };
+  install(storage);
+  try {
+    run();
+  } finally {
+    install(original);
+  }
+}
+
 describe("usePdfLayout", () => {
   it("persists independently collapsible desktop panels", () => {
     const { result } = renderHook(() => usePdfLayout("desktop"));
@@ -98,35 +114,34 @@ describe("usePdfLayout", () => {
   });
 
   it("writes a toggled preference once under StrictMode", () => {
-    const setItem = vi.spyOn(window.localStorage, "setItem");
-    const { result } = renderHook(() => usePdfLayout("desktop"), {
-      wrapper: StrictMode,
+    // A recording stand-in, not vi.spyOn(localStorage, "setItem"): jsdom keeps
+    // Storage's methods on its prototype, so a spy placed on the instance
+    // never sees a call. That spy passed on Node 26, where setup.js swaps in a
+    // plain-object shim, and failed on CI's Node 20, which has jsdom's Storage.
+    const writes: [string, string][] = [];
+    const recording = {
+      getItem: () => null,
+      setItem: (key: string, value: string) => void writes.push([key, value]),
+    };
+
+    withLocalStorage(recording, () => {
+      const { result } = renderHook(() => usePdfLayout("desktop"), {
+        wrapper: StrictMode,
+      });
+
+      act(() => result.current.toggleOutline());
     });
 
-    act(() => result.current.toggleOutline());
-
-    expect(setItem).toHaveBeenCalledTimes(1);
-    expect(setItem).toHaveBeenCalledWith("pdf-outline-open", "false");
+    expect(writes).toEqual([["pdf-outline-open", "false"]]);
   });
 
   it("uses defaults when storage is unavailable", () => {
-    const availableStorage = window.localStorage;
-    for (const target of [window, globalThis]) {
-      Object.defineProperty(target, "localStorage", { configurable: true, value: undefined });
-    }
-    try {
+    withLocalStorage(undefined, () => {
       const { result } = renderHook(() => usePdfLayout("desktop"));
 
       expect(result.current.outlineOpen).toBe(true);
       expect(result.current.assistantOpen).toBe(true);
-    } finally {
-      for (const target of [window, globalThis]) {
-        Object.defineProperty(target, "localStorage", {
-          configurable: true,
-          value: availableStorage,
-        });
-      }
-    }
+    });
   });
 });
 

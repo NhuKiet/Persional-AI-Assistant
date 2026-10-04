@@ -80,7 +80,7 @@ export function HomePage() {
   };
 
   return (
-    <AppShell {...sidebarProps}>
+    <AppShell {...sidebarProps} blackhole>
         <div className="page">
 
           {/* Lối tắt về trang chủ khi sidebar đã đóng (sidebar cũng có nút

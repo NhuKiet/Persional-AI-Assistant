@@ -1,4 +1,6 @@
+import { useRef } from "react";
 import type { ReactNode } from "react";
+import { BlackHoleBackdrop } from "./BlackHoleBackdrop";
 import { GuestBanner } from "./GuestBanner";
 import { Sidebar } from "./Sidebar";
 import type { Session } from "../lib/storage";
@@ -14,6 +16,8 @@ interface AppShellProps {
   onNewChat: () => void;
   toolLabel?: string;
   toolColor?: string;
+  /** Nền hố đen + sao sau giao diện (chỉ hiện ở theme tối) — xem BlackHoleBackdrop. */
+  blackhole?: boolean;
   children: ReactNode;
 }
 
@@ -30,12 +34,14 @@ interface AppShellProps {
  * every viewport width — the sidebar's own mobile-overlay behavior in
  * responsive.css doesn't change any of this, it's pure CSS layered on top
  * of the same DOM. */
-export function AppShell({ children, ...sidebarProps }: AppShellProps) {
+export function AppShell({ children, blackhole, ...sidebarProps }: AppShellProps) {
   const { open, onToggle } = sidebarProps;
+  const mainRef = useRef<HTMLDivElement>(null);
   return (
     <div className="app-layout">
       <Sidebar {...sidebarProps} />
-      <div className="app-main">
+      <div className="app-main" ref={mainRef}>
+        {blackhole && <BlackHoleBackdrop anchorRef={mainRef} />}
         {!open && (
           <button
             className="sb-open-btn"
