@@ -350,6 +350,11 @@ Vài điểm compose đã xử lý sẵn:
   rebuild, câu hỏi research **đầu tiên** sẽ treo hàng phút để tải lại reranker (~2GB).
 - **GPU NVIDIA** của host được khai báo sẵn cho backend; không có GPU/driver thì torch
   tự chuyển sang CPU chứ không lỗi.
+- **Coding Agent không chạy được code trong bản compose**: sandbox cần gọi Docker, mà
+  container backend không có Docker (cố ý — không gắn Docker socket vào một container
+  nhận code do LLM sinh). Trang Coding báo sandbox không khả dụng, `/health/capabilities`
+  ghi `executor: docker_unavailable`; lên kế hoạch, viết code và Quick chat vẫn dùng được.
+  Cần chạy code thì chạy backend trên máy host (mục "Cài đặt & chạy local").
 
 ---
 
