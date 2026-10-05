@@ -1,0 +1,6 @@
+# `npm ci` cài dependency ngay trong image; node_modules của máy host (bản
+# Windows) chỉ làm build context nặng thêm vài trăm MB rồi đè lên bản Linux.
+node_modules/
+# Vite build lại từ đầu trong image.
+dist/
+*.log

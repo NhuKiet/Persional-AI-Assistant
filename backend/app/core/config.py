@@ -157,6 +157,8 @@ class Settings(BaseSettings):
     SESSION_SECRET: str | None = None
     SESSION_DAYS: int = 30
     # True khi chạy sau HTTPS: trình duyệt chỉ gửi cookie qua kết nối mã hoá.
+    # Bắt buộc khi ALLOWED_HOSTS có host ngoài máy này
+    # (xem _require_secure_cookie_when_exposed).
     COOKIE_SECURE: bool = False
     # Khách dùng thử: Chat, PDF, công thức viết tay — mỗi IP GUEST_DAILY_LIMIT
     # lượt trong 24 giờ, không lưu lịch sử, dùng model GUEST_PROVIDER/MODEL
@@ -261,6 +263,20 @@ class Settings(BaseSettings):
             raise ValueError(
                 f"ALLOWED_HOSTS mở ra ngoài ({', '.join(remote)}) nhưng chưa đặt OWNER_PASSWORD — "
                 "ai vào được cũng dùng được mọi công cụ. Đặt OWNER_PASSWORD trong .env."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _require_secure_cookie_when_exposed(self) -> "Settings":
+        """Beyond this machine the login must travel over HTTPS: without the
+        Secure flag the browser sends the session cookie — and the form sends
+        the password — in the clear to anyone on the network path."""
+        remote = [h for h in self.allowed_hosts if h not in _THIS_MACHINE]
+        if remote and not self.COOKIE_SECURE:
+            raise ValueError(
+                f"ALLOWED_HOSTS mở ra ngoài ({', '.join(remote)}) nhưng COOKIE_SECURE chưa bật — "
+                "mật khẩu và cookie đăng nhập sẽ đi qua HTTP không mã hoá. "
+                "Đặt HTTPS phía trước rồi COOKIE_SECURE=true trong .env."
             )
         return self
 

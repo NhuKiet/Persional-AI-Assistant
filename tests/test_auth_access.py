@@ -46,8 +46,18 @@ def test_an_app_reachable_from_outside_must_have_a_password():
     with pytest.raises(ValidationError, match="OWNER_PASSWORD"):
         Settings(ALLOWED_HOSTS="kiet.example.com", OWNER_PASSWORD=None)
 
-    Settings(ALLOWED_HOSTS="kiet.example.com", OWNER_PASSWORD="x" * 12)
+    Settings(ALLOWED_HOSTS="kiet.example.com", OWNER_PASSWORD="x" * 12, COOKIE_SECURE=True)
     Settings(ALLOWED_HOSTS="localhost,127.0.0.1", OWNER_PASSWORD=None)  # this machine only: fine
+
+
+def test_an_app_reachable_from_outside_must_keep_its_login_on_https():
+    # Without the Secure flag the browser sends the session cookie — and the
+    # login form sends the password — over plain HTTP to anyone on the path.
+    with pytest.raises(ValidationError, match="COOKIE_SECURE"):
+        Settings(ALLOWED_HOSTS="kiet.example.com", OWNER_PASSWORD="x" * 12, COOKIE_SECURE=False)
+
+    Settings(ALLOWED_HOSTS="kiet.example.com", OWNER_PASSWORD="x" * 12, COOKIE_SECURE=True)
+    Settings(ALLOWED_HOSTS="localhost,127.0.0.1", OWNER_PASSWORD="x" * 12, COOKIE_SECURE=False)  # this machine only: fine
 
 
 def test_a_short_password_is_refused():

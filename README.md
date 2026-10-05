@@ -404,8 +404,11 @@ Mỗi lần chạy sinh một container tạm, sống đúng trong thời gian t
 - **Khách** không cần đăng nhập, được thử **Chat, PDF, Công thức viết tay**: `GUEST_DAILY_LIMIT` lượt mỗi 24 giờ mỗi IP, luôn chạy trên model `GUEST_PROVIDER`/`GUEST_MODEL`, lịch sử chỉ giữ trong RAM (không ghi DB), file PDF/ảnh để riêng (khách không đọc được file của chủ và của nhau). Research, Coding, bong bóng trợ lý, lịch sử phiên và `/docs` chỉ dành cho chủ.
 - Phân quyền **chặn mặc định** (`backend/app/core/auth.py`): route mới thêm mà không khai báo cho khách thì chỉ chủ dùng được.
 - Không đặt `OWNER_PASSWORD` = chế độ mở như trước — chỉ được phép khi `ALLOWED_HOSTS` là máy này; mở ra ngoài mà thiếu mật khẩu thì backend không khởi động.
+- Mở ra ngoài cũng bắt buộc `COOKIE_SECURE=true` (tức phải có HTTPS phía trước): thiếu thì backend không khởi động, vì mật khẩu và cookie đăng nhập sẽ đi qua HTTP không mã hoá.
 
-Frontend gọi backend **cùng origin** (`/api/…`): dev qua proxy của Vite, Docker qua nginx (`frontend/nginx.conf`) — cần để cookie đăng nhập đi kèm cả request trình duyệt tự gửi (react-pdf, `<img>`). Chạy sau HTTPS thì đặt `COOKIE_SECURE=true`.
+Frontend gọi backend **cùng origin** (`/api/…`): dev qua proxy của Vite, Docker qua nginx (`frontend/nginx.conf`) — cần để cookie đăng nhập đi kèm cả request trình duyệt tự gửi (react-pdf, `<img>`).
+
+nginx gắn header bảo mật cho mọi response (`frontend/nginx-security-headers.conf`: `nosniff`, cấm nhúng khung, `Referrer-Policy`, `Permissions-Policy`) và **Content-Security-Policy** cho trang: script chỉ được chạy từ chính origin, không có script nội tuyến — vì thế đoạn đặt theme nằm ở `frontend/public/theme-init.js` chứ không nằm trong `index.html`. Thêm thư viện tải tài nguyên từ nơi khác (CDN, font, bản đồ) thì phải nới CSP trong `nginx.conf`; `tests/test_frontend_security_headers.py` canh phần này.
 
 > **Supabase local trên Windows + Docker Desktop:** `supabase start` mở Studio (`54323`, không có
 > đăng nhập), Postgres (`54322`, `postgres/postgres`) và API (`54321`, key `service_role` mặc định ai

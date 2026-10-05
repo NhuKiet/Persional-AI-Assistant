@@ -46,8 +46,10 @@ def test_default_allowed_hosts_are_loopback_only(monkeypatch):
 
 def test_allowed_hosts_parses_comma_separated_list(monkeypatch):
     monkeypatch.setenv("ALLOWED_HOSTS", " king.example.com , *.lan.example ,localhost")
-    # Hosts beyond this machine require a password (tests/test_auth_access.py).
+    # Hosts beyond this machine require a password and an HTTPS-only cookie
+    # (tests/test_auth_access.py).
     monkeypatch.setenv("OWNER_PASSWORD", "mat-khau-du-dai")
+    monkeypatch.setenv("COOKIE_SECURE", "true")
     assert Settings(_env_file=None).allowed_hosts == [
         "king.example.com", "*.lan.example", "localhost",
     ]
