@@ -13,7 +13,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/python-3.11+-blue" alt="Python 3.11+" />
-  <img src="https://img.shields.io/badge/node-20+-green" alt="Node 20+" />
+  <img src="https://img.shields.io/badge/node-24+-green" alt="Node 24+" />
   <img src="https://img.shields.io/badge/react-18-61dafb" alt="React 18" />
   <img src="https://img.shields.io/badge/FastAPI-SSE-009688" alt="FastAPI" />
 </p>
@@ -195,7 +195,7 @@ icon, không dùng emoji) để màu luôn bám theo token của theme.
 | | Bắt buộc | Ghi chú |
 |---|---|---|
 | **Python** | ✅ `>= 3.11` | |
-| **Node.js** | ✅ `>= 20` + npm | |
+| **Node.js** | ✅ `>= 24` + npm | Node 20 đã hết hỗ trợ; CI chạy trên 24 |
 | **Docker** | ✅ | Bắt buộc cho Coding Agent — `EXECUTOR_MODE=docker` là giá trị duy nhất được chấp nhận |
 | **uv** | khuyên dùng | Trình quản lý môi trường/gói Python |
 | **Ollama** | tuỳ chọn | Chỉ cần khi chạy LLM local |
@@ -513,7 +513,23 @@ sống sót qua refactor).
 ### CI
 
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) chạy trên mọi push và pull
-request: backend `pytest`; frontend `typecheck` → `test` → `build`.
+request: backend `pytest`; frontend `typecheck` → `test` → `build` (Node 24).
+
+Job **Dependency audit** chạy riêng, thêm cả mỗi sáng thứ Hai (lỗ hổng được công bố
+kể cả khi không ai push): `uv audit` trên `uv.lock`, và `npm audit` cho các gói chạy
+trên trình duyệt (fail từ mức high). Chạy tay trước khi push:
+
+```bash
+uv audit --frozen --preview-features audit-command
+```
+
+```bash
+npm audit --omit=dev --audit-level=high
+```
+
+Nâng một gói Python bị báo: sửa dòng ghim trong `pyproject.toml` (hoặc
+`uv lock --upgrade-package <tên>` nếu là gói gián tiếp), rồi `uv sync --dev --inexact`
+— **không** bỏ `--inexact`, kẻo mất các gói HMER cài tay (mục 7).
 
 ---
 

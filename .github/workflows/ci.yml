@@ -3,13 +3,17 @@ name: CI
 on:
   push:
   pull_request:
+  # Advisories are published without anyone pushing: check the locked
+  # dependencies again every Monday.
+  schedule:
+    - cron: "0 2 * * 1"
 
 jobs:
   backend:
     name: Backend — pytest
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v5
         with:
           version: "latest"
@@ -25,13 +29,36 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
-          node-version: "20"
+          node-version: "24"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
       - run: npm run typecheck
       - run: npm run test
       - run: npm run build
+
+  # A job of its own, so a newly published advisory shows up as "audit
+  # failed" rather than as failing tests.
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+      # Reads uv.lock only; nothing is installed. `uv audit` is still a
+      # preview command — the flag opts in.
+      - name: Python dependencies
+        run: uv audit --frozen --preview-features audit-command
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+      # What ships to the browser, failing on high or critical. The two
+      # moderate react-router advisories are fixed only in v7.
+      - name: Frontend dependencies
+        working-directory: frontend
+        run: npm audit --omit=dev --audit-level=high
