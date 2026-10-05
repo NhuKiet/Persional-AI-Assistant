@@ -10,7 +10,7 @@ checkJs: false`, và mục tiêu là đồng bộ lại từ project gốc dễ 
 | `layers/blackhole.js` | **Nguyên trạng** (`src/layers/blackhole.js`). Đồng bộ lại = chép đè. |
 | `layers/stars.js` | Bỏ thấu kính con trỏ và phần mờ dưới tấm công thức; vùng rải sao rộng hơn. |
 | `glsl/common.js` | Bỏ bảng mép quạt `FAN_EDGES` và hàm `lensed()`. |
-| `config.js` | Chỉ trích `BH`, `LUT_*`, `STARS` và các hằng khung tham chiếu. |
+| `config.js` | Chỉ trích `BH`, `LUT_*`, `STARS`, các hằng khung tham chiếu; `LENS` lấy từ `INTERACT`. |
 
 Phần **có kiểu** là ranh giới duy nhất mà app chạm vào: [index.ts](index.ts),
 xuất `createBlackHoleBackdrop(canvas)` trả về `BlackHoleHandle`. Thành phần
@@ -19,7 +19,9 @@ React dùng nó là `components/BlackHoleBackdrop.tsx`.
 ## Những gì KHÔNG được port
 
 Tấm công thức (`sheet.js`, `funnel.js`, `atlas.js`, `drops.js`, MathJax), bảng
-điều khiển, tương tác chuột (`interact.js`), lớp phủ debug và chuỗi hậu kỳ
+điều khiển, kéo / giữ / lăn chuột (`interact.js` — chỉ giữ thấu kính quanh con
+trỏ, viết lại trong `index.ts` thành một lượt bẻ cong CẢ khung hình: bản gốc
+chỉ bẻ sao và tấm công thức, mà ở đây không có tấm nên sẽ chẳng thấy gì), lớp phủ debug và chuỗi hậu kỳ
 (`post.js`: UnrealBloomPass + grain + vignette). Project gốc mặc định cũng chỉ
 hiện hố đen + sao; bloom chung gần như không chạm lớp hố đen (nó có quầng và
 bloom riêng trong `blackhole.js`), nên bỏ đi chỉ mất chút quầng quanh sao.

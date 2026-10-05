@@ -7,8 +7,17 @@
 export const REF_W = 980;
 export const REF_H = 576;
 
+/** Bề ngang khung tham chiếu tối thiểu còn thấy được: khung hẹp (điện thoại,
+ *  sidebar mở) thì scale theo chiều ngang để hố không tràn — như viewTransform gốc. */
+export const MIN_VISIBLE_W = 640;
+
 /** Điểm hội tụ F — tâm của phép dời / phóng cả hệ (uShift, uZoom) */
 export const FOCUS = [474, 305];
+
+/** Thấu kính hấp dẫn quanh con trỏ: bán kính Einstein và độ làm mềm tâm (px tham
+ *  chiếu), thời gian bật / tắt dần (giây). Bản gốc (INTERACT) để 20 / 5; ở đây
+ *  lớn hơn vì nền mờ và nằm sau lớp kính, 20 px gần như không thấy. */
+export const LENS = { radius: 34, soft: 9, easeSec: 0.25 };
 
 /** Chu kỳ vòng lặp (giây). Mọi tần số khác phải là bội nguyên của 1/LOOP_SEC. */
 export const LOOP_SEC = 10;

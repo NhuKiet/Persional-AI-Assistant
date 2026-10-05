@@ -436,7 +436,7 @@ export function PDFPage() {
   };
 
   return (
-    <AppShell {...sidebarProps} blackhole>
+    <AppShell {...sidebarProps} blackhole blackholeLens={!uploadedPDF && messages.length === 0}>
       <div className="page tool-page page-entered">
         <header className="tool-header">
           <div className="tool-title-wrap">

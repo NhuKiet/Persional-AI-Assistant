@@ -199,6 +199,7 @@ export function HmerPage() {
   return (
     <AppShell
       blackhole
+      blackholeLens={!result && !busy}
       open={sidebarOpen}
       onToggle={() => setSidebarOpen((v) => !v)}
       sessions={sessions}

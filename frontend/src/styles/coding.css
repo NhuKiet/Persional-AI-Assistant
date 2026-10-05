@@ -491,3 +491,21 @@
    lên nó; lõi đĩa lại gần trắng tuyệt đối — nên nó lùi hẳn về sau. */
 .bh-canvas.ready { opacity: 0.6; }
 
+/* Thấu kính con trỏ (useCursorLens): đĩa trong suốt đi theo chuột, bẻ cong mọi
+   thứ phía sau nó bằng bộ lọc SVG. Kích thước và vị trí do JS đặt. Dưới lớp
+   grain của body::before (999), trên mọi thứ còn lại. */
+.bh-lens {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 998;
+  border-radius: 50%;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.25s var(--ease);
+  will-change: transform;
+  -webkit-backdrop-filter: url(#bh-lens-filter);
+  backdrop-filter: url(#bh-lens-filter);
+}
+.bh-lens.on { opacity: 1; }
+

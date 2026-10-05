@@ -18,6 +18,9 @@ interface AppShellProps {
   toolColor?: string;
   /** Nền hố đen + sao sau giao diện (chỉ hiện ở theme tối) — xem BlackHoleBackdrop. */
   blackhole?: boolean;
+  /** Con trỏ bẻ cong nền quanh nó. Trang chỉ bật khi còn trống (chưa có
+   *  cuộc trò chuyện / kết quả nào) — lúc đang đọc thì nền phải đứng yên. */
+  blackholeLens?: boolean;
   children: ReactNode;
 }
 
@@ -34,14 +37,14 @@ interface AppShellProps {
  * every viewport width — the sidebar's own mobile-overlay behavior in
  * responsive.css doesn't change any of this, it's pure CSS layered on top
  * of the same DOM. */
-export function AppShell({ children, blackhole, ...sidebarProps }: AppShellProps) {
+export function AppShell({ children, blackhole, blackholeLens, ...sidebarProps }: AppShellProps) {
   const { open, onToggle } = sidebarProps;
   const mainRef = useRef<HTMLDivElement>(null);
   return (
     <div className="app-layout">
       <Sidebar {...sidebarProps} />
       <div className="app-main" ref={mainRef}>
-        {blackhole && <BlackHoleBackdrop anchorRef={mainRef} />}
+        {blackhole && <BlackHoleBackdrop anchorRef={mainRef} lens={blackholeLens} />}
         {!open && (
           <button
             className="sb-open-btn"

@@ -1,9 +1,10 @@
 /**
  * Sao nền tĩnh có nhấp nháy. Vị trí cố định; tần số nhấp nháy là bội nguyên
  * của 1/LOOP_SEC để vòng lặp khít.
- * Khác bản gốc: bỏ thấu kính con trỏ và phần "mờ bớt dưới tấm công thức" (app
- * không có tấm công thức, nền không nhận chuột); vùng rải sao rộng hơn vì hố
- * đen ở đây được neo lệch khỏi tâm khung (xem index.ts).
+ * Khác bản gốc: bỏ phần "mờ bớt dưới tấm công thức" (app không có tấm công
+ * thức) và thấu kính con trỏ ở vertex shader (ở đây thấu kính bẻ cong cả khung
+ * hình ở lượt cuối — xem index.ts); vùng rải sao rộng hơn vì hố đen được neo
+ * theo vùng nội dung chứ không theo tâm khung.
  */
 import {
   BufferGeometry, Float32BufferAttribute, Points, ShaderMaterial, AdditiveBlending,
