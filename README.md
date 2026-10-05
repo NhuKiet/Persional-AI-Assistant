@@ -40,6 +40,7 @@ Server-Sent Events.
 - [Chạy bằng Docker Compose](#-chạy-bằng-docker-compose)
 - [Sandbox thực thi code](#-sandbox-thực-thi-code)
 - [Đăng nhập & dùng thử](#-đăng-nhập--dùng-thử)
+- [Sao lưu & khôi phục dữ liệu](#-sao-lưu--khôi-phục-dữ-liệu)
 - [Cấu hình (.env)](#️-cấu-hình-env)
 - [API](#-api)
 - [Kiểm thử & CI](#-kiểm-thử--ci)
@@ -423,6 +424,61 @@ nginx gắn header bảo mật cho mọi response (`frontend/nginx-security-head
 > ```
 >
 > Kiểm tra từ điện thoại cùng Wi-Fi: `http://<IP-LAN-của-máy>:54323` phải **không** mở được.
+
+---
+
+## 💾 Sao lưu & khôi phục dữ liệu
+
+Lịch sử chat và tin tức nằm trong Postgres của Supabase local.
+[`tools/db_backup.py`](tools/db_backup.py) sao lưu và khôi phục chúng; nó chạy
+`pg_dump`/`pg_restore` ngay trong container database nên không cần cài gì thêm, và
+chỉ dùng thư viện chuẩn của Python.
+
+```bash
+.venv/Scripts/python.exe tools/db_backup.py backup
+```
+
+- Ghi `data/backups/king-db-<giờ UTC>.dump` kèm file `.json` ghi số dòng từng bảng và
+  mã băm của file.
+- **Mỗi bản sao lưu được khôi phục thử ngay** vào một database nháp rồi mới được giữ
+  lại — bản nào không đọc lại được thì lệnh báo lỗi (mã thoát 1) thay vì để đó.
+- Giữ 14 bản mới nhất (`--keep N`).
+- Mặc định bản sao lưu nằm **cùng ổ đĩa** với database, nên hỏng ổ là mất cả hai. Trỏ
+  `--dir` (hoặc biến `KING_BACKUP_DIR`) sang ổ khác hay thư mục đồng bộ đám mây.
+
+```bash
+.venv/Scripts/python.exe tools/db_backup.py list
+```
+
+```bash
+.venv/Scripts/python.exe tools/db_backup.py verify data/backups/<tên-file>.dump
+```
+
+**Khôi phục** thay toàn bộ dữ liệu hiện tại bằng một bản sao lưu. Không có `--yes` thì
+lệnh chỉ nói nó sẽ làm gì:
+
+```bash
+.venv/Scripts/python.exe tools/db_backup.py restore data/backups/<tên-file>.dump --yes
+```
+
+- Trước khi thay, dữ liệu đang có được sao lưu sang `king-db-pre-restore-….dump`
+  (không bao giờ bị tự xoá).
+- Việc thay nằm trong một giao dịch: khôi phục dở chừng thì database giữ nguyên như cũ.
+- Lệnh nạp dữ liệu vào các bảng sẵn có; bảng do `supabase/migrations` tạo. Trên máy
+  mới: `supabase start` trước, rồi mới `restore`.
+
+**Chạy định kỳ trên Windows** — tạo một tác vụ hằng ngày bằng lệnh sau trong
+**Command Prompt** (thay `<repo>` bằng đường dẫn thư mục dự án). Docker Desktop và
+Supabase phải đang chạy vào giờ đó; không thì tác vụ kết thúc với mã lỗi, xem trong
+Task Scheduler:
+
+```bat
+schtasks /Create /TN "KiNg DB backup" /SC DAILY /ST 12:30 /TR "\"<repo>\.venv\Scripts\python.exe\" \"<repo>\tools\db_backup.py\" backup"
+```
+
+Không nằm trong bản sao lưu này: file bạn tải lên (`data/pdfs`, `data/hmer` — chép cả
+thư mục `data/` nếu cần) và knowledge store trên Weaviate (chỉ là bộ nhớ đệm, tự dựng
+lại khi Research chạy).
 
 ---
 

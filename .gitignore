@@ -26,6 +26,8 @@ data/pdfs/
 data/hmer/
 data/papers/
 data/knowledge/
+# Bản sao lưu database (tools/db_backup.py) — chứa lịch sử chat, không commit.
+data/backups/
 
 # ── Model weights (hundreds of MB — never commit) ───────────────────
 data/models/
