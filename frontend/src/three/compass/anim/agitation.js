@@ -69,7 +69,7 @@ export class AgitationState {
       if (a.level < AGITATION.deadZone && a.spread >= 1) a.spread = 0;
       if (a.level < AGITATION.deadZone * 0.2) {
         a.level = 0;
-        if (a.spread > 0 && a.spread >= 1) a.spread = 0;
+        if (a.spread >= 1) a.spread = 0;
       }
     }
   }

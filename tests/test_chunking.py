@@ -1,5 +1,5 @@
 from backend.app.features.research.chunking import (
-    category_for, build_parent_child, ParentChunk, CATEGORY_MAP,
+    category_for, build_parent_child, ParentChunk,
 )
 
 

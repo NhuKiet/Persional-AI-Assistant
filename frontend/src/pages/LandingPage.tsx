@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import mainlogo from "../assets/mainlogo.png";
+import mainlogo from "../assets/mainlogo-256.png";
 import { MoonPhase } from "../components/MoonPhase";
 import { PortfolioCarousel } from "../components/PortfolioCarousel";
 import { ToolIcon } from "../components/ToolIcon";

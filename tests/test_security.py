@@ -4,7 +4,6 @@ Bao ve cac fix trong dot P0/P1: chan path traversal, gioi han tai, cach ly
 upload theo session, tat auto-install, va khong ro ri secret ra code sinh.
 Comment giu ASCII de tranh loi encoding.
 """
-import os
 
 import pytest
 from fastapi import FastAPI, HTTPException

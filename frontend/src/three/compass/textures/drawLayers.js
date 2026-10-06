@@ -7,7 +7,7 @@ import {
 } from './primitives.js';
 import { buildConstellations, buildDippers, buildFieldStars } from './constellations.js';
 import {
-  SEED, TEXTURE, RINGS, LAYERS, LAYER_BY_ID, COLORS, FONT, DIPPER, CONSTELLATIONS,
+  SEED, TEXTURE, RINGS, LAYERS, LAYER_BY_ID, FONT, DIPPER, CONSTELLATIONS,
 } from '../config.js';
 import { BAND_BY_ID, cellCenterAngle, cellStartAngle } from '../bands.js';
 
@@ -136,11 +136,6 @@ function drawWash(canvas, layer, extent) {
 function smoothstep(a, b, x) {
   const t = Math.max(0, Math.min(1, (x - a) / (b - a || 1e-6)));
   return t * t * (3 - 2 * t);
-}
-
-function hexToRgb(hex) {
-  const v = parseInt(hex.slice(1), 16);
-  return { r: (v >> 16) & 255, g: (v >> 8) & 255, b: v & 255 };
 }
 
 /* ------------------------------------------------------------- noi dung lop */

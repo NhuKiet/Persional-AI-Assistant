@@ -256,7 +256,7 @@ class ConversationManager:
                 full_response += token
                 yield token
         except Exception as e:
-            raise RuntimeError(f"LLM error: {e}")
+            raise RuntimeError(f"LLM error: {e}") from e
 
         exchange = [{"role": "user", "content": message}, {"role": "assistant", "content": full_response}]
         try:

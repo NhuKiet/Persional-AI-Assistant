@@ -36,9 +36,9 @@ async def bubble_chat(req: BubbleChatRequest) -> BubbleChatResponse:
                 headers=_headers(),
             )
     except httpx.ConnectError:
-        raise HTTPException(status_code=503, detail=_BRIDGE_UNAVAILABLE)
+        raise HTTPException(status_code=503, detail=_BRIDGE_UNAVAILABLE) from None
     except httpx.TimeoutException:
-        raise HTTPException(status_code=504, detail="Trợ lý cá nhân phản hồi quá lâu, thử lại nhé.")
+        raise HTTPException(status_code=504, detail="Trợ lý cá nhân phản hồi quá lâu, thử lại nhé.") from None
 
     if resp.status_code == 401:
         logger.error("Bridge rejected token — BRIDGE_TOKEN không khớp giữa KiNg và ai-agent")
@@ -58,7 +58,7 @@ async def bubble_reset() -> dict:
         async with httpx.AsyncClient(timeout=15) as client:
             resp = await client.post(f"{settings.BRIDGE_URL}/bridge/reset", headers=_headers())
     except (httpx.ConnectError, httpx.TimeoutException):
-        raise HTTPException(status_code=503, detail=_BRIDGE_UNAVAILABLE)
+        raise HTTPException(status_code=503, detail=_BRIDGE_UNAVAILABLE) from None
 
     if resp.status_code != 200:
         raise HTTPException(status_code=502, detail=_BRIDGE_UNAVAILABLE)

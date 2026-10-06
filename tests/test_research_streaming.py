@@ -9,7 +9,6 @@ underlying future completes.
 """
 import time
 
-import pytest
 
 from backend.app.features.research.agent import _output_dict, _output_partial
 from backend.app.features.research.models import ResearchOutput, SearchResult

@@ -7,7 +7,6 @@ import json
 import threading
 import time
 
-import pytest
 
 from backend.app.shared.session_locks import KeyedLockRegistry
 

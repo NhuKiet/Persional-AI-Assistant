@@ -4,8 +4,7 @@ import threading
 
 import pytest
 
-from backend.app.features.coding.artifacts import ARTIFACT_EXTS
-from backend.app.features.coding.execution import ExecutionResult, detect_missing_packages, install_packages
+from backend.app.features.coding.execution import ExecutionResult
 from backend.app.features.coding.prompts import REVIEW_PROMPT, SYSTEM_PROMPT
 from backend.app.features.coding.schemas import CodingRequest
 import backend.app.features.coding.service as coding_service

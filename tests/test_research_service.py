@@ -6,7 +6,6 @@ import pytest
 import backend.app.shared.conversation_store as conv_mod
 import backend.app.features.research.service as service_mod
 from backend.app.features.research.schemas import DeepDiveRequest, ResearchRequest
-from backend.app.shared.conversation_store import ConversationManager
 from backend.app.shared.session_locks import SessionBusyError
 from tests.fake_session_store import FakeSessionStore
 from tests.fake_synth import StreamingSynthFake

@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import mainlogo from "../assets/mainlogo.png";
+import mainlogo from "../assets/mainlogo-256.png";
 import { useAuth } from "../hooks/useAuth";
 import { login } from "../lib/auth";
 

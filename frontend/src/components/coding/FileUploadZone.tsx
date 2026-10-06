@@ -68,7 +68,10 @@ export function FileUploadZone({ files, onAdd, onRemove, sessionId }: FileUpload
 
   return (
     <div className="upload-zone-wrap">
+      {/* Bấm vào đâu trong ô cũng mở hộp chọn file — tiện cho chuột; bàn phím
+          và trình đọc màn hình dùng nút "chọn file" bên trong. */}
       <div
+        role="presentation"
         className={`upload-drop ${dragging ? "upload-drop-active" : ""}`}
         onDragOver={e => { e.preventDefault(); setDragging(true); }}
         onDragLeave={() => setDragging(false)}
@@ -82,7 +85,9 @@ export function FileUploadZone({ files, onAdd, onRemove, sessionId }: FileUpload
           ? <span className="upload-hint"><span className="mini-spinner" /> Đang upload...</span>
           : <span className="upload-hint">
               <span className="upload-icon">📂</span>
-              Kéo thả file hoặc <span className="upload-link">chọn file</span>
+              Kéo thả file hoặc{" "}
+              <button type="button" className="upload-link"
+                onClick={e => { e.stopPropagation(); inputRef.current?.click(); }}>chọn file</button>
               <span className="upload-types">{ALLOWED_EXTS.join(" ")}</span>
             </span>
         }

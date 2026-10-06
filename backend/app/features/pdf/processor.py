@@ -2,7 +2,6 @@ import logging
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Iterator
 
 from backend.app.core.config import settings
 
@@ -75,7 +74,7 @@ class PDFProcessor:
         except ImportError:
             raise RuntimeError(
                 "PyMuPDF chưa được cài. Chạy: pip install pymupdf"
-            )
+            ) from None
 
         path = self._directory / filename
         if not path.exists():

@@ -6,7 +6,6 @@ images, and the owner's lists don't fill up with guests' uploads.
 import pytest
 from fastapi.testclient import TestClient
 
-from backend.app.core import auth
 from backend.app.core.config import settings
 from backend.app.core.csrf import CLIENT_HEADER
 

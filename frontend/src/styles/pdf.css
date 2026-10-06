@@ -340,7 +340,9 @@
   justify-content: center;
 }
 .upload-icon  { font-size: 16px; }
-.upload-link  { color: var(--accent-coding); cursor: pointer; }
+/* A <button> that reads as part of the sentence around it. */
+.upload-link  { padding: 0; border: none; background: none; font: inherit; color: var(--accent-coding); cursor: pointer; }
+.upload-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
 .upload-types { font-size: 10px; color: var(--text3); font-family: var(--mono); width: 100%; text-align: center; margin-top: 2px; }
 
 /* File list */

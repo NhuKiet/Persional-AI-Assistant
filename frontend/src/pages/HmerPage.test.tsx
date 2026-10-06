@@ -252,7 +252,7 @@ test("recognizes a drawing through the same endpoint as an upload", async () => 
   let sent: FormDataEntryValue | null = null;
   mockBackend({
     recognize: (init) => {
-      sent = (init?.body as FormData).get("file");
+      sent = (init!.body as FormData).get("file");
       return json(RESULT);
     },
   });
@@ -416,7 +416,7 @@ test("recognizes an image pasted with Ctrl+V", async () => {
   const sent: File[] = [];
   mockBackend({
     recognize: (init) => {
-      sent.push((init?.body as FormData).get("file") as File);
+      sent.push((init!.body as FormData).get("file") as File);
       return json(RESULT);
     },
   });

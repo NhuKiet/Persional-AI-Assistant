@@ -2,10 +2,9 @@ import type { CodingPhase } from "../../hooks/useCoding";
 
 interface PhaseBarProps {
   phase: CodingPhase;
-  success: boolean | null;
 }
 
-export function PhaseBar({ phase, success }: PhaseBarProps) {
+export function PhaseBar({ phase }: PhaseBarProps) {
   const phases = [
     { id: "thinking",   label: "Phân tích" },
     { id: "planning",   label: "Lập kế hoạch" },

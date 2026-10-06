@@ -278,7 +278,7 @@ def test_run_streaming_stops_early_when_cancelled(monkeypatch):
     """cancel_event set sẵn → run_streaming dừng, phát 'cancelled', KHÔNG synthesize, KHÔNG done."""
     import threading
     import backend.app.features.research.agent as ra
-    from backend.app.features.research.models import ResearchOutput, SearchResult
+    from backend.app.features.research.models import ResearchOutput
 
     agent = ra.ResearchAgent.__new__(ra.ResearchAgent)
     synth_called = {"n": 0}
@@ -320,7 +320,8 @@ def test_run_streaming_normal_when_not_cancelled(monkeypatch):
 
     class _Synth(StreamingSynthFake):
         def synthesize_grounded(self, q, s):
-            o = ResearchOutput(query=q); o.confidence = 0.9
+            o = ResearchOutput(query=q)
+            o.confidence = 0.9
             o.claims = []
             return o
         def synthesize_rag(self, q, s): return ResearchOutput(query=q)

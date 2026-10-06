@@ -3,7 +3,9 @@ from backend.app.features.research.synthesizer import Synthesizer
 
 
 class _FakeLLM:
-    def __init__(self, responses): self._r = responses; self.i = 0
+    def __init__(self, responses):
+        self._r = responses
+        self.i = 0
     def invoke(self, prompt):
         import types
         # trả JSON claim khi prompt hỏi claim; ngược lại trả text vô hại

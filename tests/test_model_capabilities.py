@@ -72,7 +72,8 @@ def test_temperature_is_omitted_for_models_that_reject_it(monkeypatch):
         def __init__(self, **kwargs):
             captured.update(kwargs)
 
-    import sys, types as _t
+    import sys
+    import types as _t
     fake = _t.ModuleType("langchain_openai")
     fake.ChatOpenAI = _FakeChatOpenAI
     monkeypatch.setitem(sys.modules, "langchain_openai", fake)

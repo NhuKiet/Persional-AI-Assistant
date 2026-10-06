@@ -14,11 +14,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v10.2.0
         with:
           version: "latest"
       - name: Install deps
         run: uv sync --dev
+      - name: Lint
+        run: uv run ruff check
       - name: Run tests
         run: uv run pytest -q
 
@@ -36,6 +38,7 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
+      - run: npm run lint
       - run: npm run typecheck
       - run: npm run test
       - run: npm run build
@@ -47,7 +50,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v10.2.0
         with:
           version: "latest"
       # Reads uv.lock only; nothing is installed. `uv audit` is still a

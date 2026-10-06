@@ -171,7 +171,7 @@ export function CodingPage() {
           {/* Agent mode: phase bar + event log */}
           {mode === "agent" && (phase !== "idle" || events.length > 0) && (
             <div className="agent-log">
-              <PhaseBar phase={phase} success={success} />
+              <PhaseBar phase={phase} />
               {heartbeat && (
                 <div className="heartbeat-row">
                   <span className="heartbeat-dot" />
@@ -208,6 +208,8 @@ export function CodingPage() {
 
         {/* Drag divider */}
         {hasResult && (
+          // Pointer-only resize handle; both panes stay fully usable at the default split.
+          // oxlint-disable-next-line jsx-a11y/no-static-element-interactions
           <div className="resize-divider" onMouseDown={onMouseDown} onTouchStart={onMouseDown} title="Kéo để thay đổi kích thước">
             <div className="resize-handle" />
           </div>

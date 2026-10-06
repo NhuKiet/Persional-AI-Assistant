@@ -195,6 +195,9 @@ export function PortfolioCarousel({ lang, onLangChange }: PortfolioCarouselProps
   const p = PORTFOLIO_PAGES[active];
 
   return (
+    // ARIA carousel: the region itself takes focus so the arrow keys can turn
+    // the slides (onKeyDown), which is what the two rules below object to.
+    // oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
     <section
       className="pf-carousel"
       /* roledescription là VAI TRÒ ("băng trượt"), label là TÊN ("Portfolio
@@ -202,6 +205,7 @@ export function PortfolioCarousel({ lang, onLangChange }: PortfolioCarouselProps
          tên hai lần liên tiếp. */
       aria-roledescription={t.role}
       aria-label={t.label}
+      // oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex
       tabIndex={0}
       onKeyDown={onKeyDown}
     >
@@ -243,6 +247,10 @@ export function PortfolioCarousel({ lang, onLangChange }: PortfolioCarouselProps
           {PORTFOLIO_PAGES.map((pg, i) => {
             const isActive = i === active;
             return (
+              // Clicking a neighbouring slide is a mouse shortcut; the keyboard
+              // turns slides with the arrow keys on the carousel and by Tab
+              // (onFocus below).
+              // oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions
               <div
                 key={pg.id}
                 ref={el => { slideRefs.current[i] = el; }}

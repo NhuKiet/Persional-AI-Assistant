@@ -467,7 +467,10 @@ export function PDFPage() {
 
         {!uploadedPDF ? (
           <div className="pdf-upload-wrap">
+            {/* Bấm vào đâu trong ô cũng mở hộp chọn file — tiện cho chuột; bàn
+                phím và trình đọc màn hình dùng nút "chọn file" bên trong. */}
             <div
+              role="presentation"
               className={`pdf-drop-zone ${uploading ? "pdf-drop-loading" : ""}`}
               onClick={() => fileRef.current?.click()}
               onDragOver={(event) => event.preventDefault()}
@@ -492,7 +495,10 @@ export function PDFPage() {
                 <>
                   <p className="pdf-drop-title">Kéo thả file PDF vào đây</p>
                   <p className="pdf-drop-sub">
-                    hoặc <span className="upload-link">click để chọn file</span> · Tối đa 50MB
+                    hoặc{" "}
+                    <button type="button" className="upload-link"
+                      onClick={(event) => { event.stopPropagation(); fileRef.current?.click(); }}>click để chọn file</button>
+                    {" "}· Tối đa 50MB
                   </p>
                 </>
               )}

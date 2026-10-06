@@ -107,7 +107,7 @@ describe("reset() targets the abandoned session id, not its replacement", () => 
 
   it("aborts the in-flight client request when Reset is clicked mid-run", async () => {
     const abortSpy = vi.spyOn(AbortController.prototype, "abort");
-    vi.spyOn(globalThis, "fetch").mockImplementation(((url: string | URL | Request, init?: RequestInit) => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(((url: string | URL | Request) => {
       const u = String(url);
       if (u.includes("/api/models")) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve(MODELS) });

@@ -82,7 +82,8 @@ export function DeepDiveModal({ source, onClose, model }: DeepDiveModalProps) {
   ];
 
   return (
-    <div className="dd-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+    // Bấm vào nền mờ quanh hộp thoại để đóng; nút đóng nằm trong hộp thoại.
+    <div className="dd-overlay" role="presentation" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="dd-modal">
         <div className="dd-header">
           <div className="dd-header-left">

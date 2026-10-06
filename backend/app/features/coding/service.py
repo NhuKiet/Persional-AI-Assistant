@@ -11,7 +11,7 @@ from fastapi import HTTPException
 
 from backend.app.core.config import settings
 from backend.app.core.llm import invoke_chat, stream_chat
-from backend.app.features.coding.artifacts import ARTIFACT_EXTS, ArtifactService, emit_path_rejected, validate_relative_path
+from backend.app.features.coding.artifacts import ArtifactService, emit_path_rejected, validate_relative_path
 from backend.app.features.coding.data_preview import describe_table
 from backend.app.features.coding.execution import CodeExecutor, detect_missing_packages, install_packages
 from backend.app.features.coding.prompts import CHAT_SYSTEM, CODE_PROMPT, DEBUG_PROMPT, PLAN_PROMPT, PLAN_SYSTEM, REVIEW_PROMPT, SYSTEM_PROMPT, TEST_PROMPT

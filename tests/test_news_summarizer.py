@@ -1,7 +1,6 @@
 import asyncio
 from datetime import datetime, timezone
 
-import pytest
 
 from backend.app.features.news import summarizer
 from backend.app.features.news.models import NewsItem

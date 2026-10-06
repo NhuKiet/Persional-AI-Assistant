@@ -17,6 +17,9 @@ export default function SelectionToolbar({ pos, onAction, onClose }: SelectionTo
     </button>
   );
   return (
+    // Only keeps a press on the toolbar from reaching the selection layer
+    // underneath; the actions themselves are the buttons inside.
+    // oxlint-disable-next-line jsx-a11y/no-static-element-interactions
     <div className="sel-toolbar" style={{ left: pos.x, top: pos.y }} onMouseDown={(e) => e.stopPropagation()}>
       {btn("explain", "Giải thích")}
       {btn("discuss", "Thảo luận")}

@@ -127,6 +127,8 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function PdfViewer
   // Vừa khít bề rộng pane thay vì scale cố định — pane co giãn được nên
   // scale cứng làm trang tràn ngang.
   const fitWidth                = useFitWidth(hostRef);
+  // A fresh token whenever any of these changes; none of them is read inside.
+  // oxlint-disable-next-line react-hooks/exhaustive-deps
   const textRenderOwner = useMemo(() => Symbol("pdf-text-render"), [
     documentRenderRevision,
     file,
@@ -155,6 +157,9 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function PdfViewer
         // Search indexing is optional; document rendering remains usable on extraction failure.
       });
     }
+    // `file` is here on purpose: each document gets a callback of its own,
+    // and a load is ignored unless it is the active callback (see above).
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [file, onDocumentReady, onSearchIndexReady]);
 
   useLayoutEffect(() => {

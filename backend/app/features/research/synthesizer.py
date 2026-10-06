@@ -723,7 +723,7 @@ class Synthesizer:
     def synthesize_grounded(self, query: str, sources: list[SearchResult]) -> ResearchOutput:
         """Đường structured (6 call) + grounding, blocking until fully done."""
         out = None
-        for out, _step in self.synthesize_grounded_streaming(query, sources):
+        for out, _step in self.synthesize_grounded_streaming(query, sources):  # noqa: B007 — the last one is the result
             pass
         return out
 

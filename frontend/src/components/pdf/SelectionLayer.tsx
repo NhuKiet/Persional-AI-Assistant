@@ -110,7 +110,7 @@ export default function SelectionLayer({ canvases, onPin, children }: SelectionL
     setBox({ x: Math.min(x, startX), y: Math.min(y, startY), w: Math.abs(x - startX), h: Math.abs(y - startY) });
   }, []);
 
-  const onMouseUpCrop = useCallback((e: React.MouseEvent) => {
+  const onMouseUpCrop = useCallback(() => {
     if (!drag.current) return;
     justCropped.current = true;
     const d = drag.current; drag.current = null;
@@ -146,13 +146,16 @@ export default function SelectionLayer({ canvases, onPin, children }: SelectionL
   };
 
   return (
+    // Dragging over the page to select text or crop a region is the feature
+    // itself: there is no keyboard gesture for it to stand in for.
+    // oxlint-disable-next-line jsx-a11y/no-static-element-interactions
     <div
       ref={hostRef}
       className="selection-host"
       style={{ position: "relative" }}
       onMouseDown={onMouseDown}
       onMouseMove={onMouseMove}
-      onMouseUp={(e) => { onMouseUpCrop(e); onMouseUp(e); }}
+      onMouseUp={(e) => { onMouseUpCrop(); onMouseUp(e); }}
     >
       {children}
       {box && (

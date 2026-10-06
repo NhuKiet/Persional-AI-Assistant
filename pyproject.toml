@@ -52,10 +52,36 @@ dependencies = [
 [dependency-groups]
 dev = [
     "pytest==9.0.3",
+    "ruff==0.16.10",
 ]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py311"
+# data/ chứa code do Coding Agent sinh ra; .worktrees là bản sao của chính repo.
+extend-exclude = ["data", ".worktrees", "frontend", "node_modules"]
+
+[tool.ruff.lint]
+# Chỉ bắt lỗi thật, không bắt kiểu cách: lỗi cú pháp và import (E4/E7/E9),
+# tên chưa định nghĩa hoặc không dùng (F), và các bẫy quen thuộc (B). Thứ tự
+# import và định dạng code cố ý để yên — không ai muốn một diff nghìn dòng.
+select = ["E4", "E7", "E9", "F", "B"]
+ignore = [
+    "E731",  # gán lambda cho một tên: gọn cho test double
+    "E741",  # biến tên `l` (một dòng, một phần tử)
+    "B905",  # zip(strict=True) biến một lệch độ dài đang được chấp nhận thành crash
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Test và tool chỉnh sys.path / biến môi trường rồi mới import app.
+"tests/**" = ["E402"]
+"tools/**" = ["E402"]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI đọc các lời gọi này trong chữ ký hàm như khai báo, không phải giá trị mặc định.
+extend-immutable-calls = ["fastapi.Depends", "fastapi.File", "fastapi.Form", "fastapi.Query", "fastapi.Body", "fastapi.Header"]
 
 [tool.uv]
 package = false

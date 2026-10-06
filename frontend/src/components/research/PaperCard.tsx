@@ -16,7 +16,9 @@ interface PaperCardProps {
 export function PaperCard({ paper, onDeepDive }: PaperCardProps) {
   const sourceColor = ({ arxiv: "#7C9EFF", semantic_scholar: "#A8E6A3", huggingface: "#FFB085", stackoverflow: "#B8E0B8" } as Record<string, string>)[paper.source || ""] || "#888";
   return (
-    <div className="paper-card" onClick={() => onDeepDive?.(paper)} style={{ cursor: "pointer" }} title="Click to deep dive">
+    // Bấm vào đâu trên thẻ cũng mở deep dive — tiện cho chuột; nút "Deep dive"
+    // bên dưới là thứ bàn phím và trình đọc màn hình dùng (PaperCard.test.tsx).
+    <div className="paper-card" role="presentation" onClick={() => onDeepDive?.(paper)} style={{ cursor: "pointer" }} title="Click to deep dive">
       <div className="paper-top">
         <span className="paper-source" style={{ color: sourceColor, borderColor: sourceColor + "44" }}>{paper.source?.replace("_", " ")}</span>
         {paper.year && <span className="paper-year">{paper.year}</span>}

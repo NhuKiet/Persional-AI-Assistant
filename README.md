@@ -550,7 +550,7 @@ Hai lớp chặn đốt tiền:
 uv run pytest
 ```
 
-Khoảng 590 test trên 65 file, phủ: hợp đồng API, luồng research (gate, grounding,
+Khoảng 990 test trên 89 file, phủ: hợp đồng API, luồng research (gate, grounding,
 trích dẫn, iteration), coding service & Docker executor, PDF context, news
 fetcher/scheduler, session store trên Supabase, capability registry, và cả ranh giới
 import giữa các feature.
@@ -565,14 +565,34 @@ npm run typecheck --prefix frontend
 npm run test --prefix frontend
 ```
 
-269 test trên 39 file, phủ: component, hook, bố cục PDF, hệ theme, và hợp đồng route
+Khoảng 500 test trên 67 file, phủ: component, hook, bố cục PDF, hệ theme, và hợp đồng route
 (đi qua `<App />` thật, chỉ khẳng định những gì người dùng nhìn thấy — nhờ vậy test
 sống sót qua refactor).
+
+### Lint
+
+```bash
+uv run ruff check
+```
+
+```bash
+npm run lint --prefix frontend
+```
+
+- **Backend — Ruff**, cấu hình trong `pyproject.toml`. Bộ luật cố ý hẹp: lỗi cú pháp
+  và import, tên chưa định nghĩa hoặc không dùng, và nhóm bugbear. Không ép định dạng
+  hay thứ tự import.
+- **Frontend — oxlint** (`frontend/.oxlintrc.json`), không phải ESLint: `typescript-eslint`
+  chưa hỗ trợ TypeScript 7 mà dự án đang dùng, còn oxlint tự phân tích TypeScript. Bật
+  nhóm luật đúng/sai của React (kể cả hook) và accessibility (`jsx-a11y`).
+- Chỗ nào cố ý đi ngược một luật thì có `oxlint-disable-next-line` / `# noqa` kèm lý do
+  ngay tại đó — đừng tắt cả luật trong cấu hình chỉ vì một trường hợp.
 
 ### CI
 
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) chạy trên mọi push và pull
-request: backend `pytest`; frontend `typecheck` → `test` → `build` (Node 24).
+request: backend `ruff` → `pytest`; frontend `lint` → `typecheck` → `test` → `build`
+(Node 24).
 
 Job **Dependency audit** chạy riêng, thêm cả mỗi sáng thứ Hai (lỗ hổng được công bố
 kể cả khi không ai push): `uv audit` trên `uv.lock`, và `npm audit` cho các gói chạy

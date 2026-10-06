@@ -63,3 +63,17 @@ it("offers no preview for a file that isn't a table", () => {
 
   expect(screen.queryByRole("button", { name: /Xem trước/ })).toBeNull();
 });
+
+it("opens the file picker from a real button, once", async () => {
+  // The whole drop zone opens the picker on click, for the mouse; the button
+  // is what a keyboard reaches — and its click must not also count as a
+  // click on the zone around it.
+  const openPicker = vi.spyOn(HTMLInputElement.prototype, "click").mockImplementation(() => {});
+  render(<Harness />);
+
+  const choose = screen.getByRole("button", { name: "chọn file" });
+  choose.focus();
+  await userEvent.keyboard("{Enter}");
+
+  expect(openPicker).toHaveBeenCalledTimes(1);
+});

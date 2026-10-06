@@ -1,4 +1,4 @@
-import mainlogo from "../assets/mainlogo.png";
+import mainlogo from "../assets/mainlogo-256.png";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { loginHref } from "./GuestBanner";
 import { useAuth } from "../hooks/useAuth";
@@ -33,7 +33,8 @@ export function Sidebar({ open, onToggle, sessions, activeId, onSelect, onDelete
   const guest = auth.auth && auth.role === "guest";
   return (
     <>
-      {open && <div className="sb-overlay" onClick={onToggle} />}
+      {/* Chỉ là nền mờ để bấm ra ngoài; bàn phím đóng sidebar bằng nút ở đầu. */}
+      {open && <div className="sb-overlay" aria-hidden="true" onClick={onToggle} />}
       <aside className={`sidebar ${open ? "sb-open" : "sb-closed"}`}>
         <div className="sb-header">
           <div className="sb-logo">
@@ -81,11 +82,12 @@ export function Sidebar({ open, onToggle, sessions, activeId, onSelect, onDelete
             <div key={group.label} className="sb-group">
               <p className="sb-group-label">{group.label}</p>
               {group.items.map(s => (
-                <div key={s.id} className={`sb-item ${s.id === activeId ? "sb-item-active" : ""}`}
-                  onClick={() => onSelect(s)}>
-                  <span className="sb-item-title">{s.title}</span>
-                  <button className="sb-item-del"
-                    onClick={e => { e.stopPropagation(); onDelete(s.id); }} title="Xóa">×</button>
+                <div key={s.id} className={`sb-item ${s.id === activeId ? "sb-item-active" : ""}`}>
+                  {/* Nút thật, không phải cả hàng bấm được: Tab tới và Enter mở
+                      lại hội thoại cũ. Nó phủ kín hàng nên vùng bấm vẫn như trước. */}
+                  <button type="button" className="sb-item-title" onClick={() => onSelect(s)}
+                    aria-current={s.id === activeId ? "true" : undefined}>{s.title}</button>
+                  <button className="sb-item-del" onClick={() => onDelete(s.id)} title="Xóa">×</button>
                 </div>
               ))}
             </div>

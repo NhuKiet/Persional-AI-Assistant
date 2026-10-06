@@ -114,7 +114,7 @@ async def upload_pdf(request: Request, file: UploadFile = File(...)):
         }
     except Exception as exc:
         destination.unlink(missing_ok=True)
-        raise HTTPException(status_code=500, detail=f"Lỗi đọc PDF: {str(exc)}")
+        raise HTTPException(status_code=500, detail=f"Lỗi đọc PDF: {str(exc)}") from exc
 
 
 @router.get("/api/pdf/list")

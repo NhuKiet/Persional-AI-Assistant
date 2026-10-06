@@ -160,6 +160,9 @@ export default function ModelPicker({ tool, value, onChange }: ModelPickerProps)
           {models.map((m, i) => {
             const selected = keyOf(m) === currentKey;
             return (
+              // ARIA listbox: the keyboard is handled on the trigger button
+              // (onKeyDown above), which moves `active` through the options.
+              // oxlint-disable-next-line jsx-a11y/click-events-have-key-events
               <li
                 key={keyOf(m)}
                 role="option"

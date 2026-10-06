@@ -2,7 +2,6 @@
 import logging
 import threading
 import time
-import urllib.parse
 from collections.abc import Callable
 
 import arxiv

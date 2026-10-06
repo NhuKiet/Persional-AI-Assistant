@@ -31,7 +31,7 @@ export function CodingResult({ codes, output, artifacts, plan, phase, finalMsg, 
   useEffect(() => { if (testOutput) setActiveTab("tests"); }, [testOutput]);
   useEffect(() => { if (review) setActiveTab("review"); }, [review]);
   useEffect(() => { if (planStream && !plan) setActiveTab("plan"); }, [planStream, plan]);
-  useEffect(() => { if (codeStream && !codes.length) setActiveTab("code"); }, [codeStream]);
+  useEffect(() => { if (codeStream && !codes.length) setActiveTab("code"); }, [codeStream, codes.length]);
 
   const tabs = [
     { id: "plan",      label: `📋 Kế hoạch (${plan?.length || 0})`,  show: !!plan?.length || !!planStream },

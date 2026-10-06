@@ -5,7 +5,6 @@ from tavily import TavilyClient
 
 from backend.app.core.config import settings
 from backend.app.features.research.models import SearchResult
-from backend.app.features.research.search.crawl import _enrich_web_results
 
 logger = logging.getLogger(__name__)
 

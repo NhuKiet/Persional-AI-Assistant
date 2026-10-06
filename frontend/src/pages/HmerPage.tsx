@@ -236,6 +236,9 @@ export function HmerPage() {
           </p>
         )}
 
+        {/* ARIA tabs: focus lives on the tab buttons (roving tabIndex below);
+            the list only listens for the arrow keys that move between them. */}
+        {/* oxlint-disable-next-line jsx-a11y/interactive-supports-focus */}
         <div className="hmer-tabs" role="tablist" aria-label="Cách nhập công thức" onKeyDown={onTabKeyDown}>
           {INPUT_MODES.map((mode) => (
             <button

@@ -1,5 +1,4 @@
 import datetime
-import time
 
 from backend.app.features.research.knowledge_store import _Hit, _rank_candidates
 

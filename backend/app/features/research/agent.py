@@ -257,7 +257,7 @@ class ResearchAgent:
 
         def _run_search(name: str, attr: str, q: str) -> list[SearchResult]:
             k = k_map.get(name, 4)
-            return getattr(getattr(self, attr), "search")(q, k)
+            return getattr(self, attr).search(q, k)
 
         futures: dict = {}
         ex = ThreadPoolExecutor(max_workers=10)
@@ -551,7 +551,7 @@ class ResearchAgent:
                     for name, attr, _ in searchers:
                         k = dynamic_k.get(name, 4)
                         futures[ex.submit(
-                            getattr(getattr(self, attr), "search"), query, k
+                            getattr(self, attr).search, query, k
                         )] = name
 
                     try:
@@ -572,7 +572,7 @@ class ResearchAgent:
                             k = dynamic_k.get(name, 4)
                             for eq in expansions[1:]:
                                 futures[ex.submit(
-                                    getattr(getattr(self, attr), "search"), eq, max(2, k // 2)
+                                    getattr(self, attr).search, eq, max(2, k // 2)
                                 )] = f"{name}[exp]"
 
                     # _gather checks the cancel flag while it waits — a cancel

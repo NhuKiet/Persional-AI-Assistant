@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import ModelPicker from "../components/ModelPicker";
 import TimeWeatherWidget from "../components/TimeWeatherWidget";
-import mainlogo from "../assets/mainlogo.png";
+import mainlogo from "../assets/mainlogo-256.png";
 import { AppShell } from "../components/AppShell";
 import { ChatTranscript } from "../components/ChatTranscript";
 import { InputBar } from "../components/InputBar";
