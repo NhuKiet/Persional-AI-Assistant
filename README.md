@@ -38,6 +38,7 @@ Server-Sent Events.
 - [Yêu cầu hệ thống](#-yêu-cầu-hệ-thống)
 - [Cài đặt & chạy local](#-cài-đặt--chạy-local)
 - [Chạy bằng Docker Compose](#-chạy-bằng-docker-compose)
+- [Mở ra internet (Cloudflare Tunnel)](#-mở-ra-internet-cloudflare-tunnel)
 - [Sandbox thực thi code](#-sandbox-thực-thi-code)
 - [Đăng nhập & dùng thử](#-đăng-nhập--dùng-thử)
 - [Sao lưu & khôi phục dữ liệu](#-sao-lưu--khôi-phục-dữ-liệu)
@@ -356,6 +357,71 @@ Vài điểm compose đã xử lý sẵn:
   nhận code do LLM sinh). Trang Coding báo sandbox không khả dụng, `/health/capabilities`
   ghi `executor: docker_unavailable`; lên kế hoạch, viết code và Quick chat vẫn dùng được.
   Cần chạy code thì chạy backend trên máy host (mục "Cài đặt & chạy local").
+
+---
+
+## 🌐 Mở ra internet (Cloudflare Tunnel)
+
+Bản compose có sẵn hai profile đưa app ra internet qua HTTPS mà **không mở cổng nào**
+trên máy hay router: một container `cloudflared` tự gọi ra Cloudflare, và Cloudflare
+đưa request của khách vào qua chính kết nối đó. Chứng chỉ HTTPS do Cloudflare lo.
+
+**1. Điền `.env`.** Hai dòng đầu là bắt buộc — thiếu một trong hai thì backend từ chối
+khởi động khi `ALLOWED_HOSTS` có tên miền ngoài máy này:
+
+```env
+OWNER_PASSWORD=<ít nhất 10 ký tự>
+COOKIE_SECURE=true
+ALLOWED_HOSTS=localhost,127.0.0.1,king.example.com
+CLOUDFLARE_TUNNEL_TOKEN=<token của tunnel>
+```
+
+**2. Tạo tunnel** trong Cloudflare Zero Trust → Networks → Tunnels → Create a tunnel
+(loại Cloudflared). Chép token vào `.env`, rồi thêm một *Public hostname*: tên miền của
+bạn → Service `HTTP`, URL `frontend:80`.
+
+**3. Chạy cả stack kèm tunnel:**
+
+```bash
+docker compose --profile tunnel up -d
+```
+
+Dừng lại (app hết truy cập được từ ngoài):
+
+```bash
+docker compose --profile tunnel down
+```
+
+**Thử nhanh khi chưa có tên miền** — Cloudflare cấp một địa chỉ tạm, đổi mỗi lần chạy
+và không được bảo đảm hoạt động liên tục. Đặt `ALLOWED_HOSTS=localhost,127.0.0.1,*.trycloudflare.com`
+(vẫn cần `OWNER_PASSWORD` và `COOKIE_SECURE=true`), rồi:
+
+```bash
+docker compose --profile tunnel-quick up -d
+```
+
+```bash
+docker compose logs tunnel-quick
+```
+
+Địa chỉ `https://….trycloudflare.com` nằm trong log.
+
+Vài điều app đã lo cho trường hợp này:
+
+- **IP thật của khách.** Qua tunnel, mọi request tới nginx đều từ container tunnel; nếu
+  không xử lý, cả thế giới thành một khách dùng chung một hạn mức dùng thử. nginx đọc IP
+  thật từ header `CF-Connecting-IP` của Cloudflare — và **chỉ tin header đó từ đúng
+  container tunnel** (địa chỉ cố định `172.30.250.10`). Container khác hay request vào
+  thẳng cổng 5173 gửi header này thì bị bỏ qua. `tests/test_tunnel_config.py` canh sự
+  khớp nhau giữa `docker-compose.yml` và `frontend/nginx.conf`.
+- **Giữ kết nối.** Cloudflare cắt response nào im lặng quá 100 giây. Mọi luồng stream
+  gửi một dòng chú thích SSE mỗi 20 giây khi không có gì mới (`backend/app/shared/sse.py`),
+  nên một lượt Research hay tóm tắt PDF dài không bị cắt giữa chừng.
+- **HSTS** chỉ được gửi cho request đến qua HTTPS.
+
+Giới hạn cần biết: app chỉ truy cập được khi máy này bật và Docker đang chạy; Coding
+Agent không chạy được code trong bản compose (mục dưới); Cloudflare gói miễn phí giới
+hạn mỗi lần upload 100 MB (app đã giới hạn 50 MB).
 
 ---
 

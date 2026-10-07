@@ -50,6 +50,52 @@ services:
       - backend
     restart: unless-stopped
 
+  # ── Cloudflare Tunnel (tuỳ chọn) ───────────────────────────────────────
+  # HTTPS và một địa chỉ công khai mà không mở cổng nào trên máy hay router:
+  # container này tự gọi RA Cloudflare, Cloudflare đưa request của khách vào
+  # qua chính kết nối đó. Chỉ chạy khi gọi tên profile (xem README):
+  #   docker compose --profile tunnel up -d         tên miền riêng, cần CLOUDFLARE_TUNNEL_TOKEN
+  #   docker compose --profile tunnel-quick up -d   địa chỉ tạm *.trycloudflare.com để thử
+  # Hai service dùng CHUNG một địa chỉ cố định — đúng địa chỉ duy nhất mà nginx
+  # tin khi đọc IP thật của khách (frontend/nginx.conf) — nên không chạy cả hai
+  # cùng lúc. tests/test_tunnel_config.py canh sự khớp nhau này.
+  tunnel:
+    image: cloudflare/cloudflared:2026.10.0
+    profiles: ["tunnel"]
+    command: tunnel --no-autoupdate run
+    environment:
+      # Lấy từ .env; trong trang Cloudflare, tunnel trỏ về http://frontend:80.
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    depends_on:
+      - frontend
+    networks:
+      default:
+        ipv4_address: 172.30.250.10
+    restart: unless-stopped
+
+  tunnel-quick:
+    image: cloudflare/cloudflared:2026.10.0
+    profiles: ["tunnel-quick"]
+    # Địa chỉ được in trong log: docker compose logs tunnel-quick
+    command: tunnel --no-autoupdate --url http://frontend:80
+    depends_on:
+      - frontend
+    networks:
+      default:
+        ipv4_address: 172.30.250.10
+    restart: "no"
+
+# Dải địa chỉ cố định cho stack này. Docker chỉ cấp phát trong ip_range (nửa
+# trên); địa chỉ của tunnel nằm ngoài dải đó, nên không container nào khác vô
+# tình nhận được địa chỉ mà nginx tin.
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 172.30.250.0/24
+          ip_range: 172.30.250.128/25
+          gateway: 172.30.250.1
+
 # ── Ollama (tuỳ chọn) ────────────────────────────────────────────────
 # Mặc định dùng Ollama đã cài trên máy host (qua host.docker.internal ở trên).
 # Muốn đóng gói Ollama vào compose: bỏ comment khối dưới, và đổi OLLAMA_URL của
