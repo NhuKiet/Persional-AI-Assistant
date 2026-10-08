@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <em>Một trợ lý AI chạy trên trình duyệt, gộp sáu công cụ vào một ứng dụng: trò chuyện,
+  <em>Một trợ lý AI cá nhân, với 1 số tác vụ chính: trò chuyện,
   nghiên cứu đa nguồn có trích dẫn, viết &amp; chạy code Python trong sandbox, hỏi đáp trên
   PDF, nhận dạng công thức toán viết tay, và điểm tin AI hằng ngày.</em>
 </p>
@@ -23,14 +23,10 @@
   <img src="docs/screenshots/landing.webp" alt="Trang chủ KiNg: portfolio, ô hỏi nhanh, lịch thiên văn và la bàn thiên văn 3D" width="900" />
 </p>
 
-KiNg là dự án cá nhân của **Bùi Như Kiệt**: frontend React + TypeScript, backend FastAPI,
+KiNg là dự án cá nhân của **Bùi Như Kiệt**: frontend sử dụng React + TypeScript, backend sử dụng FastAPI,
 mọi câu trả lời dài stream về trình duyệt theo thời gian thực bằng Server-Sent Events.
 Model đổi được ngay trên giao diện, không cần khởi động lại, giữa **Ollama** (chạy local),
-**OpenAI** / endpoint tương thích OpenAI, và **Anthropic Claude**.
-
-Ảnh trong README chụp từ ứng dụng đang chạy, với câu trả lời do model sinh ra tại lúc
-chụp (10/2026, GPT-5.6 Luna qua API OpenAI; riêng công thức viết tay chạy model local
-trên GPU).
+**OpenAI API** , và **Anthropic Claude API**.
 
 > [!NOTE]
 > KiNg được làm cho một người dùng, chạy trên máy của chính họ, và có thể mở cho vài khách
@@ -41,7 +37,7 @@ trên GPU).
 
 ## ⭐ Điểm nổi bật
 
-- **Research có kiểm chứng.** Tìm song song trên sáu nguồn, xếp hạng lại bằng
+- **Research có kiểm chứng.** Tìm song song trên nhiều nguồn, xếp hạng lại bằng
   cross-encoder, rồi viết báo cáo gắn trích dẫn từng câu. Kết quả kèm mức tin cậy, danh
   sách nhận định có nguồn, và mục "Hạn chế" nói rõ điều các nguồn không trả lời được.
   → [Nghiên cứu sâu](#nghiên-cứu-sâu-research)
@@ -49,7 +45,7 @@ trên GPU).
   một lần: không mạng, filesystem chỉ đọc, bỏ hết Linux capability, có trần RAM / CPU /
   số tiến trình / thời gian. → [Sandbox thực thi code](#-sandbox-thực-thi-code)
 - **Nhận dạng công thức viết tay có giải thích.** Mô hình SwinCoMER từ đồ án tốt nghiệp,
-  kèm bản đồ cho biết mỗi ký hiệu được đọc từ vùng mực nào và ký hiệu nào mô hình ít chắc.
+  kèm mapping cho biết mỗi ký hiệu được đọc từ vùng mực nào và ký hiệu nào mô hình ít chắc.
   → [Công thức viết tay](#công-thức-viết-tay-hmer)
 - **Hỏi đáp PDF dẫn đúng trang.** Câu trả lời gắn số trang; bấm vào là trình xem nhảy tới
   trang đó. → [Trợ lý PDF](#trợ-lý-pdf-pdf)
@@ -92,7 +88,7 @@ trên GPU).
 
 ### Trang chủ (`/`)
 
-Trang chủ (ảnh đầu README) là một dashboard kính, vừa là portfolio của tác giả vừa là cửa
+Trang chủ (ảnh đầu README) là một dashboard, vừa là portfolio của tác giả vừa là cửa
 vào trợ lý:
 
 - **Portfolio dạng thẻ**, tám thẻ, song ngữ Việt / Anh: giới thiệu, kỹ năng, kinh nghiệm,
@@ -116,11 +112,9 @@ vào trợ lý:
 - Stream phản hồi theo thời gian thực qua **SSE**; dừng giữa chừng hoặc tạo lại câu trả lời.
 - **Model Picker** đổi provider / model ngay trên ô nhập (Ollama · OpenAI /
   OpenAI-compatible · Anthropic).
-- Render Markdown, **công thức toán bằng KaTeX**, code block tô màu cú pháp có nút copy.
-- **Nhập bằng giọng nói** (Web Speech API của trình duyệt, tiếng Việt).
+- Render Markdown, **công thức toán bằng LaTeX**
 - Lịch sử hội thoại lưu trên **Supabase (Postgres)**; danh sách phiên ở sidebar, mở lại
   được từng phiên.
-- Thẻ giờ và thời tiết ở màn hình bắt đầu (Open-Meteo), cùng lối tắt sang các công cụ khác.
 
 ### Nghiên cứu sâu (`/research`)
 
@@ -128,17 +122,17 @@ vào trợ lý:
   <img src="docs/screenshots/research.webp" alt="Kết quả research: mức tin cậy, các nhận định kèm nguồn, mục hạn chế và danh sách nguồn" width="900" />
 </p>
 
-- **Tìm song song sáu nguồn**: Tavily Web, DuckDuckGo, arXiv, Semantic Scholar, Hugging
+- **Tìm song song các nguồn**: Tavily Web, DuckDuckGo, arXiv, Semantic Scholar, Hugging
   Face Papers, Stack Overflow. Chọn phạm vi *Tất cả / Học thuật / Web / Code* ngay dưới ô
   nhập. Một nguồn lỗi hay bị giới hạn tần suất thì lượt chạy vẫn đi tiếp với các nguồn còn
   lại.
 - **Knowledge Gate**: trước khi tìm, hệ thống xét tri thức đã lưu cho câu hỏi này đầy đủ
   tới đâu (`EMPTY` / `STALE` / `THIN` / `MAYBE`) để quyết định trả lời luôn, tìm bổ sung,
   hay tìm mới hoàn toàn.
-- **Làm giàu & xếp hạng**: tải toàn văn trang web bằng Trafilatura, khử trùng lặp, rồi
+- **Làm giàu & reranker**: tải toàn văn trang web bằng Trafilatura, khử trùng lặp, rồi
   rerank bằng cross-encoder `BAAI/bge-reranker-v2-m3` chạy local (hoặc Cohere Rerank nếu
   có key).
-- **Báo cáo có trích dẫn**: mỗi câu gắn số nguồn, rê chuột để xem nguồn là gì. Bên dưới
+- **Báo cáo có trích dẫn**: mỗi câu gắn số nguồn. Bên dưới
   là **mức tin cậy**, các **nhận định kèm nguồn**, và mục **Hạn chế**. Biểu đồ chỉ được vẽ
   khi các con số kiểm chứng được trong nguồn.
 - Các bảng *Key Points · Papers · Compare · Sources*, **deep dive** từng nguồn, và gợi ý
@@ -147,7 +141,7 @@ vào trợ lý:
   Embeddings để dùng lại tri thức đã thu thập ở các lượt sau.
 
 <details>
-<summary>Thêm ảnh: báo cáo với trích dẫn từng câu</summary>
+<summary>Xem thêm ảnh: báo cáo với trích dẫn từng câu</summary>
 <p align="center">
   <img src="docs/screenshots/research-report.webp" alt="Báo cáo research với số trích dẫn sau từng câu" width="900" />
 </p>
@@ -171,7 +165,7 @@ vào trợ lý:
   [Sandbox thực thi code](#-sandbox-thực-thi-code).
 
 <details>
-<summary>Thêm ảnh: output và các biến được giữ lại</summary>
+<summary>Xem thêm ảnh: output và các biến được giữ lại</summary>
 <p align="center">
   <img src="docs/screenshots/coding-output.webp" alt="Tab Output: bảng tần suất in ra và danh sách biến giữ cho câu hỏi sau" width="900" />
 </p>
@@ -219,19 +213,6 @@ vào trợ lý:
   §13.4–13.6.
 
 Cài đặt: xem [mục 7 của phần cài đặt](#7-tuỳ-chọn-bật-nhận-dạng-công-thức-viết-tay--hmer).
-
-### Điểm tin AI (`/news`)
-
-<p align="center">
-  <img src="docs/screenshots/news.webp" alt="Điểm tin AI: các tin đã được tóm tắt bằng tiếng Việt, lọc theo chủ đề" width="900" />
-</p>
-
-- Tổng hợp định kỳ từ các **RSS đã tuyển chọn**: OpenAI, Google DeepMind, Hugging
-  Face, arXiv cs.AI & cs.RO, IEEE Spectrum Robotics, Hacker News.
-- LLM tóm tắt từng tin bằng tiếng Việt và xếp vào một trong bốn chủ đề (model mới ·
-  nghiên cứu · robotics · cộng đồng); lọc theo chủ đề ngay trên trang.
-- Refresh theo lịch **single-flight**: tick tự động và refresh thủ công trùng thời
-  điểm sẽ dùng chung một lần chạy pipeline thay vì mỗi bên chạy (và trả phí) riêng.
 
 ### Bong bóng "Trợ lý nhanh"
 
@@ -313,10 +294,10 @@ của app vẫn chạy.
 | **Tìm kiếm** | Tavily · DuckDuckGo (ddgs) · arXiv · Semantic Scholar · Hugging Face · Stack Overflow |
 | **Retrieval** | BGE Reranker v2 M3 · Cohere Rerank · Weaviate hybrid search · OpenAI Embeddings · Trafilatura |
 | **PDF** | PyMuPDF (fitz) phía server · PDF.js / react-pdf phía client |
-| **Thị giác** | SwinCoMER (PyTorch) cho công thức viết tay · model vision cho vùng ảnh trong PDF |
+| **Computer Vision** | SwinCoMER (PyTorch) cho công thức viết tay · model vision cho vùng ảnh trong PDF |
 | **Sandbox** | Docker Engine — container dùng một lần, không mạng |
-| **Triển khai** | Docker Compose · nginx · Cloudflare Tunnel · GitHub Actions |
-| **Kiểm thử** | pytest · Vitest + React Testing Library · Ruff · oxlint |
+| **Deployment** | Docker Compose · nginx · Cloudflare Tunnel · GitHub Actions |
+| **Testing** | pytest · Vitest + React Testing Library · Ruff · oxlint |
 
 ---
 
