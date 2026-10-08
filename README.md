@@ -40,7 +40,7 @@ Model đổi được ngay trên giao diện, không cần khởi động lại,
 - **Research có kiểm chứng.** Tìm song song trên nhiều nguồn, xếp hạng lại bằng
   cross-encoder, rồi viết báo cáo gắn trích dẫn từng câu. Kết quả kèm mức tin cậy, danh
   sách nhận định có nguồn, và mục "Hạn chế" nói rõ điều các nguồn không trả lời được.
-  → [Nghiên cứu sâu](#nghiên-cứu-sâu-research)
+  → [Nghiên cứu sâu](#nghiên-cứu-sâu-research) · [Pipeline RAG](#-pipeline-rag)
 - **Code do LLM sinh chỉ chạy trong sandbox.** Mỗi lần chạy là một container Docker dùng
   một lần: không mạng, filesystem chỉ đọc, bỏ hết Linux capability, có trần RAM / CPU /
   số tiến trình / thời gian. → [Sandbox thực thi code](#-sandbox-thực-thi-code)
@@ -68,6 +68,7 @@ Model đổi được ngay trên giao diện, không cần khởi động lại,
 - [Tính năng](#-tính-năng)
 - [Giao diện](#-giao-diện)
 - [Kiến trúc](#-kiến-trúc)
+- [Pipeline RAG](#-pipeline-rag)
 - [Công nghệ](#-công-nghệ)
 - [Yêu cầu hệ thống](#-yêu-cầu-hệ-thống)
 - [Cài đặt & chạy local](#-cài-đặt--chạy-local)
@@ -139,6 +140,8 @@ vào trợ lý:
   câu hỏi tiếp theo.
 - **Knowledge store (tuỳ chọn)**: hybrid search trên **Weaviate Cloud** + OpenAI
   Embeddings để dùng lại tri thức đã thu thập ở các lượt sau.
+
+Thiết kế chi tiết và các số đo: [Pipeline RAG](#-pipeline-rag).
 
 <details>
 <summary>Xem thêm ảnh: báo cáo với trích dẫn từng câu</summary>
@@ -278,6 +281,233 @@ react-pdf + pdfjs worker — được **lazy-load** theo route. Mỗi route bọ
 Mọi thứ tuỳ chọn đều **hỏng mềm**: thiếu Weaviate, reranker, checkpoint HMER hay Docker
 thì riêng phần đó báo `disabled` / `degraded` trong `/health/capabilities`, phần còn lại
 của app vẫn chạy.
+
+---
+
+## 🧠 Pipeline RAG
+
+Phần này đi theo một câu hỏi Research từ đầu tới cuối: hệ thống quyết định dùng tri thức
+đã lưu hay đi tìm mới như thế nào, xếp hạng nguồn ra sao, và từng nhận định trong câu trả
+lời được đối chiếu lại với nguồn bằng cách nào. Các con số lấy từ code và từ những lần đo
+được ghi lại trong [`docs/superpowers/specs/`](docs/superpowers/specs), kèm ngày đo và cỡ
+mẫu.
+
+### Mục tiêu thiết kế
+
+Ba yêu cầu được chốt từ đầu, mọi quyết định phía sau đều bám theo:
+
+1. **Trả lời nông là lỗi nặng hơn trả lời chậm.** Tốn thêm vài giây để kiểm tra hoặc tìm
+   bù còn hơn trả lời mỏng từ dữ liệu cũ.
+2. **Tri thức mới có một phần thì bù phần thiếu, không vứt đi.**
+3. **Độ mới tuỳ loại câu hỏi.** Câu hỏi khái niệm chấp nhận dữ liệu cũ; câu hỏi về SOTA,
+   benchmark, phiên bản hay giá thì không.
+
+### Luồng tổng quát
+
+```text
+câu hỏi
+  └─► contextualize        viết lại câu hỏi nối tiếp thành câu độc lập (6 lượt gần nhất)
+        └─► retrieve_candidates   hybrid search trên Weaviate: điểm thô + metadata độ mới
+              │
+   TẦNG 1  assess()        hàm thuần, không gọi LLM
+              ├─ EMPTY   không có ứng viên ─────────────────► live search
+              ├─ STALE   có, nhưng quá hạn với loại câu hỏi ─► live search (bỏ nguồn cũ)
+              ├─ THIN    còn hạn nhưng phủ câu hỏi kém ─────► top-up search → trộn
+              └─ MAYBE   còn hạn, phủ đủ
+                    │
+   TẦNG 2  judge_sufficiency()   một LLM call, đã gia cố
+                    ├─ đủ ────► trả lời từ tri thức đã lưu (2 LLM call)
+                    └─ thiếu ─► top-up search, neo vào câu hỏi gốc → trộn
+              │
+   TẦNG 3  synthesis → grounding → tối đa 1 vòng tìm bù → lưu nguồn MỚI vào store
+```
+
+Ba tầng vì mỗi tầng đứng một mình đều không đủ. Tín hiệu thuần không phân biệt được "YOLOv11
+là gì" với "so sánh FLOPs backbone YOLOv11 và YOLOv8", vì hai câu phủ cùng token. Chỉ dùng
+LLM judge thì tốn một call cho cả những ca không cần phán, như dữ liệu sáu tháng tuổi cho
+câu hỏi SOTA. Còn tổng hợp trước rồi mới phát hiện thiếu thì đã tốn trọn bảy call.
+
+### 1. Lưu tri thức
+
+- **Parent–child chunking** (`chunking.py`). Nội dung nguồn được tách theo heading Markdown
+  thành các *section* (parent), mỗi section lại cắt thành chunk 500 ký tự, overlap 50
+  (child). Search chạy trên child vì chunk nhỏ khớp chính xác hơn, nhưng thứ trả về cho LLM
+  là **nội dung parent**, để câu trả lời có đủ ngữ cảnh.
+- **Embedding** từng child bằng OpenAI `text-embedding-3-small`; vector tự cấp cho Weaviate.
+- Mỗi chunk mang theo nguồn, loại nguồn, URL, tiêu đề, câu hỏi đã sinh ra nó, thời điểm lưu
+  và **ngày xuất bản** (arXiv cho ngày, Semantic Scholar cho năm). Hai mốc thời gian tách
+  riêng vì một paper 2020 vừa index hôm nay không phải bằng chứng hiện hành.
+- **Chỉ nguồn mới được ghi.** Khi top-up, nguồn lấy từ store không được ghi lại, nếu không
+  mỗi lần hỏi cùng chủ đề sẽ nhân bản chunk. Tập "mới" được tính sau bước khử trùng lặp.
+- Embed và ghi chạy nền song song với synthesis, nên người dùng không phải chờ việc chỉ có
+  ích cho câu hỏi *sau*; lượt chạy chỉ báo xong khi đã ghi xong.
+
+### 2. Retrieval
+
+- **Hybrid search** của Weaviate: BM25 trên nội dung chunk kết hợp vector, `alpha = 0.5`,
+  fusion `RELATIVE_SCORE`, lấy tối đa 80 hit rồi gộp theo parent.
+- **Tách "có liên quan" khỏi "còn mới".** Bản đầu so ngưỡng với điểm đã nhân time-decay,
+  nên tuổi tác *loại bỏ* chứ không *hạ hạng*: chunk điểm 1.0 biến mất sau khoảng 26 ngày,
+  điểm 0.8 sau khoảng 12,5 ngày, và TTL 180 ngày không bao giờ có hiệu lực.
+  `retrieve_candidates()` lọc theo điểm thô, chỉ dùng decay để sắp xếp, và nhường quyết định
+  về độ mới cho tầng 1.
+
+### 3. Knowledge gate
+
+**Tầng 1** là hàm thuần, không I/O, không gọi LLM:
+
+| Trạng thái | Điều kiện | Hành động |
+|---|---|---|
+| `EMPTY` | Không có ứng viên | Live search đầy đủ |
+| `STALE` | Có ứng viên nhưng không cái nào còn trong TTL | Live search; nguồn cũ **không** đưa vào synthesis |
+| `THIN` | Còn hạn nhưng coverage dưới 0.6 | Giữ nguồn còn hạn, top-up search, trộn. Không gọi judge |
+| `MAYBE` | Còn hạn và coverage đủ | Tầng 2 quyết định |
+
+- **TTL theo loại câu hỏi**: *volatile* 7 ngày (có từ như sota, benchmark, mới nhất, version,
+  giá… hoặc nhắc tới năm nay / năm trước), *stable* 180 ngày (là gì, định nghĩa, kiến trúc,
+  giải thích…), còn lại 30 ngày. Năm được tính động, không hardcode.
+- **Tuổi bằng chứng** tính theo ngày xuất bản nếu biết, không thì theo ngày lưu. Nguồn không
+  rõ tuổi bị loại với câu hỏi volatile.
+- **Coverage** là tỉ lệ token của câu hỏi xuất hiện trong các nguồn *còn hạn*, không phải
+  toàn bộ ứng viên: một đoạn mới mà lạc đề không được làm chín nguồn cũ trông như còn hạn.
+  Tokenizer là Unicode; bản `[a-z0-9]+` ban đầu làm rụng hết chữ có dấu và xếp mọi câu hỏi
+  tiếng Việt vào `THIN`.
+
+**Tầng 2** là một LLM call trả về `{sufficient, missing}`, được gia cố vì nó đọc nội dung
+lấy từ internet:
+
+- Nội dung nguồn nằm trong khung "untrusted", tối đa 400 ký tự mỗi nguồn và 4.000 ký tự tổng.
+- Chỉ `sufficient: true` kiểu boolean mới được tính là đủ; `"yes"` hay `1` bị coi là thiếu.
+- Timeout 20 giây; lỗi hay quá giờ đều nghiêng về tìm thêm. Hủy được ngay cả khi call đang
+  chạy.
+- Query top-up **luôn neo vào câu hỏi gốc**: phần `missing` do judge viết chỉ được nối thêm
+  vào sau, không bao giờ đứng một mình. Văn bản độc trong một nguồn vì thế không lái được
+  lượt search.
+
+### 4. Live search và top-up
+
+- Các searcher chạy **song song** với deadline 60 giây. Khi đã có từ 4 kết quả, những nguồn
+  còn đang chạy chỉ được thêm 10 giây.
+- **Query expansion**: LLM sinh hai cách diễn đạt khác, chỉ dùng cho arXiv và Semantic
+  Scholar, và chạy đè lên các search chính thay vì bắt chúng chờ.
+- **Dynamic k**: số kết quả lấy từ mỗi nguồn đổi theo loại câu hỏi (học thuật / thực hành /
+  chung).
+- **Anchor filter**: bỏ kết quả không chung token thực chất nào với câu hỏi gốc của người
+  dùng, không phải với query đã expand. Nếu filter định bỏ hơn 80% thì coi là lệch ngôn ngữ
+  giữa câu hỏi và corpus, và giữ lại tất cả.
+- **Enrich** kết quả web bằng Trafilatura để lấy toàn văn, có chặn SSRF (chỉ fetch địa chỉ
+  IP công khai).
+- **Khử trùng lặp** bằng cosine ≥ 0.92 trên embedding của tiêu đề + 300 ký tự đầu.
+- **Rerank và score fusion**, giữ 15 nguồn tốt nhất:
+
+| Tín hiệu | Trọng số |
+|---|---|
+| Cross-encoder (`bge-reranker-v2-m3` local, hoặc Cohere) | 0.55 |
+| Độ tin cậy của loại nguồn | 0.20 |
+| Độ mới, `exp(-tuổi / 5 năm)` | 0.10 |
+| Số trích dẫn, trần 200 | 0.10 |
+| Điểm gốc của nguồn | 0.05 |
+
+Độ tin cậy theo nguồn: arXiv 1.0 · Semantic Scholar 0.95 · Hugging Face 0.80 · Stack
+Overflow 0.70 · web 0.55 · DuckDuckGo 0.50. Khi không reranker nào chạy được, fusion tự
+chuyển sang bộ trọng số không có cross-encoder (điểm gốc 0.40 · độ tin cậy 0.35 · trích dẫn
+0.15 · độ mới 0.10) thay vì dừng. Khi top-up, nguồn lấy từ store được trộn với nguồn mới
+rồi đi qua cùng bước rerank này.
+
+### 5. Synthesis
+
+- **Đường search / top-up**: các phần của báo cáo (tóm tắt, bản chi tiết, key points, biểu
+  đồ, câu hỏi tiếp theo, danh sách paper, thêm bảng so sánh khi câu hỏi có ý so sánh) là các
+  LLM call độc lập chạy song song; phần nào xong thì stream về giao diện ngay.
+- **Đường reuse**: một call trả lời tự nhiên cộng một call grounding, tức 2 call thay vì 7.
+- **Context budget** bằng nửa context window của model đang chọn, trần 60.000 token, chia
+  đều cho 15 nguồn.
+- **Trích dẫn `[n]`** trỏ tới nguồn thứ n. Marker trỏ ra ngoài danh sách nguồn bị gỡ trước
+  khi hiển thị.
+- **Biểu đồ** chỉ được vẽ khi model chép ra được một câu có thật trong nguồn và câu đó chứa
+  ít nhất hai con số đang được vẽ.
+
+### 6. Grounding
+
+LLM chỉ làm một việc: trích các claim, mỗi claim kèm nguồn nó dẫn và **câu nó đã chép từ
+nguồn đó**. Claim có được chấp nhận hay không là do code quyết định (`grounding.py`):
+
+1. **Quote có thật không.** Câu chép phải xuất hiện trong đúng nguồn được dẫn: khớp nguyên
+   văn sau khi chuẩn hoá dấu câu, hoặc ít nhất 85% token.
+2. **Không có quote** thì dùng token containment: ít nhất 55% token của claim phải nằm trong
+   nguồn.
+3. **Quote có đúng chuyện không.** Một câu có thật vẫn có thể không liên quan, nên claim và
+   quote phải có cosine embedding từ 0.2 trở lên.
+4. **Tín hiệu quote sụp cả lô** (dưới 30% claim qua, từ 3 claim trở lên) được hiểu là model
+   đã diễn giải thay vì chép, không phải mọi claim đều bịa. Khi đó cả lô được chấm lại bằng
+   embedding giữa claim và nguồn.
+
+Từ kết quả đó:
+
+- **Chỉ claim đã qua kiểm tra mới được hiển thị.**
+- **Confidence** = tỉ lệ claim được chấp nhận × `min(1, 0.3 + số_nguồn / 10)`. Một câu trả lời
+  chỉ dựa vào một nguồn dừng ở 0.4 dù mọi claim đều có quote.
+- **Hạn chế** được sinh tự động: có claim không tìm được nguồn, ít hơn ba nguồn, nguồn học
+  thuật chỉ có abstract, hoặc mọi claim dựa vào cùng một nguồn.
+- **Tối đa một vòng tìm bù** khi không có claim nào hoặc confidence dưới 0.5: search thêm
+  theo câu hỏi tiếp theo đầu tiên, trộn với nguồn đang có, rồi tổng hợp lại.
+
+### Chịu lỗi
+
+- Store là cache, nên mọi lỗi của nó đều không làm hỏng câu trả lời. Sau một lần lỗi, store
+  được bỏ qua 60 giây thay vì bị gọi lại ở mọi request, và mỗi lần tra có hạn 6 giây.
+- Query expansion, contextualize, judge, rerank, grounding và bước lưu đều có đường lui riêng;
+  một nguồn search lỗi không làm hỏng cả lượt.
+- Khi đã kết luận là thiếu mà không tìm bù được, hệ thống không giả vờ đủ: confidence bị chặn
+  ở 0.4 và mục Hạn chế nói rõ câu trả lời dựa trên dữ liệu đã lưu.
+- Reranker được chấm thử một cặp thật lúc khởi động, và trạng thái của embeddings, knowledge
+  store, reranker xuất hiện ở `/health/capabilities`.
+
+### Đã đo gì, và quyết định gì từ đó
+
+| Đã đo | Kết quả | Quyết định |
+|---|---|---|
+| Đọc tay 22 claim trên 3 câu hỏi, so với đúng nguồn được dẫn (25/08/2026) | Cả 22 đều có nguồn hỗ trợ, nhưng bộ kiểm tra lexical bác 11, tức 11/11 lần bác là bác oan. Một claim tiếng Việt gần như trùng câu trong nguồn tiếng Việt nhận điểm 0.000 | Thay bằng kiểm tra theo quote, tokenizer Unicode, containment thay Jaccard, và embedding cho cặp khác ngôn ngữ |
+| Bộ 8 câu hỏi chuẩn, trước và sau khi sửa grounding (25/08/2026) | Claim được hiển thị mỗi câu: 3.4 → 5.1. Vòng tìm bù: 6 → 0. Thời gian trung bình: 92.6 s → 57.9 s | Giữ thiết kế mới |
+| Claim ghép với một câu có thật nhưng không liên quan | Claim bịa "nhanh hơn 12 lần" kèm một câu thật về thu thập dữ liệu đã lọt qua. Đo bằng embedding: 16 cặp thật đạt 0.33–0.86, cặp ghép sai đạt −0.03 và 0.03 | Thêm bước kiểm tra claim–quote với ngưỡng 0.2 |
+| Gate trên 8 câu hỏi, store có 1.199 chunk (25/08/2026) | `top_up` 7 · `search` 1 · `reuse` 0. Judge trả "thiếu" ở 15/16 lần chấm | Đọc song song hai câu trả lời cho 4 câu hỏi: bản chỉ dùng store đúng nhưng kém cụ thể hơn. Giữ judge nghiêm, đúng với yêu cầu 1 |
+| Reranker trong lúc đo (19/08/2026) | Cross-encoder chưa từng chạy: model load được nhưng lỗi ở bước chấm điểm, và lỗi bị nuốt thành fallback | Đổi sang `CrossEncoder` của sentence-transformers, thêm bước chấm thử lúc khởi động |
+| Biểu đồ sau khi chuyển sang structured output | Từ 1/8 lên 8/8 câu hỏi có biểu đồ, vì model gần như luôn trả `has_data: true` | Bắt buộc quote chứa ít nhất hai con số được vẽ; còn 3/8 |
+| Reasoning effort cho bước trích claim, A/B chạy liền nhau (19/08/2026) | `high`: tỉ lệ grounded 0.287, 7 vòng tìm bù, 86.4 s. Không đặt: 0.442, 4 vòng, 81.6 s | Không gửi `reasoning_effort` cho bước này |
+| Thời gian một lượt search (29/09/2026) | Kết quả web về sau khoảng 4 giây, trong khi nguồn học thuật đang bị rate-limit giữ cả lượt đủ 60 giây | Đủ 4 kết quả thì các nguồn còn lại chỉ được thêm 10 giây |
+
+Các script đo nằm trong [`tools/`](tools): `research_probe.py`, `claim_audit.py`,
+`gate_compare.py`, `iteration_probe.py`.
+
+### Giới hạn đã biết
+
+- **Store chủ yếu đóng vai bổ sung, chưa phải cache để bỏ qua search.** Ở lần đo gần nhất,
+  `reuse` xảy ra 1/8 câu hỏi, nên phần lớn câu hỏi `MAYBE` tốn thêm một judge call mà vẫn đi
+  search. Đây là hệ quả của yêu cầu 1, không phải lỗi, nhưng là chi phí có thật.
+- **Ngưỡng ứng viên 0.65 đang áp lên điểm `RELATIVE_SCORE`**, vốn được chuẩn hoá trong từng
+  lô kết quả, nên nó chỉ lọc tương đối: mỗi câu hỏi chỉ ra 1–5 ứng viên trên 1.199 chunk. Hạ
+  xuống 0.40 cho 5–14 ứng viên. Chưa chỉnh, vì chưa có bằng chứng rằng câu trả lời tốt hơn.
+- **Cỡ mẫu nhỏ.** Mỗi cấu hình chạy một lần trên 8 câu hỏi, audit đọc 22 claim, và kết quả
+  search thay đổi theo thời điểm. Đủ để thấy hướng, chưa đủ để nêu một tỉ lệ.
+- **Quote chứng minh model chép đúng, không chứng minh suy luận đúng.** Một claim tổng hợp
+  từ nhiều nguồn có thể bị loại dù hợp lý.
+
+### RAG trên PDF
+
+Trợ lý PDF dùng một đường đơn giản hơn, không cần embedding:
+
+- Mỗi trang được cắt thành chunk 800 ký tự, overlap 100, và chunk nhớ số trang của nó.
+- Retrieval chấm lexical: `0.4 × tần suất từ khoá + 0.6 × độ phủ từ khoá`, lấy 8 chunk tốt
+  nhất, rồi xếp lại theo thứ tự trang cho vừa 6.000 ký tự context.
+- **Số trang trong câu trả lời lấy từ đúng những chunk đã đưa cho model**, nên model không
+  thể dẫn một trang nó chưa được đọc.
+- Tóm tắt cả tài liệu dùng map-reduce có trần: tối đa 16 phần, mỗi phần 6.000 ký tự.
+
+### Test
+
+Pipeline Research có 273 test trên 23 file. Phần lõi (gate tầng 1, fusion, grounding, quyết
+định tìm bù) là hàm thuần nên test không cần mạng, LLM hay Weaviate; LLM và bộ chấm
+embedding được tiêm vào từ ngoài.
 
 ---
 
