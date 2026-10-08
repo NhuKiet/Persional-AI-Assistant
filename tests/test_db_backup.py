@@ -5,6 +5,7 @@ Supabase container when it is up (skipped otherwise): it only ever READS the
 live database; everything it writes goes to scratch databases it creates and
 drops, and to pytest's temporary directory.
 """
+import datetime
 import importlib.util
 import json
 import subprocess
@@ -103,6 +104,71 @@ def test_a_backup_that_changed_on_disk_is_not_trusted(tmp_path):
 
     with pytest.raises(db_backup.BackupError, match="checksum"):
         db_backup.verify(Running(), dump)
+
+
+def _stamped(hours_ago: float) -> str:
+    taken = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=hours_ago)
+    return f"king-db-{taken.strftime('%Y%m%d-%H%M%SZ')}.dump"
+
+
+def test_a_scheduled_run_does_nothing_while_the_newest_backup_is_recent(tmp_path, monkeypatch, capsys):
+    def never(*_args, **_kwargs):
+        raise AssertionError("a skipped run must not reach the database")
+
+    monkeypatch.setattr(db_backup, "Postgres", never)
+    (tmp_path / _stamped(30)).write_bytes(b"x")
+    (tmp_path / _stamped(2)).write_bytes(b"x")
+
+    code = db_backup.main(["--dir", str(tmp_path), "backup", "--if-older-than", "23"])
+
+    assert code == 0
+    assert "nothing to do" in capsys.readouterr().out
+    assert len(list(tmp_path.iterdir())) == 2
+
+
+@pytest.mark.parametrize("existing", [[], [30], ["pre-restore"]])
+def test_a_scheduled_run_takes_a_backup_when_none_is_recent(tmp_path, monkeypatch, existing):
+    for item in existing:
+        # A safety copy from a restore is not one of the daily backups.
+        name = _stamped(1).replace("king-db-", "king-db-pre-restore-") if item == "pre-restore" else _stamped(item)
+        (tmp_path / name).write_bytes(b"x")
+    taken = []
+
+    def fake_backup(_postgres, directory, keep):
+        taken.append(directory)
+        return {"file": "king-db-new.dump", "bytes": 1, "tables": {}, "removed": []}
+
+    monkeypatch.setattr(db_backup, "Postgres", lambda container: container)
+    monkeypatch.setattr(db_backup, "backup", fake_backup)
+
+    code = db_backup.main(["--dir", str(tmp_path), "--container", "db", "backup", "--if-older-than", "23"])
+
+    assert code == 0
+    assert taken == [tmp_path]
+
+
+def test_a_backups_age_comes_from_its_name_not_from_the_files_date(tmp_path):
+    # Written just now (a sync tool restoring it, a copy to a new disk), taken 30 hours ago.
+    (tmp_path / _stamped(30)).write_bytes(b"x")
+
+    assert db_backup.hours_since_newest(tmp_path) == pytest.approx(30, abs=0.01)
+    assert db_backup.hours_since_newest(tmp_path / "missing") is None
+
+
+def test_docker_is_called_without_opening_a_console_window():
+    # A scheduled run has no console (pythonw.exe); Windows would otherwise
+    # give each docker call a window of its own.
+    seen = []
+
+    def run(argv, **kwargs):
+        seen.append(kwargs.get("creationflags"))
+        return subprocess.CompletedProcess(argv, 0, stdout=b"true\n", stderr=b"")
+
+    server = db_backup.Postgres("db", run=run)
+    server.check_running()
+    server._query("postgres", "select 1", "q")
+
+    assert seen == [getattr(subprocess, "CREATE_NO_WINDOW", 0)] * 2
 
 
 def test_table_names_are_checked_before_they_reach_sql():

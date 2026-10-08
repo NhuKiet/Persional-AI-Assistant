@@ -1,38 +1,76 @@
-# KiNg — Personal AI Assistant
+# KiNg — Trợ lý AI cá nhân
 
 <p align="center">
-  <img src="frontend/src/assets/mainlogo.png" alt="KiNg logo" width="120" />
+  <img src="frontend/src/assets/mainlogo-256.png" alt="Logo KiNg" width="96" />
 </p>
 
 <p align="center">
-  <em>Một trợ lý AI cá nhân chạy trên trình duyệt: trò chuyện, nghiên cứu sâu đa nguồn,
-  sinh &amp; chạy code Python trong sandbox, đọc PDF, nhận dạng công thức toán viết tay
-  (kèm bản đồ vùng mô hình dựa vào), và điểm tin AI hằng ngày — tất cả trong một lõi
-  xử lý duy nhất.</em>
+  <em>Một trợ lý AI chạy trên trình duyệt, gộp sáu công cụ vào một ứng dụng: trò chuyện,
+  nghiên cứu đa nguồn có trích dẫn, viết &amp; chạy code Python trong sandbox, hỏi đáp trên
+  PDF, nhận dạng công thức toán viết tay, và điểm tin AI hằng ngày.</em>
 </p>
 
 <p align="center">
+  <a href="https://github.com/NhuKiet/Persional-AI-Assistant/actions/workflows/ci.yml"><img src="https://github.com/NhuKiet/Persional-AI-Assistant/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <img src="https://img.shields.io/badge/python-3.11+-blue" alt="Python 3.11+" />
   <img src="https://img.shields.io/badge/node-24+-green" alt="Node 24+" />
   <img src="https://img.shields.io/badge/react-18-61dafb" alt="React 18" />
+  <img src="https://img.shields.io/badge/typescript-7-3178c6" alt="TypeScript 7" />
   <img src="https://img.shields.io/badge/FastAPI-SSE-009688" alt="FastAPI" />
 </p>
 
-KiNg chạy được với **LLM local qua Ollama** hoặc **API provider** (Anthropic Claude,
-OpenAI / endpoint OpenAI-compatible), đổi model ngay trên giao diện mà không cần khởi
-động lại. Mọi phản hồi dài đều stream về client theo thời gian thực bằng
-Server-Sent Events.
+<p align="center">
+  <img src="docs/screenshots/landing.webp" alt="Trang chủ KiNg: portfolio, ô hỏi nhanh, lịch thiên văn và la bàn thiên văn 3D" width="900" />
+</p>
 
-> [!WARNING]
-> Dự án hướng tới môi trường **cá nhân / phát triển nội bộ**. API chưa có lớp
-> authentication, phân quyền hay rate-limiting đa người dùng. Đừng expose thẳng ra
-> Internet nếu chưa bổ sung các lớp bảo vệ đó.
+KiNg là dự án cá nhân của **Bùi Như Kiệt**: frontend React + TypeScript, backend FastAPI,
+mọi câu trả lời dài stream về trình duyệt theo thời gian thực bằng Server-Sent Events.
+Model đổi được ngay trên giao diện, không cần khởi động lại, giữa **Ollama** (chạy local),
+**OpenAI** / endpoint tương thích OpenAI, và **Anthropic Claude**.
+
+Ảnh trong README chụp từ ứng dụng đang chạy, với câu trả lời do model sinh ra tại lúc
+chụp (10/2026, GPT-5.6 Luna qua API OpenAI; riêng công thức viết tay chạy model local
+trên GPU).
+
+> [!NOTE]
+> KiNg được làm cho một người dùng, chạy trên máy của chính họ, và có thể mở cho vài khách
+> dùng thử qua internet. Nó có đăng nhập, phân quyền và hạn mức cho khách, nhưng không phải
+> dịch vụ nhiều người dùng: backend chạy một worker, hạn mức và khoá phiên nằm trong bộ nhớ.
+
+---
+
+## ⭐ Điểm nổi bật
+
+- **Research có kiểm chứng.** Tìm song song trên sáu nguồn, xếp hạng lại bằng
+  cross-encoder, rồi viết báo cáo gắn trích dẫn từng câu. Kết quả kèm mức tin cậy, danh
+  sách nhận định có nguồn, và mục "Hạn chế" nói rõ điều các nguồn không trả lời được.
+  → [Nghiên cứu sâu](#nghiên-cứu-sâu-research)
+- **Code do LLM sinh chỉ chạy trong sandbox.** Mỗi lần chạy là một container Docker dùng
+  một lần: không mạng, filesystem chỉ đọc, bỏ hết Linux capability, có trần RAM / CPU /
+  số tiến trình / thời gian. → [Sandbox thực thi code](#-sandbox-thực-thi-code)
+- **Nhận dạng công thức viết tay có giải thích.** Mô hình SwinCoMER từ đồ án tốt nghiệp,
+  kèm bản đồ cho biết mỗi ký hiệu được đọc từ vùng mực nào và ký hiệu nào mô hình ít chắc.
+  → [Công thức viết tay](#công-thức-viết-tay-hmer)
+- **Hỏi đáp PDF dẫn đúng trang.** Câu trả lời gắn số trang; bấm vào là trình xem nhảy tới
+  trang đó. → [Trợ lý PDF](#trợ-lý-pdf-pdf)
+- **Đủ lớp bảo vệ để mở ra internet.** Đăng nhập chủ + khách dùng thử theo hạn mức mỗi IP,
+  phân quyền chặn mặc định, chống CSRF, rate limit, allow-list model, CSP và security
+  header, HTTPS qua Cloudflare Tunnel. Backend từ chối khởi động khi cấu hình hở.
+  → [Đăng nhập & dùng thử](#-đăng-nhập--dùng-thử) · [Mở ra internet](#-mở-ra-internet-cloudflare-tunnel)
+- **Có kiểm thử và CI.** Khoảng 1.000 test backend (pytest) và 500 test frontend (Vitest),
+  lint, typecheck, build, và kiểm tra lỗ hổng dependency hằng tuần trên GitHub Actions.
+  → [Kiểm thử & CI](#-kiểm-thử--ci)
+- **Có công cụ vận hành.** Trạng thái từng năng lực (`/health/capabilities`), độ trễ p50/p95
+  theo tính năng (`/health/latency`), và sao lưu database có khôi phục thử.
+  → [Sao lưu & khôi phục dữ liệu](#-sao-lưu--khôi-phục-dữ-liệu)
 
 ---
 
 ## Mục lục
 
+- [Điểm nổi bật](#-điểm-nổi-bật)
 - [Tính năng](#-tính-năng)
+- [Giao diện](#-giao-diện)
 - [Kiến trúc](#-kiến-trúc)
 - [Công nghệ](#-công-nghệ)
 - [Yêu cầu hệ thống](#-yêu-cầu-hệ-thống)
@@ -46,75 +84,134 @@ Server-Sent Events.
 - [API](#-api)
 - [Kiểm thử & CI](#-kiểm-thử--ci)
 - [Cấu trúc dự án](#-cấu-trúc-dự-án)
-- [Giấy phép](#-giấy-phép)
+- [Tác giả](#-tác-giả)
 
 ---
 
 ## ✨ Tính năng
 
-### Trang chủ — "Capability Reactor" (`/`)
+### Trang chủ (`/`)
 
-Landing một màn hình: lõi phản ứng 3D dựng bằng **Three.js** (kéo để xoay, cuộn để
-phóng) đặt trong một card rêu ô liu bo góc, cùng hero giới thiệu và một CTA duy nhất
-dẫn vào trợ lý. Canvas tự nhận diện máy yếu để hạ cấu hình, và có fallback tĩnh nếu
-WebGL không khởi tạo được.
+Trang chủ (ảnh đầu README) là một dashboard kính, vừa là portfolio của tác giả vừa là cửa
+vào trợ lý:
+
+- **Portfolio dạng thẻ**, tám thẻ, song ngữ Việt / Anh: giới thiệu, kỹ năng, kinh nghiệm,
+  dự án, học vấn, liên hệ.
+- **Ô hỏi nhanh** đưa câu hỏi thẳng sang trang chat, kèm lối tắt tới Research, PDF và
+  Công thức viết tay.
+- **Lịch thiên văn**: kinh độ hoàng đạo của Mặt Trời, tiết khí, tháng kiến, pha Mặt Trăng và tú.
+  Tất cả tính ngay trên trình duyệt từ ngày giờ hiện tại.
+- **La bàn thiên văn 3D** dựng bằng **Three.js**: sáu vành đồng tâm (chòm sao, 28 tú,
+  24 tiết khí, thước độ, 12 tháng, lõi Bắc Đẩu) quay ngược chiều nhau và khoá theo ngày
+  giờ hôm nay. Kéo để xoay, Ctrl/⌘ + cuộn để phóng, nhấp đúp để về vị trí ban đầu. Cảnh
+  3D được nạp lười sau phần còn lại của trang, tôn trọng `prefers-reduced-motion`, và có
+  hình tĩnh thay thế khi máy không khởi tạo được WebGL.
 
 ### Trò chuyện (`/chat`)
 
-- Stream phản hồi theo thời gian thực qua **SSE**.
-- **Model Picker** đổi provider/model ngay trên thanh điều khiển (Ollama · Anthropic ·
-  OpenAI / OpenAI-compatible).
-- Render Markdown, code block có tô màu cú pháp và nút copy.
-- Lịch sử hội thoại lưu trên **Supabase (Postgres)**, khôi phục được theo `session_id`;
-  danh sách phiên hiển thị ở sidebar.
-- Dock công cụ để nhảy sang các chế độ chuyên biệt.
+<p align="center">
+  <img src="docs/screenshots/chat.webp" alt="Trang chat: câu trả lời có công thức toán và khối code Python" width="900" />
+</p>
+
+- Stream phản hồi theo thời gian thực qua **SSE**; dừng giữa chừng hoặc tạo lại câu trả lời.
+- **Model Picker** đổi provider / model ngay trên ô nhập (Ollama · OpenAI /
+  OpenAI-compatible · Anthropic).
+- Render Markdown, **công thức toán bằng KaTeX**, code block tô màu cú pháp có nút copy.
+- **Nhập bằng giọng nói** (Web Speech API của trình duyệt, tiếng Việt).
+- Lịch sử hội thoại lưu trên **Supabase (Postgres)**; danh sách phiên ở sidebar, mở lại
+  được từng phiên.
+- Thẻ giờ và thời tiết ở màn hình bắt đầu (Open-Meteo), cùng lối tắt sang các công cụ khác.
 
 ### Nghiên cứu sâu (`/research`)
 
-- **Tìm song song nhiều nguồn**: Tavily Web, DuckDuckGo, arXiv, Semantic Scholar,
-  Hugging Face Papers, Stack Overflow — rồi tới bước tổng hợp.
-- **Knowledge Gate**: phân loại độ đầy đủ của tri thức sẵn có (`EMPTY` / `STALE` /
-  `THIN` / `MAYBE`) để quyết định tìm thêm hay trả lời luôn, tránh tốn lượt tìm kiếm.
-- **Rerank & khử trùng lặp** bằng `BAAI/bge-reranker-v2-m3` chạy local (hoặc Cohere
-  Rerank nếu có key).
-- **Grounding & trích dẫn**: câu trả lời gắn nguồn, kèm bước kiểm tra trích dẫn.
-- **Deep dive** từng nguồn và gợi ý câu hỏi tiếp theo theo ngữ cảnh.
-- **Knowledge store (tuỳ chọn)**: hybrid vector search trên **Weaviate Cloud** +
-  OpenAI Embeddings để tái sử dụng tri thức đã thu thập.
+<p align="center">
+  <img src="docs/screenshots/research.webp" alt="Kết quả research: mức tin cậy, các nhận định kèm nguồn, mục hạn chế và danh sách nguồn" width="900" />
+</p>
+
+- **Tìm song song sáu nguồn**: Tavily Web, DuckDuckGo, arXiv, Semantic Scholar, Hugging
+  Face Papers, Stack Overflow. Chọn phạm vi *Tất cả / Học thuật / Web / Code* ngay dưới ô
+  nhập. Một nguồn lỗi hay bị giới hạn tần suất thì lượt chạy vẫn đi tiếp với các nguồn còn
+  lại.
+- **Knowledge Gate**: trước khi tìm, hệ thống xét tri thức đã lưu cho câu hỏi này đầy đủ
+  tới đâu (`EMPTY` / `STALE` / `THIN` / `MAYBE`) để quyết định trả lời luôn, tìm bổ sung,
+  hay tìm mới hoàn toàn.
+- **Làm giàu & xếp hạng**: tải toàn văn trang web bằng Trafilatura, khử trùng lặp, rồi
+  rerank bằng cross-encoder `BAAI/bge-reranker-v2-m3` chạy local (hoặc Cohere Rerank nếu
+  có key).
+- **Báo cáo có trích dẫn**: mỗi câu gắn số nguồn, rê chuột để xem nguồn là gì. Bên dưới
+  là **mức tin cậy**, các **nhận định kèm nguồn**, và mục **Hạn chế**. Biểu đồ chỉ được vẽ
+  khi các con số kiểm chứng được trong nguồn.
+- Các bảng *Key Points · Papers · Compare · Sources*, **deep dive** từng nguồn, và gợi ý
+  câu hỏi tiếp theo.
+- **Knowledge store (tuỳ chọn)**: hybrid search trên **Weaviate Cloud** + OpenAI
+  Embeddings để dùng lại tri thức đã thu thập ở các lượt sau.
+
+<details>
+<summary>Thêm ảnh: báo cáo với trích dẫn từng câu</summary>
+<p align="center">
+  <img src="docs/screenshots/research-report.webp" alt="Báo cáo research với số trích dẫn sau từng câu" width="900" />
+</p>
+</details>
 
 ### Coding Agent (`/coding`)
 
-- Vòng lặp tự động **Plan → Code → Execute → Debug**, tự sửa lỗi tối đa
-  `MAX_DEBUG_ITER` vòng.
-- Sinh project Python nhiều file; upload dữ liệu (CSV, JSON, JSONL, Excel, Parquet,
-  TXT, TSV, XML) để phân tích.
-- Thu **artifact** do code sinh ra (PNG, JPG, SVG, HTML) và hiển thị ngay trong app.
-- Mọi lần chạy đều diễn ra trong **container Docker dùng một lần** — xem
+<p align="center">
+  <img src="docs/screenshots/coding.webp" alt="Coding Agent: các bước đã chạy và biểu đồ Plotly do code sinh ra" width="900" />
+</p>
+
+- Vòng lặp tự động **Plan → Code → Execute → Debug**, tự sửa lỗi tối đa `MAX_DEBUG_ITER`
+  vòng. Kết quả chia theo tab: kế hoạch, code, output, biểu đồ.
+- **Biểu đồ tương tác**: code ghi figure Plotly ra JSON, trang vẽ lại bằng plotly.js (rê
+  chuột, phóng to). Ảnh PNG / JPG / SVG và file HTML do code sinh ra cũng được hiển thị.
+- **Giữ biến giữa các lượt**: biến của lần chạy thành công được lưu lại cho câu hỏi tiếp
+  theo trong cùng phiên (tối đa 50 MB mỗi biến, 100 MB mỗi phiên).
+- Upload dữ liệu để phân tích: CSV, TSV, TXT, JSON, JSONL, Excel, Parquet, XML.
+- Hai chế độ: **Code chat** (chạy code thật) và **Quick chat** (hỏi nhanh, không chạy).
+- Mọi lần chạy diễn ra trong **container Docker dùng một lần**. Xem
   [Sandbox thực thi code](#-sandbox-thực-thi-code).
+
+<details>
+<summary>Thêm ảnh: output và các biến được giữ lại</summary>
+<p align="center">
+  <img src="docs/screenshots/coding-output.webp" alt="Tab Output: bảng tần suất in ra và danh sách biến giữ cho câu hỏi sau" width="900" />
+</p>
+</details>
 
 ### Trợ lý PDF (`/pdf`)
 
-- **Workspace chia đôi** tài liệu / hỏi đáp, kéo chỉnh tỉ lệ; tự đổi bố cục theo khổ
-  màn hình (split ở desktop, drawer ở laptop, overlay ở màn hẹp).
-- Trích xuất nội dung bằng **PyMuPDF**, render bằng **react-pdf / PDF.js**, có outline
-  và tìm kiếm highlight trong trang.
+<p align="center">
+  <img src="docs/screenshots/pdf.webp" alt="Trợ lý PDF: tài liệu mở ở trang được trích dẫn, bên phải là câu trả lời kèm số trang" width="900" />
+</p>
+
+- **Workspace chia đôi** tài liệu / hỏi đáp, kéo chỉnh tỉ lệ; tự đổi bố cục theo khổ màn
+  hình (split ở desktop, drawer ở laptop, overlay ở màn hẹp).
+- **Trích dẫn theo trang**: câu trả lời gắn chip số trang, bấm vào là trình xem nhảy tới
+  trang đó (ảnh trên: câu trả lời dẫn `tr.5`, tài liệu đang mở trang 5).
+- Trích xuất nội dung bằng **PyMuPDF**, render bằng **react-pdf / PDF.js**, có mục lục và
+  tìm kiếm highlight trong trang.
 - **Ghim ngữ cảnh**: bôi đen đoạn text hoặc khoanh vùng ảnh trên trang để hỏi riêng về
   phần đó (vùng ảnh đi qua model vision).
-- Tóm tắt nhanh toàn tài liệu bằng một nút.
+- Tóm tắt toàn tài liệu bằng một nút, và gợi ý câu hỏi sinh từ chính nội dung tài liệu.
 
 ### Công thức viết tay (`/hmer`)
 
-- Ảnh **một biểu thức** toán viết tay → LaTeX, bằng mô hình **SwinCoMER** (encoder
-  Swin Transformer V2 + decoder CoMER) từ đồ án tốt nghiệp; chạy GPU ~5 s/ảnh.
-- **Tải ảnh** hoặc **vẽ tay** trên canvas (chuột, bút, cảm ứng). Nét vẽ lưu dạng vector
-  rồi được dựng lại khi gửi đi: cắt sát mực, nét dày cố định, đen trên trắng. Mô hình
-  chỉ đọc được mực lấp đầy khung ảnh; gửi nguyên khung vẽ có lề rộng thì 0/100 biểu
+<p align="center">
+  <img src="docs/screenshots/hmer.webp" alt="Công thức viết tay: ảnh nét vẽ với vùng mô hình dựa vào, dải ký hiệu, công thức đã render và ô LaTeX" width="900" />
+</p>
+
+- Ảnh **một biểu thức** toán viết tay → LaTeX sửa được ngay tại chỗ, bằng mô hình
+  **SwinCoMER** (encoder Swin Transformer V2 + decoder CoMER) từ đồ án tốt nghiệp. Trên
+  GPU laptop (RTX 3050 Ti 4 GB) mỗi ảnh mất khoảng 3–5 giây.
+- **Tải ảnh**, dán ảnh, hoặc **vẽ tay** trên canvas (chuột, bút, cảm ứng). Nét vẽ lưu dạng
+  vector rồi được dựng lại khi gửi đi: cắt sát mực, nét dày cố định, đen trên trắng. Mô
+  hình chỉ đọc được mực lấp đầy khung ảnh; gửi nguyên khung vẽ có lề rộng thì 0/100 biểu
   thức đúng, dựng lại thì 50/100.
 - **Vùng mô hình dựa vào**: với mỗi ký hiệu LaTeX, che lần lượt từng ô của lưới 4×16
-  trên ảnh và đo mô hình bớt chắc bao nhiêu (occlusion sensitivity). Rê chuột / Tab
-  qua dải ký hiệu để xem vùng sáng, **Phát lại** để xem mô hình "đọc" cả biểu thức;
-  thanh dưới mỗi ký hiệu là xác suất của nó. Dùng để tìm ra *vì sao* một ký hiệu bị
-  đọc sai — ví dụ vùng của một chữ `7` đọc nhầm nằm trên nửa trên của chữ `2`.
+  trên ảnh và đo mô hình bớt chắc bao nhiêu (occlusion sensitivity). Rê chuột / Tab qua
+  dải ký hiệu để xem vùng sáng, **Phát lại** để xem mô hình "đọc" cả biểu thức.
+- **Ký hiệu ít chắc được đánh dấu.** Ảnh trên là một ca như vậy: mô hình đọc chữ `a` thành
+  `w`, tự báo xác suất chỉ 0.09, và vùng sáng nằm đúng trên chữ `a`. Người dùng biết
+  ngay cần sửa ký hiệu nào.
 - Vì sao là occlusion chứ không phải attention: trên checkpoint hiện có, bản đồ
   cross-attention quét trái→phải theo bước giải mã **bất kể ảnh** — ảnh lật hay ảnh
   trắng cũng cho cùng đường chéo — còn occlusion dịch theo khi mực dịch. Số đo và
@@ -125,10 +222,14 @@ Cài đặt: xem [mục 7 của phần cài đặt](#7-tuỳ-chọn-bật-nhận
 
 ### Điểm tin AI (`/news`)
 
+<p align="center">
+  <img src="docs/screenshots/news.webp" alt="Điểm tin AI: các tin đã được tóm tắt bằng tiếng Việt, lọc theo chủ đề" width="900" />
+</p>
+
 - Tổng hợp định kỳ từ các **RSS đã tuyển chọn**: OpenAI, Google DeepMind, Hugging
   Face, arXiv cs.AI & cs.RO, IEEE Spectrum Robotics, Hacker News.
-- LLM tóm tắt từng tin, phân nhóm theo chủ đề (model release · research · robotics ·
-  community).
+- LLM tóm tắt từng tin bằng tiếng Việt và xếp vào một trong bốn chủ đề (model mới ·
+  nghiên cứu · robotics · cộng đồng); lọc theo chủ đề ngay trên trang.
 - Refresh theo lịch **single-flight**: tick tự động và refresh thủ công trùng thời
   điểm sẽ dùng chung một lần chạy pipeline thay vì mỗi bên chạy (và trả phí) riêng.
 
@@ -139,38 +240,63 @@ riêng qua `BRIDGE_URL` / `BRIDGE_TOKEN`. Tách biệt hoàn toàn với chat ch
 
 ---
 
+## 🎨 Giao diện
+
+<table>
+  <tr>
+    <td><img src="docs/screenshots/chat.webp" alt="Giao diện sáng Warm Paper" /></td>
+    <td><img src="docs/screenshots/chat-dark.webp" alt="Giao diện tối với nền hố đen" /></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>Warm Paper</strong> — sáng, mặc định</td>
+    <td align="center"><strong>Mực tối</strong> — nền hố đen dựng bằng shader</td>
+  </tr>
+</table>
+
+Hệ thống thiết kế là **CSS thuần dựa trên design token**, không dùng thư viện component:
+
+- Hai theme, đổi bằng một nút ở sidebar. Theme tối có nền hố đen vẽ bằng shader
+  ray-marching trên WebGL (`frontend/src/three/blackhole`).
+- Mỗi công cụ có màu nhấn riêng (chat, research, coding, PDF, công thức), nên nhìn màu là
+  biết đang ở đâu.
+- Icon điều hướng là SVG nội tuyến vẽ bằng `currentColor` để màu bám theo token của theme.
+- Trang nặng được nạp lười theo route; cảnh 3D và plotly.js chỉ tải khi cần tới.
+
+---
+
 ## 🏛 Kiến trúc
 
 ```text
-Trình duyệt (React 18 + Vite)
-        │  fetch + Server-Sent Events
+Trình duyệt (React 18 + TypeScript, Vite)
+        │  fetch + Server-Sent Events, cùng origin (/api)
         ▼
-FastAPI (Uvicorn)  ──►  LLM: Ollama | Anthropic | OpenAI-compatible
+nginx (bản Docker) hoặc Vite proxy (dev)
+        │  security header · CSP · IP thật của khách qua Cloudflare Tunnel
+        ▼
+FastAPI (Uvicorn)  ──►  LLM: Ollama | OpenAI-compatible | Anthropic
+        │  đăng nhập · CSRF · rate limit · allow-list model
         │
-        ├─► Supabase Postgres   (lịch sử phiên & tin nhắn)
+        ├─► Supabase Postgres   (lịch sử phiên, tin nhắn, tin tức)
         ├─► Weaviate Cloud      (knowledge store — tuỳ chọn)
         ├─► Search APIs         (Tavily · DuckDuckGo · arXiv · S2 · HF · SO)
-        └─► Docker Executor     (container dùng một lần, chạy code sinh ra)
+        ├─► Docker Executor     (container dùng một lần, chạy code sinh ra)
+        └─► SwinCoMER trên GPU  (công thức viết tay — tuỳ chọn)
 ```
 
 Backend cắt theo **feature slice**: mỗi tính năng là một thư mục riêng trong
 `backend/app/features/` với router + service + schema của chính nó, dùng chung phần
-`core/` (config, LLM factory, lifespan, capabilities) và `shared/` (conversation store,
-session lock, SSE encoder). Có test canh **ranh giới giữa các feature** để chúng không
-import chéo lung tung.
+`core/` (config, LLM factory, lifespan, capabilities, auth, CSRF, rate limit) và `shared/`
+(conversation store, session lock, SSE, đo độ trễ). Có test canh **ranh giới giữa các
+feature** để chúng không import chéo lung tung.
 
-Frontend là **React Router v6 SPA**, mỗi tính năng một route. Landing và trang chat
+Frontend là **React Router v7 SPA**, mỗi tính năng một route. Trang chủ và trang chat
 được nạp sẵn (eager) vì là điểm vào chính; các trang nặng — nhất là PDF, kéo theo
 react-pdf + pdfjs worker — được **lazy-load** theo route. Mỗi route bọc trong
 `ErrorBoundary` riêng nên một trang lỗi không kéo sập cả router.
 
-**Hệ thống thiết kế** là CSS thuần dựa trên design token, hai theme:
-
-- **Warm Paper** (sáng, mặc định) — nền giấy ấm, accent đất nung.
-- **Mực tối** — nền mực, accent vàng đồng.
-
-Toàn bộ icon là **SVG nội tuyến đơn sắc** vẽ bằng `currentColor` (không dùng thư viện
-icon, không dùng emoji) để màu luôn bám theo token của theme.
+Mọi thứ tuỳ chọn đều **hỏng mềm**: thiếu Weaviate, reranker, checkpoint HMER hay Docker
+thì riêng phần đó báo `disabled` / `degraded` trong `/health/capabilities`, phần còn lại
+của app vẫn chạy.
 
 ---
 
@@ -178,17 +304,19 @@ icon, không dùng emoji) để màu luôn bám theo token của theme.
 
 | Mảng | Công nghệ |
 |---|---|
-| **Frontend** | React 18 · TypeScript · Vite 5 · React Router v6 · Three.js · react-pdf |
+| **Frontend** | React 18 · TypeScript 7 · Vite 5 · React Router 7 · Three.js · react-pdf · KaTeX · Plotly.js |
 | **Styling** | CSS thuần + design token, hai theme, SVG nội tuyến |
 | **Backend** | Python 3.11+ · FastAPI · Uvicorn · Pydantic Settings · asyncio |
-| **Streaming** | Server-Sent Events qua `StreamingResponse` |
-| **LLM** | Ollama · Anthropic · OpenAI / OpenAI-compatible · LangChain / LangGraph |
+| **Streaming** | Server-Sent Events qua `StreamingResponse`, có keep-alive |
+| **LLM** | Ollama · OpenAI / OpenAI-compatible · Anthropic, qua các gói tích hợp của LangChain |
 | **Lưu trữ** | Supabase (Postgres) qua `psycopg` pool · `localStorage` phía client |
 | **Tìm kiếm** | Tavily · DuckDuckGo (ddgs) · arXiv · Semantic Scholar · Hugging Face · Stack Overflow |
-| **Retrieval** | BGE Reranker v2 M3 · Cohere Rerank · Weaviate hybrid search · OpenAI Embeddings |
+| **Retrieval** | BGE Reranker v2 M3 · Cohere Rerank · Weaviate hybrid search · OpenAI Embeddings · Trafilatura |
 | **PDF** | PyMuPDF (fitz) phía server · PDF.js / react-pdf phía client |
+| **Thị giác** | SwinCoMER (PyTorch) cho công thức viết tay · model vision cho vùng ảnh trong PDF |
 | **Sandbox** | Docker Engine — container dùng một lần, không mạng |
-| **Kiểm thử** | pytest (backend) · Vitest + React Testing Library (frontend) |
+| **Triển khai** | Docker Compose · nginx · Cloudflare Tunnel · GitHub Actions |
+| **Kiểm thử** | pytest · Vitest + React Testing Library · Ruff · oxlint |
 
 ---
 
@@ -275,8 +403,9 @@ Giao diện chạy ở `http://localhost:5173`. Backend tự chấp nhận CORS 
 
 Backend chỉ trả lời request có Host header nằm trong `ALLOWED_HOSTS` (mặc định
 `localhost,127.0.0.1`) để chặn DNS rebinding. Mở app qua IP LAN hay domain khác thì
-backend trả `400 Invalid host header`. Muốn vậy thì thêm host đó vào `ALLOWED_HOSTS`, và
-đừng làm khi chưa có lớp auth.
+backend trả `400 Invalid host header`. Muốn vậy thì thêm host đó vào `ALLOWED_HOSTS`; khi
+đó backend bắt buộc phải có `OWNER_PASSWORD` và `COOKIE_SECURE=true`, thiếu là không khởi
+động (mục [Đăng nhập & dùng thử](#-đăng-nhập--dùng-thử)).
 
 ### 7. (Tuỳ chọn) Bật nhận dạng công thức viết tay — HMER
 
@@ -452,9 +581,9 @@ Mỗi lần chạy sinh một container tạm, sống đúng trong thời gian t
 | Lớp cô lập | Thiết lập |
 |---|---|
 | Mạng | `--network none` — cắt hoàn toàn |
-| Filesystem | read-only, trừ `/tmp` |
+| Filesystem | chỉ đọc; ghi được `/tmp` (64 MB) và thư mục làm việc của riêng phiên đó |
 | Bộ nhớ / CPU / tiến trình | giới hạn theo `EXECUTOR_MEMORY` · `EXECUTOR_CPUS` · `EXECUTOR_PIDS` |
-| Đặc quyền | drop toàn bộ Linux capabilities |
+| Đặc quyền | drop toàn bộ Linux capabilities, `no-new-privileges` |
 | Thời gian | cắt theo `CODE_TIMEOUT` |
 
 > [!CAUTION]
@@ -510,7 +639,16 @@ chỉ dùng thư viện chuẩn của Python.
   lại — bản nào không đọc lại được thì lệnh báo lỗi (mã thoát 1) thay vì để đó.
 - Giữ 14 bản mới nhất (`--keep N`).
 - Mặc định bản sao lưu nằm **cùng ổ đĩa** với database, nên hỏng ổ là mất cả hai. Trỏ
-  `--dir` (hoặc biến `KING_BACKUP_DIR`) sang ổ khác hay thư mục đồng bộ đám mây.
+  `--dir` (hoặc biến môi trường `KING_BACKUP_DIR` của Windows) sang ổ khác hay thư mục
+  đồng bộ đám mây:
+
+  ```powershell
+  [Environment]::SetEnvironmentVariable("KING_BACKUP_DIR", "$env:OneDrive\KiNg-backups", "User")
+  ```
+
+  Với thư mục đám mây, kiểm tra nó **thật sự đang đồng bộ**: trong Explorer, cột Status
+  của file phải là dấu tích xanh. Mũi tên xoay ("Sync pending") mãi không hết nghĩa là
+  file vẫn chỉ nằm trên máy này — thường do ứng dụng đồng bộ đã bị đăng xuất.
 
 ```bash
 .venv/Scripts/python.exe tools/db_backup.py list
@@ -533,14 +671,22 @@ lệnh chỉ nói nó sẽ làm gì:
 - Lệnh nạp dữ liệu vào các bảng sẵn có; bảng do `supabase/migrations` tạo. Trên máy
   mới: `supabase start` trước, rồi mới `restore`.
 
-**Chạy định kỳ trên Windows** — tạo một tác vụ hằng ngày bằng lệnh sau trong
-**Command Prompt** (thay `<repo>` bằng đường dẫn thư mục dự án). Docker Desktop và
-Supabase phải đang chạy vào giờ đó; không thì tác vụ kết thúc với mã lỗi, xem trong
-Task Scheduler:
+**Chạy định kỳ trên Windows** — đăng ký một tác vụ theo lịch cho tài khoản đang dùng
+(không cần quyền admin):
 
-```bat
-schtasks /Create /TN "KiNg DB backup" /SC DAILY /ST 12:30 /TR "\"<repo>\.venv\Scripts\python.exe\" \"<repo>\tools\db_backup.py\" backup"
+```powershell
+powershell -File tools\schedule_backup.ps1
 ```
+
+- Tác vụ chạy **mỗi giờ** nhưng chỉ sao lưu khi bản mới nhất đã quá 23 giờ
+  (`backup --if-older-than 23`): mỗi ngày một bản, vào giờ đầu tiên thấy database đang
+  chạy. Một giờ cố định trong ngày là không đủ: Task Scheduler không chạy lại một tác
+  vụ kết thúc với mã lỗi, mà database chỉ chạy khi Docker Desktop đang mở.
+- Nó chạy cả khi máy dùng pin, chạy bù sau khi máy tắt hoặc ngủ, và không hiện cửa sổ.
+- Kiểm tra: `Get-ScheduledTaskInfo -TaskName "KiNg DB backup"`. `LastTaskResult` bằng 0
+  là đang có bản sao lưu chưa quá 23 giờ; bằng 1 là lần chạy gần nhất không sao lưu
+  được (thường vì Docker chưa mở). `db_backup.py list` liệt kê các bản đang có.
+- Gỡ: `Unregister-ScheduledTask -TaskName "KiNg DB backup"`.
 
 Không nằm trong bản sao lưu này: file bạn tải lên (`data/pdfs`, `data/hmer` — chép cả
 thư mục `data/` nếu cần) và knowledge store trên Weaviate (chỉ là bộ nhớ đệm, tự dựng
@@ -598,8 +744,9 @@ Hai lớp chặn đốt tiền:
 |---|---|
 | **Chat** | `POST /api/chat/stream` · `GET /api/chat/sessions/{id}` · `DELETE /api/chat/session/{id}` |
 | **Research** | `POST /api/research/stream` · `POST /api/research/deep-dive` · `GET /api/research/trending` · `GET /api/research/sessions/{id}` |
-| **Coding** | `GET /api/coding/status` · `POST /api/coding/stream` · `POST /api/coding/upload` · `GET /api/coding/artifact/{...}` · `DELETE /api/coding/file/{name}` · `GET /api/coding/sessions/{id}` |
-| **PDF** | `POST /api/pdf/upload` · `GET /api/pdf/list` · `GET /api/pdf/raw/{name}` · `POST /api/pdf/stream` · `POST /api/pdf/summarize` · `DELETE /api/pdf/file/{name}` |
+| **Coding** | `GET /api/coding/status` · `POST /api/coding/stream` · `POST /api/coding/upload` · `GET /api/coding/artifact/{...}` · `DELETE /api/coding/file/{name}` · `GET /api/coding/sessions/{id}` · `DELETE /api/coding/session/{id}` |
+| **PDF** | `POST /api/pdf/upload` · `GET /api/pdf/list` · `GET /api/pdf/raw/{name}` · `POST /api/pdf/stream` · `POST /api/pdf/summarize` · `POST /api/pdf/suggestions` · `GET /api/pdf/sessions/{id}` · `DELETE /api/pdf/file/{name}` |
+| **HMER** | `GET /api/hmer/status` · `POST /api/hmer/recognize` · `POST /api/hmer/explain` · `GET /api/hmer/images` · `GET /api/hmer/images/{name}` · `DELETE /api/hmer/images/{name}` |
 | **News** | `GET /api/news` · `POST /api/news/refresh` |
 | **Models** | `GET /api/models` |
 | **Bubble** | `POST /api/bubble/chat` · `POST /api/bubble/reset` |
@@ -616,10 +763,11 @@ Hai lớp chặn đốt tiền:
 uv run pytest
 ```
 
-Khoảng 990 test trên 89 file, phủ: hợp đồng API, luồng research (gate, grounding,
+Khoảng 1.000 test trên 89 file, phủ: hợp đồng API, luồng research (gate, grounding,
 trích dẫn, iteration), coding service & Docker executor, PDF context, news
-fetcher/scheduler, session store trên Supabase, capability registry, và cả ranh giới
-import giữa các feature.
+fetcher/scheduler, session store trên Supabase, đăng nhập và phân quyền, capability
+registry, công cụ sao lưu, và cả ranh giới import giữa các feature. Test cần database
+thật tự bỏ qua khi container Supabase không chạy.
 
 ### Frontend — Vitest + typecheck
 
@@ -684,39 +832,48 @@ Nâng một gói Python bị báo: sửa dòng ghim trong `pyproject.toml` (ho�
 Persional-AI-Assistant/
 ├── main.py                     # Entrypoint re-export app FastAPI cho Uvicorn
 ├── backend/app/
-│   ├── main.py                 # Khởi tạo FastAPI, CORS, đăng ký router
-│   ├── core/                   # config · llm factory · lifespan · capabilities
-│   ├── shared/                 # conversation store · session lock · SSE · files
+│   ├── main.py                 # Khởi tạo FastAPI, middleware, đăng ký router
+│   ├── core/                   # config · llm factory · lifespan · capabilities · auth · csrf · rate limit
+│   ├── shared/                 # conversation store · session lock · SSE · đo độ trễ · files
 │   └── features/               # mỗi tính năng một slice: router + service + schema
 │       ├── chat/               #   chat tổng quát + prompt theo từng chế độ
 │       ├── research/           #   agent, searcher đa nguồn, rerank, knowledge store
 │       ├── coding/             #   agent plan→code→run→debug, docker executor, artifact
 │       ├── pdf/                #   trích xuất, xếp hạng ngữ cảnh, hỏi đáp tài liệu
+│       ├── hmer/               #   công thức viết tay: nhận dạng + bản đồ occlusion
 │       ├── news/               #   RSS fetcher, summarizer, scheduler, store
+│       ├── auth/               #   đăng nhập chủ, phiên khách
 │       ├── models/             #   registry provider & model
 │       └── assistant_bubble/   #   bridge sang ai-agent bên ngoài
 ├── frontend/
+│   ├── nginx.conf              # bản Docker: proxy /api, CSP, security header, IP thật qua tunnel
 │   └── src/
-│       ├── pages/              # Landing · Home · Research · Coding · Pdf · News · Tool
-│       ├── components/         # dock, sidebar, composer, model picker, markdown, pdf, ...
+│       ├── pages/              # Landing · Home (chat) · Research · Coding · Pdf · Hmer · News · Login
+│       ├── components/         # sidebar, composer, model picker, markdown, pdf, hmer, news, ...
 │       ├── hooks/              # useChat · useResearch · useCoding · useTheme · ...
-│       ├── three/              # lõi phản ứng 3D của trang chủ
-│       ├── config/             # registry tool, token theme, hiển thị event
+│       ├── three/              # la bàn thiên văn (trang chủ), nền hố đen (theme tối)
+│       ├── lib/                # gọi API, SSE, trích dẫn, xử lý nét vẽ và LaTeX
+│       ├── config/             # registry tool, nội dung portfolio, hiển thị event
 │       ├── styles/             # CSS thuần + design token
-│       └── test/               # Vitest suite
+│       └── test/               # Vitest suite (thêm các file *.test.tsx đặt cạnh component)
 ├── tests/                      # pytest suite của backend
+├── tools/                      # sao lưu database, script đo đạc
+├── docs/                       # ảnh README, spec thiết kế và số đo
 ├── supabase/                   # migration cho session store
-├── data/                       # dữ liệu runtime (pdf đã upload, sandbox)
+├── data/                       # dữ liệu runtime (pdf đã upload, sandbox, backup) — không commit
+├── .github/workflows/ci.yml    # lint · test · build · audit
 ├── Dockerfile                  # image backend
 ├── Dockerfile.executor         # image sandbox chạy code
-├── docker-compose.yml
+├── docker-compose.yml          # backend + nginx, kèm profile Cloudflare Tunnel
 ├── pyproject.toml · uv.lock    # dependency Python
 └── .env.example                # tham chiếu cấu hình đầy đủ
 ```
 
 ---
 
-## 📄 Giấy phép
+## 📄 Tác giả
 
-Dự án được duy trì bởi **Nhukiet**. Mọi đóng góp, báo lỗi và đề xuất tính năng đều
-được hoan nghênh qua GitHub Issues / Pull Requests.
+**Bùi Như Kiệt** — [github.com/NhuKiet](https://github.com/NhuKiet). Báo lỗi và đề xuất
+tính năng qua GitHub Issues / Pull Requests.
+
+Repo chưa kèm file giấy phép, nên mặc định mọi quyền thuộc về tác giả.

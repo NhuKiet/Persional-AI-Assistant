@@ -233,7 +233,9 @@
   align-items: stretch;
   gap: 0;
 }
-.ref-item-wrap .ref-item { flex: 1; border-radius: 7px 0 0 7px; border-right: none; }
+/* min-width: 0 lets a long title shrink to an ellipsis instead of pushing the
+   deep-dive button out of the panel. */
+.ref-item-wrap .ref-item { flex: 1; min-width: 0; border-radius: 7px 0 0 7px; border-right: none; }
 .ref-dive-btn {
   background: var(--bg3);
   border: 1px solid var(--border2);

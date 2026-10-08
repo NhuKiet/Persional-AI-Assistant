@@ -21,6 +21,10 @@ Usage:
 A backup on the same disk as the database does not survive that disk. Point
 --dir (or KING_BACKUP_DIR) at another drive or a cloud-synced folder.
 
+As a scheduled job, run `backup --if-older-than 23` every hour: it takes one
+backup a day, at the first run that finds the database up, and does nothing
+the rest of the time. Under pythonw.exe it shows no window (README).
+
 A restore loads data into the tables that are already there; the tables
 themselves come from supabase/migrations. On a new machine: `supabase start`
 first, then `restore`.
@@ -51,6 +55,9 @@ _STAMP = "%Y%m%d-%H%M%SZ"
 # restore are named king-db-pre-restore-… and are never pruned.
 _REGULAR = re.compile(r"^king-db-\d{8}-\d{6}Z\.dump$")
 _IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+# Windows only: without it every docker call from a windowless scheduled run
+# (pythonw.exe) pops up a console window of its own.
+_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 _ROW_COUNTS = (
     "select table_name || '=' || (xpath('/row/c/text()', query_to_xml("
     "format('select count(*) as c from %I.%I', table_schema, table_name), false, true, '')))[1]::text "
@@ -94,7 +101,7 @@ class Postgres:
 
     def _docker(self, *argv: str, stdin=None, stdout=subprocess.PIPE, what: str) -> subprocess.CompletedProcess:
         try:
-            done = self._run(["docker", *argv], stdin=stdin, stdout=stdout, stderr=subprocess.PIPE)
+            done = self._run(["docker", *argv], stdin=stdin, stdout=stdout, stderr=subprocess.PIPE, creationflags=_NO_WINDOW)
         except FileNotFoundError:
             raise BackupError("The docker command was not found. Is Docker installed and on PATH?") from None
         if done.returncode != 0:
@@ -114,7 +121,7 @@ class Postgres:
         try:
             done = self._run(
                 ["docker", "inspect", "-f", "{{.State.Running}}", self.container],
-                stdin=None, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                stdin=None, stdout=subprocess.PIPE, stderr=subprocess.PIPE, creationflags=_NO_WINDOW,
             )
         except FileNotFoundError:
             raise BackupError("The docker command was not found. Is Docker installed and on PATH?") from None
@@ -305,6 +312,17 @@ def prune(directory: Path, keep: int) -> list[Path]:
     return removed
 
 
+def hours_since_newest(directory: Path, now=None) -> float | None:
+    """How long ago the newest regular backup in `directory` was taken; None
+    when there is none. Read from the file's name: a sync tool or a copy can
+    change a file's modification time."""
+    names = sorted(path.name for path in directory.iterdir() if _REGULAR.match(path.name)) if directory.is_dir() else []
+    if not names:
+        return None
+    taken = datetime.datetime.strptime(names[-1][len("king-db-"):-len(".dump")], _STAMP).replace(tzinfo=datetime.timezone.utc)
+    return ((now or datetime.datetime.now(datetime.timezone.utc)) - taken).total_seconds() / 3600
+
+
 def verify(postgres: Postgres, dump: Path) -> dict[str, int]:
     """Prove `dump` still restores, and still holds what was recorded for it."""
     postgres.check_running()
@@ -351,6 +369,7 @@ def main(argv: list[str] | None = None) -> int:
     commands = parser.add_subparsers(dest="command", required=True)
     make = commands.add_parser("backup", help="take a backup and prove it restores")
     make.add_argument("--keep", type=int, default=DEFAULT_KEEP, help=f"regular backups to keep (default {DEFAULT_KEEP})")
+    make.add_argument("--if-older-than", type=float, metavar="HOURS", help="do nothing when the newest backup is younger than this (for a job that runs often)")
     check = commands.add_parser("verify", help="check that a backup still restores")
     check.add_argument("file", type=Path)
     back = commands.add_parser("restore", help="replace the live data with a backup")
@@ -366,6 +385,12 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"{item['file']}  {item['bytes']:>10,} bytes  {_rows(item['tables'])}")
             print(f"{len(found)} backup(s) in {args.dir}")
             return 0
+
+        if args.command == "backup" and args.if_older_than is not None:
+            age = hours_since_newest(args.dir)
+            if age is not None and age < args.if_older_than:
+                print(f"The newest backup in {args.dir} is {age:.1f} hours old; nothing to do.")
+                return 0
 
         postgres = Postgres(args.container or default_container())
         if args.command == "backup":

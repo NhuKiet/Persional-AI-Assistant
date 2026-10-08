@@ -201,8 +201,10 @@
 
 /* ── Footer ────────────────────────────────────────────────── */
 
+/* Left padding keeps the footer's buttons clear of the assistant bubble, which
+   is fixed over this corner (assistant-bubble.css: 56px wide, 20px in). */
 .sb-footer {
-  padding: 8px 8px 14px;
+  padding: 8px 8px 14px 72px;
   border-top: 1px solid var(--border);
   flex-shrink: 0;
 }

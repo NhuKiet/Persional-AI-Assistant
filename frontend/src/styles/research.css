@@ -109,10 +109,12 @@
 .rr-ai-label  { font-size: 12px; color: var(--text3); letter-spacing: 0.05em; text-transform: uppercase; }
 .rr-body      { font-size: 14px; line-height: 1.75; color: var(--text); }
 
-.rr-panels { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 4px; border-top: 1px solid var(--border); }
+/* align-items: a closed panel stays the height of its button instead of
+   stretching to match the open one beside it. */
+.rr-panels { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px; padding-top: 4px; border-top: 1px solid var(--border); }
 
 .hp-wrap         { border: 1px solid var(--border); border-radius: var(--r); overflow: hidden; transition: border-color 0.15s; flex-shrink: 0; }
-.hp-wrap.hp-open { border-color: var(--border2); flex: 1 1 300px; }
+.hp-wrap.hp-open { border-color: var(--border2); flex: 1 1 300px; min-width: 0; }
 .hp-trigger      { display: flex; align-items: center; gap: 6px; padding: 7px 12px; background: var(--bg2); border: none; cursor: pointer; white-space: nowrap; transition: background 0.15s; }
 .hp-trigger:hover{ background: var(--bg3); }
 .hp-label        { font-size: 12px; font-weight: 500; color: var(--text2); }
