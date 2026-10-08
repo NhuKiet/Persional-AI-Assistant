@@ -31,6 +31,10 @@ export function Sidebar({ open, onToggle, sessions, activeId, onSelect, onDelete
   const { state: auth, set: setAuth } = useAuth();
   const { pathname } = useLocation();
   const guest = auth.auth && auth.role === "guest";
+  const onChatPage = pathname === "/chat";
+  // "Trang chủ" là landing; đây là đường về trang chat từ mọi công cụ. Đang ở
+  // chính trang chat thì không có route nào để đi — đưa về màn hình bắt đầu.
+  const toChat = () => (onChatPage ? onNewChat() : navigate("/chat"));
   return (
     <>
       {/* Chỉ là nền mờ để bấm ra ngoài; bàn phím đóng sidebar bằng nút ở đầu. */}
@@ -53,6 +57,13 @@ export function Sidebar({ open, onToggle, sessions, activeId, onSelect, onDelete
             <path d="M2 6.2 7 2l5 4.2v5.3a.5.5 0 0 1-.5.5H8.7V8.5H5.3V12H2.5a.5.5 0 0 1-.5-.5V6.2Z" stroke="currentColor" strokeWidth="1.25" strokeLinejoin="round" />
           </svg>
           Trang chủ
+        </button>
+
+        <button className="sb-home-link" onClick={toChat} aria-current={onChatPage ? "page" : undefined}>
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+            <path d="M2 3.5A1.5 1.5 0 0 1 3.5 2h7A1.5 1.5 0 0 1 12 3.5v4.8a1.5 1.5 0 0 1-1.5 1.5H6.6L4 12V9.8h-.5A1.5 1.5 0 0 1 2 8.3V3.5Z" stroke="currentColor" strokeWidth="1.25" strokeLinejoin="round" />
+          </svg>
+          Trò chuyện
         </button>
 
         {FEATURES.news && (

@@ -208,6 +208,15 @@ describe("điều hướng sang từng tool", () => {
     expect(window.location.pathname).toBe("/");
   });
 
+  // "Trang chủ" là landing, không phải chat: từ một tool phải có đường về
+  // thẳng trang chat, không thì chỉ còn cách đi vòng qua landing.
+  it("quay lại trang chat từ một tool (Research)", async () => {
+    const user = await openTool(TOOL_TITLE.research);
+    await user.click(await screen.findByRole("button", { name: "Trò chuyện" }));
+    expect(await screen.findByPlaceholderText(/Hỏi KiNg bất cứ điều gì/i)).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/chat");
+  });
+
   // Không còn back-btn riêng trên header tool nào — nút "Trang chủ" trong
   // sidebar là đường về nhà duy nhất, dùng chung cho mọi route. Test riêng
   // để bắt lỗi nếu route /tool/:toolId (ví dụ "Bài tập") lỡ thiếu sidebar.

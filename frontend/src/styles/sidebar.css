@@ -77,6 +77,8 @@
   transform: translateX(2px);
 }
 .sb-home-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* The page you are on. */
+.sb-home-link[aria-current="page"] { background: var(--bg3); color: var(--text); }
 
 .sb-icon-btn {
   width: 28px;
