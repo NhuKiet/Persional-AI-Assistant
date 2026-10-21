@@ -30,6 +30,15 @@ def test_available_models_only_configured(monkeypatch):
     assert all(set(m.keys()) == {"provider", "model", "label"} for m in models)
 
 
+def test_no_ollama_url_means_no_ollama_model(monkeypatch):
+    # A hosted deploy has no Ollama machine: offering it would only fail later.
+    monkeypatch.setattr(llm_mod.settings, "OLLAMA_URL", "")
+    monkeypatch.setattr(llm_mod.settings, "ANTHROPIC_API_KEY", None)
+    monkeypatch.setattr(llm_mod.settings, "OPENAI_API_KEY", "sk-test")
+    providers = {m["provider"] for m in available_models()}
+    assert providers == {"openai"}
+
+
 def test_available_models_includes_anthropic_when_key(monkeypatch):
     monkeypatch.setattr(llm_mod.settings, "ANTHROPIC_API_KEY", "sk-test")
     monkeypatch.setattr(llm_mod.settings, "OPENAI_API_KEY", None)

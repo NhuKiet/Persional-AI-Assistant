@@ -218,14 +218,16 @@ def check_model_allowed(provider: str | None, model: str | None) -> None:
 
 
 def available_models() -> list[dict]:
-    """Danh sách model chọn được — CHỈ provider đã cấu hình key."""
-    out: list[dict] = [
-        {
+    """Danh sách model chọn được — CHỈ provider đã cấu hình (key, hoặc URL
+    với Ollama). OLLAMA_URL rỗng = không có máy Ollama, như khi deploy lên
+    cloud: không liệt kê thì model guard cũng từ chối luôn provider đó."""
+    out: list[dict] = []
+    if settings.OLLAMA_URL:
+        out.append({
             "provider": "ollama",
             "model": settings.OLLAMA_MODEL,
             "label": f"{settings.OLLAMA_MODEL} (local)",
-        }
-    ]
+        })
     if settings.ANTHROPIC_API_KEY:
         for model_id, label in MODEL_REGISTRY["anthropic"]:
             out.append({"provider": "anthropic", "model": model_id, "label": label})

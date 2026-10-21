@@ -25,12 +25,18 @@ def _seed_capabilities() -> None:
     key, already raises loudly from get_llm and is not in the silent class
     this registry exists to catch.
     """
+    from backend.app.core.config import settings
     from backend.app.features.research.reranker import reranker_selfcheck
     from backend.app.features.research.embeddings import embed_query
     from backend.app.features.research.knowledge_store import get_store
 
-    problem = reranker_selfcheck()
-    if problem:
+    # Turned off on purpose (a host without the ~2 GB the model needs): say
+    # so, rather than load torch to prove it is missing and report that as
+    # a failure.
+    problem = reranker_selfcheck() if settings.RERANK_ENABLED else None
+    if not settings.RERANK_ENABLED:
+        capabilities.disabled(capabilities.RERANKER)
+    elif problem:
         capabilities.failed(capabilities.RERANKER, problem)
         logger.error(
             "Cross-encoder reranking is NOT working (%s) — research will "
@@ -41,6 +47,12 @@ def _seed_capabilities() -> None:
         )
     else:
         capabilities.ok(capabilities.RERANKER)
+
+    # No checkpoint configured is a decision, known at boot. Loading the model
+    # to find out costs seconds of GPU time, so a configured one is left for
+    # its first request to report.
+    if not settings.HMER_CHECKPOINT:
+        capabilities.disabled(capabilities.HMER)
 
     # Both of these report from their own boundaries; the try/except here
     # exists only so a probe failure cannot kill the startup thread.

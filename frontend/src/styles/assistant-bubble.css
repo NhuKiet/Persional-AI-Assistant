@@ -1,5 +1,5 @@
-/* assistant-bubble.css — chat bubble nổi cho ai-agent (bridge), tách biệt CTA
-   "Mở trợ lý" của landing (góc dưới-phải) nên đặt ở góc dưới-trái. */
+/* assistant-bubble.css — chat bubble nổi cho ai-agent (bridge). Mặc định ở góc
+   dưới-trái: trên các trang công cụ, góc dưới-phải là nút gửi của ô nhập. */
 
 .bubble-root {
   position: fixed;
@@ -10,6 +10,17 @@
   flex-direction: column;
   align-items: flex-start;
   gap: 12px;
+}
+
+/* Trang chủ, từ tablet trở lên: sang góc dưới-phải, vì góc trái là hàng nút
+   của carousel portfolio. Điện thoại giữ góc trái — ở đó góc phải lại là nút
+   gửi của ô hỏi nhanh. */
+@media (min-width: 481px) {
+  .bubble-root--right {
+    left: auto;
+    right: 20px;
+    align-items: flex-end;
+  }
 }
 
 .bubble-toggle {

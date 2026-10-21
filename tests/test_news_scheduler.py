@@ -68,6 +68,14 @@ def test_start_background_task_returns_none_when_storage_unconfigured(monkeypatc
     assert scheduler.start_background_task() is None
 
 
+def test_start_background_task_returns_none_when_news_disabled(monkeypatch):
+    # A hosted deploy turns the page off; the job must not keep paying for
+    # LLM summaries nobody can see.
+    monkeypatch.setattr(settings, "SUPABASE_DB_URL", "postgresql://fake/db")
+    monkeypatch.setattr(settings, "NEWS_ENABLED", False)
+    assert scheduler.start_background_task() is None
+
+
 def test_start_background_task_returns_a_task_when_storage_configured(monkeypatch):
     monkeypatch.setattr(settings, "SUPABASE_DB_URL", "postgresql://fake/db")
 

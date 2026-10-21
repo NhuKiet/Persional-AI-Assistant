@@ -73,6 +73,7 @@ Model đổi được ngay trên giao diện, không cần khởi động lại,
 - [Yêu cầu hệ thống](#-yêu-cầu-hệ-thống)
 - [Cài đặt & chạy local](#-cài-đặt--chạy-local)
 - [Chạy bằng Docker Compose](#-chạy-bằng-docker-compose)
+- [Deploy lên Railway](#️-deploy-lên-railway)
 - [Mở ra internet (Cloudflare Tunnel)](#-mở-ra-internet-cloudflare-tunnel)
 - [Sandbox thực thi code](#-sandbox-thực-thi-code)
 - [Đăng nhập & dùng thử](#-đăng-nhập--dùng-thử)
@@ -700,6 +701,80 @@ Vài điểm compose đã xử lý sẵn:
 
 ---
 
+## ☁️ Deploy lên Railway
+
+Bản chạy trên Railway nằm trong **một container** ([`deploy/railway/`](deploy/railway)):
+nginx phục vụ frontend đã build và chuyển `/api` sang uvicorn chạy cùng container. Một
+service, một tên miền, cookie đăng nhập dùng chung origin.
+
+So với bản chạy trên máy:
+
+| | Trên máy / Docker Compose | Railway |
+|---|---|---|
+| Image | ~12 GB (có torch bản CUDA) | ~1 GB: bỏ torch, transformers, FlagEmbedding |
+| Công thức viết tay | có (chạy trên GPU) | ẩn khỏi giao diện |
+| Reranker cross-encoder | BGE chạy local | tắt; rerank bằng các tín hiệu còn lại ([Pipeline RAG](#-pipeline-rag)) |
+| Coding Agent | chạy code trong Docker sandbox | không chạy được code vì Railway không có Docker; lên kế hoạch, viết code và Quick chat vẫn dùng được |
+| Model | Ollama · OpenAI · Anthropic | OpenAI · Anthropic |
+| Database | Supabase local | Postgres của Railway; bảng được tạo mỗi lần khởi động bằng [`tools/migrate.py`](tools/migrate.py), chạy lại không sao |
+| Tin AI | làm mới mỗi 6 giờ | tắt |
+
+Các mặc định này nằm sẵn trong image (`ENV` trong `deploy/railway/Dockerfile`); đặt biến
+cùng tên trên Railway sẽ ghi đè. `tests/test_railway_deploy.py` kiểm tra app khởi động
+được khi thiếu các gói đã bỏ, và cấu hình nginx của bản Railway giữ đúng header, CSP và
+thiết lập proxy như bản Docker Compose.
+
+**1. Tạo project.** Railway → *New Project* → *Deploy from GitHub repo* → chọn repo này.
+
+**2. Thêm database.** Trong project: *Create* → *Database* → *PostgreSQL*.
+
+**3. Đặt biến** cho service KiNg, ở tab *Variables*:
+
+| Biến | Giá trị |
+|---|---|
+| `RAILWAY_DOCKERFILE_PATH` | `deploy/railway/Dockerfile` |
+| `SUPABASE_DB_URL` | `${{Postgres.DATABASE_URL}}` |
+| `OWNER_PASSWORD` | mật khẩu của chủ, ít nhất 10 ký tự |
+| `ALLOWED_HOSTS` | tên miền ở bước 4, vd `king-production.up.railway.app` |
+| `OPENAI_API_KEY` | key OpenAI |
+| `DEFAULT_MODEL` | model mặc định cho chủ, vd `gpt-4.1-mini` |
+| `GUEST_MODEL` | model rẻ cho khách, vd `gpt-4o-mini` |
+| `TAVILY_API_KEY` | cần cho Research |
+| `WEAVIATE_URL`, `WEAVIATE_API_KEY` | tuỳ chọn, cho knowledge store |
+
+**4. Tên miền.** *Settings → Networking → Generate Domain*, rồi chép tên miền vào
+`ALLOWED_HOSTS`.
+
+**5. Volume** cho file PDF upload: *Settings → Volumes*, mount vào `/app/data`. Không có
+volume thì mỗi lần deploy lại sẽ mất các file đã upload.
+
+**6. Health check.** *Settings → Deploy → Healthcheck Path* = `/health`.
+
+Từ đó mỗi lần push lên `main`, Railway tự build và deploy lại.
+
+Vài điều app đã lo cho trường hợp này:
+
+- **IP thật của khách.** Mọi request vào container đều đi qua edge của Railway, và edge
+  ghi IP của khách vào `X-Real-IP`. nginx đọc header đó và **ghi đè** `X-Forwarded-For`
+  trước khi chuyển sang backend, nên hạn mức dùng thử tính theo từng khách và khách không
+  tự đặt IP giả được.
+- **Giữ kết nối.** Railway cắt request im lặng quá 5 phút và dừng mọi request ở 15 phút.
+  Luồng stream gửi chú thích SSE mỗi 20 giây, nên một lượt Research dài không bị cắt.
+- **Health check của Railway** gửi Host của riêng nó; nginx hỏi `/health` dưới tên
+  `localhost`, và script khởi động luôn giữ `localhost` trong `ALLOWED_HOSTS`.
+- Nếu nginx hoặc uvicorn dừng, container thoát để Railway khởi động lại, thay vì phục vụ
+  trang mà API đã chết.
+
+**Chi phí.** Gói Hobby của Railway là 5 USD/tháng, đã gồm 5 USD tài nguyên; dùng vượt thì
+tính thêm. Phần lớn chi phí còn lại là OpenAI, tính theo lượt dùng: khách bị giới hạn
+`GUEST_DAILY_LIMIT` lượt mỗi ngày mỗi IP, và nên đặt thêm hạn mức chi tiêu trong trang
+quản lý của OpenAI.
+
+**Chưa có:** công cụ sao lưu cho Postgres trên Railway ([`tools/db_backup.py`](tools/db_backup.py)
+chỉ làm việc với Supabase local).
+
+---
+
 ## 🌐 Mở ra internet (Cloudflare Tunnel)
 
 Bản compose có sẵn hai profile đưa app ra internet qua HTTPS mà **không mở cổng nào**
@@ -990,7 +1065,7 @@ npm run typecheck --prefix frontend
 npm run test --prefix frontend
 ```
 
-Khoảng 500 test trên 67 file, phủ: component, hook, bố cục PDF, hệ theme, và hợp đồng route
+Khoảng 500 test trên 68 file, phủ: component, hook, bố cục PDF, hệ theme, và hợp đồng route
 (đi qua `<App />` thật, chỉ khẳng định những gì người dùng nhìn thấy — nhờ vậy test
 sống sót qua refactor).
 
@@ -1068,7 +1143,8 @@ Persional-AI-Assistant/
 │       ├── styles/             # CSS thuần + design token
 │       └── test/               # Vitest suite (thêm các file *.test.tsx đặt cạnh component)
 ├── tests/                      # pytest suite của backend
-├── tools/                      # sao lưu database, script đo đạc
+├── tools/                      # sao lưu và migrate database, script đo đạc
+├── deploy/railway/             # image một container cho Railway: Dockerfile, nginx, script khởi động
 ├── docs/                       # ảnh README, spec thiết kế và số đo
 ├── supabase/                   # migration cho session store
 ├── data/                       # dữ liệu runtime (pdf đã upload, sandbox, backup) — không commit

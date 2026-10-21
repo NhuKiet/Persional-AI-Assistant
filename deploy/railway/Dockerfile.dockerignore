@@ -1,0 +1,36 @@
+# Used instead of the root .dockerignore when building deploy/railway/Dockerfile
+# (BuildKit picks <Dockerfile>.dockerignore next to the Dockerfile). The root
+# file leaves frontend/ out because the compose backend image doesn't need it;
+# this image builds the frontend too.
+
+# Secrets and runtime data never go into an image.
+.env
+.env.*
+!.env.example
+data/
+
+# Git, environments, caches, editor and agent folders.
+.git
+.venv/
+venv/
+env/
+__pycache__/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+**/.pytest_cache/
+.worktrees/
+.superpowers/
+.claude/
+.agents/
+.vscode/
+
+# Rebuilt inside the image.
+node_modules/
+**/node_modules/
+frontend/dist/
+
+# Not needed at runtime.
+docs/
+tests/
+*.md

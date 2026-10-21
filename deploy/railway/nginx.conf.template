@@ -1,0 +1,110 @@
+# nginx for the single-container Railway deploy (deploy/railway/Dockerfile).
+# start.sh writes this file to /etc/nginx/nginx.conf with __PORT__ replaced by
+# Railway's $PORT.
+#
+# The server block mirrors frontend/nginx.conf (the docker-compose deploy):
+# same headers, CSP, caching and proxy settings. Only two things differ — the
+# backend is uvicorn on 127.0.0.1:8000 in this same container, and the
+# visitor's address comes from Railway's edge. tests/test_railway_deploy.py
+# keeps the shared parts identical.
+
+user www-data;
+worker_processes auto;
+pid /run/nginx.pid;
+error_log /dev/stderr warn;
+
+events {
+    worker_connections 1024;
+}
+
+http {
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+    access_log /dev/stdout;
+    sendfile on;
+    keepalive_timeout 65;
+
+    # Nén văn bản trước khi gửi: JS + CSS lúc mở trang giảm từ ~370 KB còn ~107 KB.
+    # SSE (text/event-stream) không nằm trong danh sách nên token vẫn ra ngay.
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_comp_level 5;
+    gzip_types text/css text/plain application/javascript text/javascript application/json image/svg+xml;
+
+    # mime.types của nginx không biết đuôi .mjs (worker của pdf.js).
+    types {
+        application/javascript mjs;
+    }
+
+    # ── Behind Railway's edge ────────────────────────────────────────────────
+    # The edge is the only way into the container, and it puts the visitor's
+    # address in X-Real-IP (Railway docs: public networking, specs & limits).
+    # Without this every visitor would look like the edge: one shared guest
+    # quota and one shared rate limit for everybody.
+    set_real_ip_from 0.0.0.0/0;
+    set_real_ip_from ::/0;
+    real_ip_header X-Real-IP;
+
+    # The edge terminates TLS and always sends X-Forwarded-Proto: https.
+    map $http_x_forwarded_proto $forwarded_proto {
+        https    https;
+        default  $scheme;
+    }
+
+    map $forwarded_proto $hsts {
+        https    "max-age=31536000";
+        default  "";
+    }
+
+    server {
+        listen __PORT__;
+        listen [::]:__PORT__;
+        server_name _;
+
+        root /usr/share/nginx/html;
+        index index.html;
+
+        server_tokens off;
+
+        location / {
+            include /etc/nginx/snippets/security-headers.conf;
+            add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://api.open-meteo.com; worker-src 'self' blob:; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'" always;
+            add_header Cache-Control "no-cache" always;
+            try_files $uri $uri/ /index.html;
+        }
+
+        location /api/ {
+            include /etc/nginx/snippets/security-headers.conf;
+            proxy_hide_header X-Content-Type-Options;
+            proxy_pass http://127.0.0.1:8000;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            # Overwrite, never append: $remote_addr is already the visitor
+            # (real_ip_header above), and a value the browser sent must not
+            # reset its guest quota.
+            proxy_set_header X-Forwarded-For $remote_addr;
+            proxy_set_header X-Forwarded-Proto $forwarded_proto;
+            proxy_buffering off;
+            proxy_cache off;
+            # Railway itself ends a response after 15 minutes.
+            proxy_read_timeout 1800s;
+            client_max_body_size 55m;
+        }
+
+        # Railway's health check arrives with its own Host header, which
+        # ALLOWED_HOSTS would refuse. /health says nothing but "ok", so it is
+        # asked as localhost instead.
+        location = /health {
+            include /etc/nginx/snippets/security-headers.conf;
+            proxy_pass http://127.0.0.1:8000;
+            proxy_set_header Host localhost;
+        }
+
+        location /assets/ {
+            include /etc/nginx/snippets/security-headers.conf;
+            expires 1y;
+            add_header Cache-Control "public, immutable";
+        }
+    }
+}

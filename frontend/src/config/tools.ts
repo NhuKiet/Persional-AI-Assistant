@@ -18,6 +18,12 @@ export interface Tool {
  * biết theme hiện tại đang là gì. Hệ quả: mọi nơi ghép chuỗi kiểu
  * `tool.color + "44"` để ra alpha-hex sẽ HỎNG (var() không ghép hậu tố hex
  * được) — phải dùng `color-mix(in srgb, ${tool.color} N%, transparent)`. */
+/* Build-time switch for hosts without the handwriting model: the Railway image
+ * builds with VITE_HMER=off (deploy/railway/Dockerfile), which hides the tool
+ * everywhere VISIBLE_TOOLS is used. /hmer itself stays reachable and says the
+ * model is not installed. */
+const HMER_OFF = import.meta.env.VITE_HMER === "off";
+
 export const TOOLS: Tool[] = [
   { id: "research", label: "Research",  color: "var(--accent-research)", desc: "Deep research từ Arxiv, HuggingFace, Stack Overflow & Web" },
   { id: "coding",   label: "Coding",    color: "var(--accent-coding)",   desc: "AI coding agent: plan → code → execute → debug", hidden: true },
@@ -25,7 +31,7 @@ export const TOOLS: Tool[] = [
   { id: "essay",    label: "Nghị luận", color: "var(--accent-essay)",    desc: "Viết văn nghị luận, luận điểm", hidden: true },
   { id: "email",    label: "Email",     color: "var(--accent-email)",    desc: "Soạn thảo, phân loại email", hidden: true },
   { id: "pdf",      label: "PDF Chat",  color: "var(--accent-pdf)",      desc: "Chat với tài liệu PDF — tóm tắt, hỏi đáp" },
-  { id: "hmer",     label: "Công thức", color: "var(--accent-hmer)",     desc: "Ảnh công thức toán viết tay → LaTeX" },
+  { id: "hmer",     label: "Công thức", color: "var(--accent-hmer)",     desc: "Ảnh công thức toán viết tay → LaTeX", hidden: HMER_OFF },
 ];
 
 /** Danh sách tool THỰC SỰ hiện cho người dùng. Dock và mọi UI liệt kê tool

@@ -104,17 +104,17 @@ export const PORTFOLIO_PAGES: PortfolioPage[] = [
       vi: "KiNg — Trợ lý AI cá nhân (dự án cá nhân)",
       en: "KiNg — Personal AI Research Assistant (personal project)",
     },
-    meta: { vi: "Kỹ sư AI · 12/2025 – 6/2026", en: "AI Engineer · Dec 2025 – Jun 2026" },
+    meta: { vi: "Kỹ sư AI · 12/2025 – nay", en: "AI Engineer · Dec 2025 – Present" },
     bullets: {
       vi: [
-        "Chính là trang bạn đang xem: trợ lý AI full-stack (FastAPI + React/Vite, stream qua SSE) gộp bốn công cụ — Chat, Deep Research, Coding Agent và PDF Chat — chạy LLM (Llama 3) hoàn toàn local qua Ollama.",
-        "Thiết kế pipeline RAG hybrid-search kết hợp vector dense + sparse BGE-M3, thêm reranker BGE và chấm độ tin cậy; tái dùng tri thức đã thu thập giúp giảm thời gian trả lời từ ~19s xuống ~0.4s với truy vấn đã cache.",
-        "Viết research agent truy vấn 7 nguồn song song qua ThreadPoolExecutor, tự chunk và lưu kết quả vào vector DB, rồi tổng hợp thành tóm tắt, điểm chính, bảng so sánh và biểu đồ.",
+        "Chính là trang bạn đang xem: trợ lý AI full-stack (FastAPI + React/TypeScript, stream qua SSE) gộp Chat, Deep Research, Coding Agent, PDF Chat và nhận dạng công thức viết tay; đổi model ngay trên giao diện giữa Ollama (local), OpenAI và Anthropic.",
+        "Thiết kế pipeline RAG: hybrid search trên Weaviate (BM25 + vector), reranker cross-encoder BGE và knowledge gate ba tầng quyết định dùng lại tri thức đã lưu hay tìm bù. Mỗi nhận định được đối chiếu với câu trích từ chính nguồn nó dẫn trước khi hiển thị; cách này thay bộ kiểm tra cũ sau khi audit tay cho thấy nó bác oan 11/22 nhận định.",
+        "Viết research agent tìm song song trên Tavily, DuckDuckGo, arXiv, Semantic Scholar, Hugging Face và Stack Overflow qua ThreadPoolExecutor, tự chunk và lưu vào vector DB, rồi tổng hợp thành báo cáo có trích dẫn, mức tin cậy, bảng so sánh và biểu đồ.",
       ],
       en: [
-        "The page you are looking at: a full-stack AI assistant (FastAPI + React/Vite with SSE streaming) integrating four tools — Chat, Deep Research, Coding Agent and PDF Chat — running an LLM (Llama 3) fully locally via Ollama.",
-        "Designed a hybrid-search RAG pipeline combining BGE-M3 dense + sparse vectors, with a BGE reranker and credibility scoring, enabling knowledge reuse that cut response time from ~19s to ~0.4s on cached queries.",
-        "Developed a research agent that queries 7 sources in parallel via ThreadPoolExecutor, auto-chunks and persists results to the vector DB, then synthesizes summaries, key points, comparison tables and charts.",
+        "The page you are looking at: a full-stack AI assistant (FastAPI + React/TypeScript with SSE streaming) combining Chat, Deep Research, a Coding Agent, PDF Chat and handwritten-formula recognition; the model is switchable in the UI between Ollama (local), OpenAI and Anthropic.",
+        "Designed the RAG pipeline: hybrid search on Weaviate (BM25 + vectors), a BGE cross-encoder reranker, and a three-tier knowledge gate that decides between reusing stored knowledge and searching for what is missing. Each claim is checked against a quote from the very source it cites before it is shown; this replaced an earlier checker after a manual audit found it wrongly rejected 11 of 22 claims.",
+        "Built a research agent that searches Tavily, DuckDuckGo, arXiv, Semantic Scholar, Hugging Face and Stack Overflow in parallel via ThreadPoolExecutor, chunks and stores the results in the vector DB, then writes a cited report with a confidence level, comparison tables and charts.",
       ],
     },
   },
@@ -211,7 +211,7 @@ export const PORTFOLIO_PAGES: PortfolioPage[] = [
 export const SHORTCUT_COPY: Record<string, { k: Bi; v: Bi }> = {
   research: {
     k: { vi: "Nghiên cứu", en: "Research" },
-    v: { vi: "7 nguồn song song, có trích dẫn", en: "7 sources in parallel, cited" },
+    v: { vi: "Nhiều nguồn song song, có trích dẫn", en: "Many sources in parallel, cited" },
   },
   coding: {
     k: { vi: "Viết code", en: "Coding" },

@@ -102,6 +102,9 @@ async def _background_loop() -> None:
 
 
 def start_background_task() -> asyncio.Task | None:
+    if not settings.NEWS_ENABLED:
+        logger.info("[NEWS] NEWS_ENABLED=false — background refresh disabled")
+        return None
     if not settings.SUPABASE_DB_URL:
         logger.info("[NEWS] SUPABASE_DB_URL not configured — background refresh disabled")
         return None

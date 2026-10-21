@@ -96,6 +96,10 @@ class Settings(BaseSettings):
     S2_API_KEY: str | None = None
 
     # ── News digest ──────────────────────────────────────────────────
+    # False = no background refresh at all. Each refresh summarizes up to
+    # NEWS_MAX_NEW_ITEMS_PER_RUN items with the LLM, a real cost on a hosted
+    # deploy where the page is hidden (frontend config/features.ts).
+    NEWS_ENABLED: bool = True
     NEWS_REFRESH_INTERVAL_SECONDS: int = 6 * 3600
     NEWS_MANUAL_COOLDOWN_SECONDS: int = 60
     NEWS_MAX_ITEMS_PER_FEED: int = 20

@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { API, apiFetch } from "../lib/api";
 import { Markdown } from "./Markdown";
@@ -33,6 +34,10 @@ function AssistantBubbleInner() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
+  // Trang chủ: góc dưới-trái là hàng nút của carousel portfolio (đo ở
+  // 1280×720 và 1366×768 bong bóng đè lên nút "Thẻ trước"), còn góc dưới-phải
+  // trống. Các trang khác giữ góc trái: góc phải ở đó là nút gửi của ô nhập.
+  const onLanding = useLocation().pathname === "/";
 
   const scrollToBottom = () => {
     requestAnimationFrame(() => {
@@ -80,7 +85,7 @@ function AssistantBubbleInner() {
   };
 
   return (
-    <div className="bubble-root">
+    <div className={onLanding ? "bubble-root bubble-root--right" : "bubble-root"}>
       {open && (
         <div className="bubble-panel">
           <div className="bubble-header">
