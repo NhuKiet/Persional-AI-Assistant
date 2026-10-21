@@ -55,6 +55,11 @@ _BOOT = r"""
 import importlib.abc, json, os, sys
 
 blocked = set(json.loads(os.environ["BLOCKED_MODULES"]))
+# Some installs register a module before any code runs: on Linux the CUDA
+# wheels that come with torch add a "cuda" namespace through a .pth file at
+# interpreter start. Only what is imported from here on is the app's doing
+# (and the Railway image does not have those wheels at all).
+preloaded = set(sys.modules)
 
 class Block(importlib.abc.MetaPathFinder):
     def find_spec(self, name, path=None, target=None):
@@ -75,7 +80,10 @@ with TestClient(app) as client:
     models = client.get("/api/models").json()
     hmer = client.get("/api/hmer/status").json()
 
-leaked = sorted(name for name in sys.modules if name.split(".")[0] in blocked)
+leaked = sorted(
+    name for name in sys.modules
+    if name not in preloaded and name.split(".")[0] in blocked
+)
 print(json.dumps({
     "health": health.status_code,
     "reranker": caps["reranker"]["status"],
