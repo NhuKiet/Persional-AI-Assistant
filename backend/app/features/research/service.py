@@ -64,9 +64,12 @@ class ResearchService:
         self,
         agent: ResearchAgent | None = None,
         conversations: ConversationManager | None = None,
+        persist: bool = True,
     ):
         self._agent = agent or ResearchAgent()
         self._conv_manager = conversations or ConversationManager(namespace="research")
+        # False: runs read the knowledge store but add none of their sources.
+        self._persist = persist
         # Single-worker only — see backend/app/shared/session_locks.py.
         self._locks = KeyedLockRegistry()
 
@@ -80,6 +83,10 @@ class ResearchService:
 
     def end_session(self, lock: SessionLease) -> None:
         self._locks.release(lock)
+
+    @property
+    def agent(self) -> ResearchAgent:
+        return self._agent
 
     def get_history_with_revision(self, session_id: str) -> tuple[list[dict], int]:
         return self._conv_manager.get_history_with_revision(session_id)
@@ -101,7 +108,7 @@ class ResearchService:
             try:
                 for event in self._agent.run_streaming(
                     query, req.provider, req.model, cancel_event=cancel_event,
-                    history=history, focus=req.focus,
+                    history=history, focus=req.focus, persist=self._persist,
                 ):
                     loop.call_soon_threadsafe(aqueue.put_nowait, event)
             except Exception as e:  # noqa: BLE001 — surfaced as SSE error

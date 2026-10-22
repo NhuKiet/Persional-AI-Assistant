@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import mainlogo from "../assets/mainlogo-256.png";
 import { MoonPhase } from "../components/MoonPhase";
@@ -6,8 +6,9 @@ import { PortfolioCarousel } from "../components/PortfolioCarousel";
 import { ToolIcon } from "../components/ToolIcon";
 import { FEATURES } from "../config/features";
 import { SHORTCUT_COPY, type Lang } from "../config/portfolio";
-import { VISIBLE_TOOLS, toolPath } from "../config/tools";
+import { toolPath, type Tool } from "../config/tools";
 import { useTheme } from "../hooks/useTheme";
+import { useVisibleTools } from "../hooks/useVisibleTools";
 import "@fontsource/noto-serif-sc/chinese-simplified-400.css";
 import "@fontsource/noto-serif-sc/latin-400.css";
 // Chỉ phần lịch (tính toán thuần) nạp cùng trang; cảnh 3D (three.js) nạp
@@ -43,10 +44,12 @@ const HALF_SYNODIC_DAYS = 29.530588853 / 2;
 /** Lối tắt trong thẻ trợ lý: đúng các công cụ đang bật, theo thứ tự của dock
  *  ở /chat, cộng trang tin nếu bật. Công cụ không có chữ trong SHORTCUT_COPY
  *  thì không hiện (xem ghi chú ở đó). */
-const SHORTCUTS = [
-  ...VISIBLE_TOOLS.map(tool => ({ id: tool.id, path: toolPath(tool) })),
-  ...(FEATURES.news ? [{ id: "news", path: "/news" }] : []),
-].flatMap(s => (SHORTCUT_COPY[s.id] ? [{ ...s, ...SHORTCUT_COPY[s.id] }] : []));
+function shortcutsFor(tools: Tool[]) {
+  return [
+    ...tools.map(tool => ({ id: tool.id, path: toolPath(tool) })),
+    ...(FEATURES.news ? [{ id: "news", path: "/news" }] : []),
+  ].flatMap(s => (SHORTCUT_COPY[s.id] ? [{ ...s, ...SHORTCUT_COPY[s.id] }] : []));
+}
 
 /** Phím "/" chỉ nhảy vào ô hỏi khi người dùng không đang gõ ở chỗ khác. */
 function isTyping(target: EventTarget | null): boolean {
@@ -76,6 +79,8 @@ const shortPhase = (name: string) => name.replace(/^Trăng\s+/i, "").toLowerCase
 export function LandingPage() {
   const navigate = useNavigate();
   const { theme, toggle } = useTheme();
+  const tools = useVisibleTools();
+  const shortcuts = useMemo(() => shortcutsFor(tools), [tools]);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const handleRef = useRef<CompassHandle | null>(null);
   const failedRef = useRef<HTMLDivElement>(null);
@@ -211,7 +216,7 @@ export function LandingPage() {
                   </button>
                 </form>
                 <nav className="atom-core" aria-label="Vào thẳng công cụ">
-                  {SHORTCUTS.map(s => (
+                  {shortcuts.map(s => (
                     <Link className="atom-core-link" to={s.path} key={s.id}>
                       <span className="atom-core-icon"><ToolIcon tool={s.id} size={17} /></span>
                       <span className="atom-core-text">

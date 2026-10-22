@@ -203,46 +203,48 @@
 
 /* ── Footer ────────────────────────────────────────────────── */
 
-/* Left padding keeps the footer's buttons clear of the assistant bubble, which
-   is fixed over this corner (assistant-bubble.css: 56px wide, 20px in). */
 .sb-footer {
-  padding: 8px 8px 14px 72px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 8px 14px;
   border-top: 1px solid var(--border);
   flex-shrink: 0;
 }
+/* Keeps the footer's rows clear of the assistant bubble, which is fixed over
+   this corner (assistant-bubble.css: 56px wide, 20px in). */
+.sb-footer--bubble { padding-left: 72px; }
 
-.sb-clear-all {
-  width: 100%;
-  padding: 7px;
-  border-radius: 10px;
-  border: none;
-  background: none;
-  color: var(--text3);
-  font-family: var(--sans);
-  font-size: 12px;
-  cursor: pointer;
-  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
-}
-.sb-clear-all:hover { background: color-mix(in srgb, var(--danger) 9%, transparent); color: var(--danger); }
-
-.sb-theme-toggle {
+/* Every footer row looks the same: icon, then label, left-aligned. */
+.sb-theme-toggle,
+.sb-clear-all,
+.sb-auth {
   display: flex;
   align-items: center;
   gap: 8px;
   width: 100%;
   padding: 7px 8px;
-  margin-bottom: 4px;
   border-radius: 10px;
   border: none;
   background: none;
   color: var(--text2);
   font-family: var(--sans);
   font-size: 12px;
+  text-align: left;
+  text-decoration: none;
   cursor: pointer;
   transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
 }
-.sb-theme-toggle:hover { background: var(--bg3); color: var(--text); }
-.sb-theme-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sb-theme-toggle svg,
+.sb-clear-all svg,
+.sb-auth svg { flex-shrink: 0; }
+.sb-theme-toggle:hover,
+.sb-auth:hover { background: var(--bg3); color: var(--text); }
+.sb-clear-all { color: var(--text3); }
+.sb-clear-all:hover { background: color-mix(in srgb, var(--danger) 9%, transparent); color: var(--danger); }
+.sb-theme-toggle:focus-visible,
+.sb-clear-all:focus-visible,
+.sb-auth:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* ── Overlay (mobile) ──────────────────────────────────────── */
 

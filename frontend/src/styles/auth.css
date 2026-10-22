@@ -71,11 +71,6 @@
 .login-back:hover { color: var(--text); }
 
 /* ── Sidebar + dock ──────────────────────────────────────────── */
-.sb-auth {
-  display: block; width: 100%; padding: 7px; border-radius: 10px; border: none; background: none;
-  color: var(--text2); font: 12.5px var(--sans); text-align: center; text-decoration: none; cursor: pointer;
-}
-.sb-auth:hover { background: var(--bg3); color: var(--text); }
 .dock-item.is-locked .dock-icon { opacity: 0.55; }
 .dock-lock {
   position: absolute; right: -7px; bottom: -5px; color: var(--text2);

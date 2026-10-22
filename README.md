@@ -766,9 +766,9 @@ Vài điều app đã lo cho trường hợp này:
   trang mà API đã chết.
 
 **Chi phí.** Gói Hobby của Railway là 5 USD/tháng, đã gồm 5 USD tài nguyên; dùng vượt thì
-tính thêm. Phần lớn chi phí còn lại là OpenAI, tính theo lượt dùng: khách bị giới hạn
-`GUEST_DAILY_LIMIT` lượt mỗi ngày mỗi IP, và nên đặt thêm hạn mức chi tiêu trong trang
-quản lý của OpenAI.
+tính thêm. Phần lớn chi phí còn lại là OpenAI và Tavily, tính theo lượt dùng: khách bị
+giới hạn `GUEST_DAILY_LIMIT` lượt và `GUEST_RESEARCH_DAILY_LIMIT` lượt Research mỗi ngày
+mỗi IP, và nên đặt thêm hạn mức chi tiêu trong trang quản lý của OpenAI.
 
 **Chưa có:** công cụ sao lưu cho Postgres trên Railway ([`tools/db_backup.py`](tools/db_backup.py)
 chỉ làm việc với Supabase local).
@@ -883,7 +883,8 @@ Mỗi lần chạy sinh một container tạm, sống đúng trong thời gian t
 Đặt `OWNER_PASSWORD` trong `.env` để bật đăng nhập (trang `/login`):
 
 - **Chủ trợ lý** đăng nhập bằng mật khẩu đó và dùng được mọi thứ. Phiên là cookie `HttpOnly`, `SameSite=Strict`, có chữ ký, sống `SESSION_DAYS` ngày.
-- **Khách** không cần đăng nhập, được thử **Chat, PDF, Công thức viết tay**: `GUEST_DAILY_LIMIT` lượt mỗi 24 giờ mỗi IP, luôn chạy trên model `GUEST_PROVIDER`/`GUEST_MODEL`, lịch sử chỉ giữ trong RAM (không ghi DB), file PDF/ảnh để riêng (khách không đọc được file của chủ và của nhau). Research, Coding, bong bóng trợ lý, lịch sử phiên và `/docs` chỉ dành cho chủ.
+- **Khách** không cần đăng nhập, được thử **Chat, PDF, Công thức viết tay**: `GUEST_DAILY_LIMIT` lượt mỗi 24 giờ mỗi IP, luôn chạy trên model `GUEST_PROVIDER`/`GUEST_MODEL`, lịch sử chỉ giữ trong RAM (không ghi DB), file PDF/ảnh để riêng (khách không đọc được file của chủ và của nhau). Coding, bong bóng trợ lý, lịch sử phiên và `/docs` chỉ dành cho chủ.
+- **Research cho khách** có hạn mức riêng, tính ngoài số lượt trên: `GUEST_RESEARCH_DAILY_LIMIT` lượt mỗi 24 giờ mỗi IP (mặc định 3; `0` = khách không dùng Research), vì mỗi lượt gọi nhiều search API và nhiều vòng LLM. Lượt của khách vẫn đọc knowledge store nhưng **không ghi thêm gì vào đó**, nên những gì người lạ tìm không lẫn vào tri thức của chủ; câu hỏi tiếp theo trong cùng phiên vẫn hiểu ngữ cảnh nhờ lịch sử trong RAM. Hỏi sâu một nguồn (deep-dive) tính như một lượt thường.
 - Phân quyền **chặn mặc định** (`backend/app/core/auth.py`): route mới thêm mà không khai báo cho khách thì chỉ chủ dùng được.
 - Không đặt `OWNER_PASSWORD` = chế độ mở như trước — chỉ được phép khi `ALLOWED_HOSTS` là máy này; mở ra ngoài mà thiếu mật khẩu thì backend không khởi động.
 - Mở ra ngoài cũng bắt buộc `COOKIE_SECURE=true` (tức phải có HTTPS phía trước): thiếu thì backend không khởi động, vì mật khẩu và cookie đăng nhập sẽ đi qua HTTP không mã hoá.
@@ -995,7 +996,7 @@ lại khi Research chạy).
 | **Coding** | `CODE_TIMEOUT` · `MAX_DEBUG_ITER` · `ENABLE_AUTO_INSTALL` · `EXECUTOR_*` |
 | **Giới hạn** | `MAX_MESSAGE_CHARS` · `MAX_UPLOAD_MB` · `MAX_HISTORY` · `RATE_LIMIT_ENABLED` · `RATE_LIMIT_PER_MINUTE` · `RATE_LIMIT_RESEARCH_PER_MINUTE` |
 | **Mạng** | `ALLOWED_HOSTS` (Host header được phục vụ, mặc định chỉ loopback) |
-| **Đăng nhập** | `OWNER_PASSWORD` · `SESSION_SECRET` · `SESSION_DAYS` · `COOKIE_SECURE` · `GUEST_ENABLED` · `GUEST_DAILY_LIMIT` · `GUEST_PROVIDER` · `GUEST_MODEL` · `GUEST_MAX_UPLOAD_MB` · `RATE_LIMIT_LOGIN_PER_MINUTE` |
+| **Đăng nhập** | `OWNER_PASSWORD` · `SESSION_SECRET` · `SESSION_DAYS` · `COOKIE_SECURE` · `GUEST_ENABLED` · `GUEST_DAILY_LIMIT` · `GUEST_RESEARCH_DAILY_LIMIT` · `GUEST_PROVIDER` · `GUEST_MODEL` · `GUEST_MAX_UPLOAD_MB` · `RATE_LIMIT_LOGIN_PER_MINUTE` |
 | **PDF** | `PDF_MAX_CONTEXT` · `PDF_CHUNK_SIZE` · `PDF_CHUNK_OVERLAP` |
 | **Bubble** | `BRIDGE_URL` · `BRIDGE_TOKEN` |
 

@@ -169,6 +169,10 @@ class Settings(BaseSettings):
     # (trống = model mặc định của server).
     GUEST_ENABLED: bool = True
     GUEST_DAILY_LIMIT: int = 10
+    # Research có hạn mức riêng, tính ngoài GUEST_DAILY_LIMIT: mỗi lượt gọi
+    # nhiều search API + LLM. Nguồn khách tìm được không ghi vào knowledge
+    # store. 0 = khách không dùng Research.
+    GUEST_RESEARCH_DAILY_LIMIT: int = 3
     GUEST_PROVIDER: str | None = None
     GUEST_MODEL: str | None = None
     GUEST_MAX_UPLOAD_MB: int = 5
@@ -255,6 +259,13 @@ class Settings(BaseSettings):
     def _check_positive(cls, v: int) -> int:
         if v < 1:
             raise ValueError("Giá trị phải >= 1.")
+        return v
+
+    @field_validator("GUEST_RESEARCH_DAILY_LIMIT")
+    @classmethod
+    def _check_not_negative(cls, v: int) -> int:
+        if v < 0:
+            raise ValueError("Giá trị phải >= 0 (0 = tắt).")
         return v
 
     @model_validator(mode="after")

@@ -10,6 +10,11 @@ export interface Tool {
    *  /coding vẫn sống, SUGGESTIONS vẫn còn — chỉ là không quảng cáo lối vào.
    *  Bật lại = xoá dòng `hidden: true` của tool đó, không cần sửa chỗ nào khác. */
   hidden?: boolean;
+  /** Tool chạy code do LLM sinh: chỉ hiện cho CHỦ, và chỉ khi backend chạy
+   *  được code thật (sandbox Docker sẵn sàng — backend chạy thẳng trên máy).
+   *  Bản compose, Railway và link công khai không có sandbox nên nó tự ẩn;
+   *  khách thì không bao giờ dùng được. Quyết định lúc chạy: useVisibleTools. */
+  needsSandbox?: boolean;
 }
 
 /* `color` là chuỗi var(--accent-*), KHÔNG phải hex tĩnh — vì bảng màu tool
@@ -26,7 +31,7 @@ const HMER_OFF = import.meta.env.VITE_HMER === "off";
 
 export const TOOLS: Tool[] = [
   { id: "research", label: "Research",  color: "var(--accent-research)", desc: "Deep research từ Arxiv, HuggingFace, Stack Overflow & Web" },
-  { id: "coding",   label: "Coding",    color: "var(--accent-coding)",   desc: "AI coding agent: plan → code → execute → debug", hidden: true },
+  { id: "coding",   label: "Coding",    color: "var(--accent-coding)",   desc: "AI coding agent: plan → code → execute → debug", needsSandbox: true },
   { id: "homework", label: "Bài tập",   color: "var(--accent-homework)", desc: "Giải toán, lý, hóa, lập trình", hidden: true },
   { id: "essay",    label: "Nghị luận", color: "var(--accent-essay)",    desc: "Viết văn nghị luận, luận điểm", hidden: true },
   { id: "email",    label: "Email",     color: "var(--accent-email)",    desc: "Soạn thảo, phân loại email", hidden: true },
@@ -34,10 +39,11 @@ export const TOOLS: Tool[] = [
   { id: "hmer",     label: "Công thức", color: "var(--accent-hmer)",     desc: "Ảnh công thức toán viết tay → LaTeX", hidden: HMER_OFF },
 ];
 
-/** Danh sách tool THỰC SỰ hiện cho người dùng. Dock và mọi UI liệt kê tool
- *  phải dùng cái này, không dùng TOOLS trực tiếp — TOOLS là registry đầy đủ,
- *  còn dùng để tra theo id (ToolRoute trong App.tsx) kể cả với tool đang ẩn. */
-export const VISIBLE_TOOLS: Tool[] = TOOLS.filter(t => !t.hidden);
+/** Tool hiện cho MỌI người dùng. Dock và trang chủ dùng useVisibleTools()
+ *  (danh sách này cộng tool cần sandbox khi chủ chạy được code); không dùng
+ *  TOOLS trực tiếp — TOOLS là registry đầy đủ, còn dùng để tra theo id
+ *  (ToolRoute trong App.tsx) kể cả với tool đang ẩn. */
+export const VISIBLE_TOOLS: Tool[] = TOOLS.filter(t => !t.hidden && !t.needsSandbox);
 
 /** Tool nào có page riêng thì đi thẳng route đó; còn lại dùng /tool/:id chung.
  *  Dùng chung ở cả LandingPage (thẻ công cụ) và HomePage (dock 6 tool) —

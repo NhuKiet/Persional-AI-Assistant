@@ -1,0 +1,10 @@
+# Bản công khai qua Cloudflare Tunnel, không phải sửa .env: backend đọc thêm
+# .env.public (gitignored) sau .env, nên OWNER_PASSWORD, COOKIE_SECURE=true và
+# ALLOWED_HOSTS trong đó thắng. Chạy:
+#   docker compose -f docker-compose.yml -f docker-compose.public.yml --profile tunnel-quick up -d --build
+# Địa chỉ https://….trycloudflare.com nằm trong: docker compose logs tunnel-quick
+services:
+  backend:
+    env_file:
+      - .env
+      - .env.public

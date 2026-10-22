@@ -63,8 +63,9 @@ export function AppRoutes() {
       <Route path="/"             element={guarded(<LandingPage />)} />
       <Route path="/chat"         element={guarded(<HomePage />, "Trò chuyện")} />
       {/* Chỉ chủ trợ lý: khách thấy lời giải thích + nút đăng nhập (backend
-          cũng từ chối các API này với khách — backend/app/core/auth.py). */}
-      <Route path="/research"     element={guarded(<RequireOwner feature="Research"><ResearchPage /></RequireOwner>, "Research")} />
+          cũng từ chối các API này với khách — backend/app/core/auth.py).
+          Research mở cho khách khi backend cho (GUEST_RESEARCH_DAILY_LIMIT). */}
+      <Route path="/research"     element={guarded(<RequireOwner feature="Research" tool="research"><ResearchPage /></RequireOwner>, "Research")} />
       <Route path="/coding"       element={guarded(<RequireOwner feature="Coding"><CodingPage /></RequireOwner>, "Coding")} />
       <Route path="/pdf"          element={guarded(<PDFPage />, "PDF Chat")} />
       <Route path="/news"         element={guarded(<RequireOwner feature="Tin AI"><NewsPage /></RequireOwner>, "News")} />

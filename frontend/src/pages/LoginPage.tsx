@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import mainlogo from "../assets/mainlogo-256.png";
 import { useAuth } from "../hooks/useAuth";
-import { login } from "../lib/auth";
+import { guestToolsText, login } from "../lib/auth";
 
 /** Only same-site paths: `next` comes from the URL, and an absolute or
  *  protocol-relative value would make this an open redirect. */
@@ -18,6 +18,7 @@ export function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const guestTools = guestToolsText(state);
 
   // Already the owner (signed in, or no password on the backend): go on.
   useEffect(() => {
@@ -51,7 +52,9 @@ export function LoginPage() {
           <p className="login-note">Máy chủ đang chạy không cần mật khẩu — mọi công cụ đều mở.</p>
         ) : (
           <>
-            <p className="login-note">Dành cho chủ trợ lý. Khách vẫn dùng thử được Chat, PDF và Công thức viết tay.</p>
+            <p className="login-note">
+              {guestTools ? `Dành cho chủ trợ lý. Khách vẫn dùng thử được ${guestTools}.` : "Dành cho chủ trợ lý."}
+            </p>
             <label className="login-label" htmlFor="login-password">Mật khẩu</label>
             <input
               id="login-password"

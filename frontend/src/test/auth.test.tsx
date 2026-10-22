@@ -10,7 +10,12 @@ import { apiFetch } from "../lib/api";
 import { displayPdfName } from "../lib/pdfUrls";
 import { readErrorResponse } from "../lib/sse";
 
-const GUEST = { role: "guest", auth: true, guest: { enabled: true, limit: 10, remaining: 7, tools: ["chat", "pdf", "hmer"] } };
+const GUEST = {
+  role: "guest", auth: true,
+  guest: { enabled: true, limit: 10, remaining: 7, tools: ["chat", "pdf", "hmer", "research"], research: { limit: 3, remaining: 2 } },
+};
+// A backend that keeps Research from guests (GUEST_RESEARCH_DAILY_LIMIT=0).
+const GUEST_NO_RESEARCH = { ...GUEST, guest: { ...GUEST.guest, tools: ["chat", "pdf", "hmer"], research: null } };
 const OWNER = { role: "owner", auth: true, guest: GUEST.guest };
 const OPEN = { role: "owner", auth: false, guest: null };
 
@@ -59,21 +64,46 @@ describe("guest", () => {
     expect(within(banner).getByRole("link", { name: "Đăng nhập" })).toHaveAttribute("href", "/login?next=%2Fchat");
   });
 
-  it("finds owner-only tools locked, with a way in", async () => {
+  it("can try Research, with its own allowance shown", async () => {
     installBackend(GUEST);
     openAt("/research");
 
+    expect(await screen.findByPlaceholderText(/Nhập chủ đề nghiên cứu/i)).toBeInTheDocument();
+    expect(screen.getByRole("status", { name: "Chế độ dùng thử" })).toHaveTextContent("còn 2/3 lượt Research hôm nay");
+  });
+
+  it("finds owner-only tools locked, with a way in and what can be tried instead", async () => {
+    installBackend(GUEST);
+    openAt("/coding");
+
+    expect(await screen.findByRole("heading", { name: "Coding cần đăng nhập" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Đăng nhập" })).toHaveAttribute("href", "/login?next=%2Fcoding");
+    expect(screen.getByText(/Bạn vẫn có thể dùng thử Chat, Research, PDF Chat và Công thức\./)).toBeInTheDocument();
+  });
+
+  it("finds Research locked when the backend keeps it from guests", async () => {
+    installBackend(GUEST_NO_RESEARCH);
+    openAt("/research");
+
     expect(await screen.findByRole("heading", { name: "Research cần đăng nhập" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Đăng nhập" })).toHaveAttribute("href", "/login?next=%2Fresearch");
     expect(screen.queryByPlaceholderText(/Nhập chủ đề nghiên cứu/i)).toBeNull();
   });
 
   it("sees owner-only tools marked on the chat page", async () => {
-    installBackend(GUEST);
+    installBackend(GUEST_NO_RESEARCH);
     openAt("/chat");
 
     const research = await screen.findByTitle(/Deep research/i);
     await waitFor(() => expect(research).toHaveAccessibleName(/Research.*cần đăng nhập/));
+  });
+
+  it("sees Research unlocked on the chat page when guests may try it", async () => {
+    installBackend(GUEST);
+    openAt("/chat");
+
+    const research = await screen.findByTitle(/Deep research/i);
+    await screen.findByRole("status", { name: "Chế độ dùng thử" });
+    expect(research).not.toHaveAccessibleName(/cần đăng nhập/);
   });
 });
 
@@ -85,6 +115,13 @@ describe("login", () => {
     await userEvent.type(await screen.findByLabelText("Mật khẩu"), "sai{Enter}");
 
     expect(await screen.findByText("Sai mật khẩu.")).toBeInTheDocument();
+  });
+
+  it("tells guests what they can still try, from what the backend allows", async () => {
+    installBackend(GUEST_NO_RESEARCH);
+    openAt("/login");
+
+    expect(await screen.findByText("Dành cho chủ trợ lý. Khách vẫn dùng thử được Chat, PDF Chat và Công thức.")).toBeInTheDocument();
   });
 
   it("signs in and goes where the user was headed, as the owner", async () => {
@@ -127,9 +164,10 @@ describe("plumbing", () => {
     window.addEventListener(AUTH_CHANGED, heard);
 
     await apiFetch("/api/chat/stream", { method: "POST", body: "{}" });
+    await apiFetch("/api/research/stream", { method: "POST", body: "{}" });
     await apiFetch("/api/models");
 
-    expect(heard).toHaveBeenCalledTimes(1);
+    expect(heard).toHaveBeenCalledTimes(2);
     window.removeEventListener(AUTH_CHANGED, heard);
   });
 

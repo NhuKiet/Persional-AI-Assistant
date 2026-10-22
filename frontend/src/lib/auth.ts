@@ -1,14 +1,22 @@
+import { VISIBLE_TOOLS } from "../config/tools";
 import { API, apiFetch, AUTH_CHANGED } from "./api";
 
 export { AUTH_CHANGED };
 
-/** GET /api/auth/me — backend/app/features/auth/router.py. */
-export interface GuestInfo {
-  enabled: boolean;
+/** A daily allowance: how many a guest gets, and how many are left. */
+export interface Allowance {
   limit: number;
   remaining: number;
-  /** Tool ids a guest may try ("chat", "pdf", "hmer"). */
+}
+
+/** GET /api/auth/me — backend/app/features/auth/router.py. */
+export interface GuestInfo extends Allowance {
+  enabled: boolean;
+  /** Tool ids a guest may try ("chat", "pdf", "hmer", "research"). */
   tools: string[];
+  /** Research runs: an allowance of their own, apart from the turns above.
+   *  null when guests may not research. */
+  research: Allowance | null;
 }
 
 export interface AuthState {
@@ -26,12 +34,14 @@ export function parseAuth(data: unknown): AuthState | null {
   const d = data as Partial<AuthState> | null;
   if (!d || (d.role !== "owner" && d.role !== "guest") || typeof d.auth !== "boolean") return null;
   const g = d.guest as Partial<GuestInfo> | null | undefined;
+  const r = g?.research as Partial<Allowance> | null | undefined;
   const guest = g
     ? {
         enabled: Boolean(g.enabled),
         limit: Number(g.limit) || 0,
         remaining: Number(g.remaining) || 0,
         tools: Array.isArray(g.tools) ? g.tools.map(String) : [],
+        research: r ? { limit: Number(r.limit) || 0, remaining: Number(r.remaining) || 0 } : null,
       }
     : null;
   return { role: d.role, auth: d.auth, guest };
@@ -76,4 +86,17 @@ export async function logout(): Promise<AuthState> {
 /** Whether a tool is usable for this visitor. */
 export function canUse(state: AuthState, toolId: string): boolean {
   return state.role === "owner" || Boolean(state.guest?.enabled && state.guest.tools.includes(toolId));
+}
+
+/** "Chat, Research và PDF Chat": the tools a guest can try on this build, for
+ *  a sentence. Tools hidden here (the handwriting one on Railway) are left
+ *  out even when the backend lists them. Empty when guests can try nothing. */
+export function guestToolsText(state: AuthState): string {
+  const tools = state.guest?.enabled ? state.guest.tools : [];
+  const names = [
+    ...(tools.includes("chat") ? ["Chat"] : []),
+    ...VISIBLE_TOOLS.filter(tool => tools.includes(tool.id)).map(tool => tool.label),
+  ];
+  if (names.length <= 1) return names.join("");
+  return `${names.slice(0, -1).join(", ")} và ${names[names.length - 1]}`;
 }

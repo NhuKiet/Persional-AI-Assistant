@@ -18,11 +18,17 @@ class LoginRequest(BaseModel):
 def _me(role: str, client: str) -> dict:
     if not settings.auth_enabled:
         return {"role": auth.OWNER, "auth": False, "guest": None}
+    tools = auth.guest_tools()
     guest = {
         "enabled": settings.GUEST_ENABLED,
         "limit": settings.GUEST_DAILY_LIMIT,
         "remaining": auth.guest_quota.remaining(client) if settings.GUEST_ENABLED else 0,
-        "tools": auth.GUEST_TOOLS if settings.GUEST_ENABLED else [],
+        "tools": tools,
+        # Research runs have their own allowance, apart from the turns above.
+        "research": {
+            "limit": settings.GUEST_RESEARCH_DAILY_LIMIT,
+            "remaining": auth.guest_research_quota.remaining(client),
+        } if "research" in tools else None,
     }
     return {"role": role, "auth": True, "guest": guest}
 

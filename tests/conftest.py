@@ -77,11 +77,13 @@ def _reset_rate_limiter():
 @pytest.fixture(autouse=True)
 def _reset_guest_quota():
     """Guest trial turns are counted per client in memory, like the limiter."""
-    from backend.app.core.auth import guest_quota
+    from backend.app.core.auth import QUOTAS
 
-    guest_quota.reset()
+    for quota in QUOTAS.values():
+        quota.reset()
     yield
-    guest_quota.reset()
+    for quota in QUOTAS.values():
+        quota.reset()
 
 
 @pytest.fixture(autouse=True)

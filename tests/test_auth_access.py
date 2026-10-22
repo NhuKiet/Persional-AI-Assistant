@@ -1,8 +1,8 @@
 """Owner login + guest trial.
 
 The owner signs in with OWNER_PASSWORD and gets everything. Anyone else is a
-guest: a short allowlist (chat, PDF, handwritten maths) with a daily quota,
-everything else refused — including routes added later, since the policy is
+guest: a short allowlist (chat, PDF, handwritten maths, research) with a daily
+quota — research on a smaller one of its own — everything else refused — including routes added later, since the policy is
 deny-by-default. Without OWNER_PASSWORD the app stays open, but only while it
 is reachable from this machine alone.
 """
@@ -23,9 +23,12 @@ def secured(monkeypatch):
     monkeypatch.setattr(settings, "SESSION_SECRET", None)
     monkeypatch.setattr(settings, "GUEST_ENABLED", True)
     monkeypatch.setattr(settings, "GUEST_DAILY_LIMIT", 3)
+    monkeypatch.setattr(settings, "GUEST_RESEARCH_DAILY_LIMIT", 2)
     auth.guest_quota.reset()
+    auth.guest_research_quota.reset()
     yield
     auth.guest_quota.reset()
+    auth.guest_research_quota.reset()
 
 
 @pytest.fixture
@@ -121,14 +124,18 @@ def test_me_tells_a_guest_what_it_can_do(secured, client):
 
     assert me["role"] == "guest"
     assert me["auth"] is True
-    assert me["guest"] == {"enabled": True, "limit": 3, "remaining": 3, "tools": ["chat", "pdf", "hmer"]}
+    assert me["guest"] == {
+        "enabled": True, "limit": 3, "remaining": 3,
+        "tools": ["chat", "pdf", "hmer", "research"],
+        "research": {"limit": 2, "remaining": 2},
+    }
 
 
 # ── the policy ──────────────────────────────────────────────────────────
 
 
 @pytest.mark.parametrize("method,path", [
-    ("POST", "/api/research/stream"),
+    ("GET", "/api/research/sessions/abc"),
     ("POST", "/api/coding/stream"),
     ("POST", "/api/bubble/chat"),
     ("GET", "/api/pdf/list"),
@@ -182,6 +189,120 @@ def test_guest_trial_turns_run_out_but_the_owner_has_no_quota(secured, client, m
 
     _login(client)
     assert client.post("/api/chat/stream", json=body).status_code == 200
+
+
+class _FakeResearchAgent:
+    def __init__(self):
+        self.runs = []
+
+    def run_streaming(self, query, provider=None, model=None, cancel_event=None, history=None, focus="all", persist=True):
+        self.runs.append({"provider": provider, "model": model, "persist": persist, "history": history})
+        yield {"type": "done", "data": {"query": query, "summary_short": f"về {query}"}}
+
+
+@pytest.fixture
+def research(monkeypatch):
+    """The real research router and services around a fake agent; the
+    owner's history goes to an in-memory stand-in for the database."""
+    import backend.app.features.research.router as research_router
+    import backend.app.shared.conversation_store as conv_mod
+    from backend.app.features.research.service import ResearchService
+    from tests.fake_session_store import FakeSessionStore
+
+    agent = _FakeResearchAgent()
+    owner_store = FakeSessionStore()
+    monkeypatch.setattr(conv_mod, "_store", owner_store)
+    monkeypatch.setattr(research_router, "_service", ResearchService(agent=agent))
+    monkeypatch.setattr(research_router, "_guest_service", None)
+    return agent, owner_store
+
+
+def test_guest_research_has_its_own_allowance_apart_from_the_turns(secured, client, research):
+    agent, _ = research
+    body = {"query": "attention", "session_id": "g-research"}
+
+    codes = [client.post("/api/research/stream", json=body).status_code for _ in range(3)]
+    assert codes == [200, 200, 429]
+    refused = client.post("/api/research/stream", json=body)
+    assert refused.json()["detail"] == "guest_quota_exceeded"
+    assert refused.json()["quota"] == "research"
+    assert "Research" in refused.json()["message"]
+
+    guest = client.get("/api/auth/me").json()["guest"]
+    assert guest["research"] == {"limit": 2, "remaining": 0}
+    assert guest["remaining"] == 3  # chat, PDF and handwriting turns untouched
+    assert len(agent.runs) == 2
+
+
+def test_guest_research_runs_on_the_guest_model_and_leaves_nothing_behind(secured, client, research):
+    agent, owner_store = research
+
+    client.post("/api/research/stream", json={
+        "query": "attention", "session_id": "g-1", "provider": "anthropic", "model": "claude-opus-5-5",
+    })
+    client.post("/api/research/stream", json={"query": "còn gì nữa", "session_id": "g-1"})
+
+    assert all((r["provider"], r["model"]) == auth.guest_model() for r in agent.runs)
+    assert all(r["persist"] is False for r in agent.runs)
+    # The follow-up still knows the first question (memory, not the database).
+    assert agent.runs[1]["history"][0] == {"role": "user", "content": "attention"}
+    assert owner_store._data == {}
+    # And the owner's history cannot be read back by the guest.
+    assert client.get("/api/research/sessions/g-1").status_code == 401
+
+
+def test_the_owner_research_is_stored_and_spends_no_allowance(secured, client, research):
+    agent, owner_store = research
+    _login(client)
+
+    codes = [client.post("/api/research/stream", json={"query": "q", "session_id": "o-1"}).status_code for _ in range(3)]
+
+    assert codes == [200, 200, 200]
+    assert all(r["persist"] is True for r in agent.runs)
+    assert owner_store._data
+
+
+def test_a_deep_dive_by_a_guest_spends_an_ordinary_turn(secured, client, research, monkeypatch):
+    import backend.app.features.research.router as research_router
+
+    seen = []
+
+    async def fake_deep_dive(req, system):
+        seen.append((req.provider, req.model))
+        yield {"type": "done", "message": "ok"}
+
+    guest_service = research_router.get_guest_service()
+    monkeypatch.setattr(guest_service, "deep_dive_events", fake_deep_dive)
+    body = {"question": "tóm tắt?", "source_content": "nội dung", "session_id": "g-2"}
+
+    assert client.post("/api/research/deep-dive", json=body).status_code == 200
+    guest = client.get("/api/auth/me").json()["guest"]
+    assert guest["remaining"] == 2
+    assert guest["research"]["remaining"] == 2
+    assert seen == [auth.guest_model()]
+
+
+def test_guests_can_read_the_research_suggestions(secured, client, monkeypatch):
+    import backend.app.features.research.router as research_router
+
+    monkeypatch.setattr(research_router, "fetch_trending_papers", lambda k: ["Một paper mới"])
+    monkeypatch.setitem(research_router._trending_cache, "next_fetch", 0.0)
+
+    response = client.get("/api/research/trending")
+
+    assert response.status_code == 200
+    assert response.json() == {"suggestions": ["Một paper mới"]}
+
+
+def test_research_can_be_kept_from_guests_alone(secured, client, monkeypatch):
+    monkeypatch.setattr(settings, "GUEST_RESEARCH_DAILY_LIMIT", 0)
+
+    response = client.post("/api/research/stream", json={"query": "q"})
+
+    assert response.status_code == 401
+    guest = client.get("/api/auth/me").json()["guest"]
+    assert "research" not in guest["tools"]
+    assert guest["research"] is None
 
 
 def test_with_guests_disabled_only_the_public_routes_answer(secured, client, monkeypatch):

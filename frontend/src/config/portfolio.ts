@@ -205,7 +205,7 @@ export const PORTFOLIO_PAGES: PortfolioPage[] = [
  *  một nhãn và một dòng nói công cụ làm gì — đủ để lướt hai giây là biết bấm
  *  vào đâu. Khoá theo id trong TOOLS (config/tools.ts), cộng "news".
  *
- *  Trang chủ chỉ hiện công cụ ĐANG BẬT (VISIBLE_TOOLS, FEATURES.news) mà có
+ *  Trang chủ chỉ hiện công cụ ĐANG BẬT (useVisibleTools, FEATURES.news) mà có
  *  mục ở đây — bật lại một công cụ đang ẩn thì thêm mục cho nó, nếu không nó
  *  vẫn vắng mặt trên trang chủ. Mỗi dòng nên vừa một dòng ở bề ngang thẻ. */
 export const SHORTCUT_COPY: Record<string, { k: Bi; v: Bi }> = {

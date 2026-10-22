@@ -105,7 +105,9 @@ export function Sidebar({ open, onToggle, sessions, activeId, onSelect, onDelete
           ))}
         </div>
 
-        <div className="sb-footer">
+        {/* Guests have no assistant bubble in this corner (AssistantBubble), so
+            nothing to keep clear of. */}
+        <div className={`sb-footer${guest ? "" : " sb-footer--bubble"}`}>
           <button className="sb-theme-toggle" onClick={toggle}
             aria-label="Đổi giao diện sáng/tối"
             title={theme === "dark" ? "Chuyển sang giao diện sáng" : "Chuyển sang giao diện tối"}>
@@ -115,11 +117,20 @@ export function Sidebar({ open, onToggle, sessions, activeId, onSelect, onDelete
             <span>{theme === "dark" ? "Giao diện sáng" : "Giao diện tối"}</span>
           </button>
           {!guest && sessions.length > 0 && (
-            <button className="sb-clear-all" onClick={onClearAll}>Xóa tất cả lịch sử</button>
+            <button className="sb-clear-all" onClick={onClearAll}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12.5A1.5 1.5 0 0 0 8.5 21h7a1.5 1.5 0 0 0 1.5-1.5L18 7M9 7V4.5A1.5 1.5 0 0 1 10.5 3h3A1.5 1.5 0 0 1 15 4.5V7" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              <span>Xóa tất cả lịch sử</span>
+            </button>
           )}
           {auth.auth && (auth.role === "owner"
-            ? <button className="sb-auth" onClick={async () => setAuth(await logout())}>Đăng xuất</button>
-            : <Link className="sb-auth" to={loginHref(pathname)}>Đăng nhập</Link>)}
+            ? <button className="sb-auth" onClick={async () => setAuth(await logout())}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 4h3.5A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5H15M10 8l-4 4 4 4M6 12h10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                <span>Đăng xuất</span>
+              </button>
+            : <Link className="sb-auth" to={loginHref(pathname)}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 4h3.5A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5H15M11 8l4 4-4 4M15 12H4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                <span>Đăng nhập</span>
+              </Link>)}
         </div>
       </aside>
     </>

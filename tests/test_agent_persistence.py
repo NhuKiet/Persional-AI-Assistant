@@ -1,3 +1,5 @@
+import pytest
+
 import backend.app.features.research.agent as agent_mod
 from backend.app.features.research.models import ResearchOutput, SearchResult
 from tests.fake_synth import StreamingSynthFake
@@ -8,17 +10,22 @@ def _sr(title="t", content="transformer attention mechanism", **extra):
                         content=content, extra=extra)
 
 
-def _run(monkeypatch, candidates, judge_verdict=(True, None), topup_new=None):
+def _run(monkeypatch, candidates, judge_verdict=(True, None), topup_new=None, persist=True, read=None):
     from concurrent.futures import ThreadPoolExecutor
     from backend.app.features.research.agent import ResearchAgent
 
     stored = []
+    read = read if read is not None else []
     a = ResearchAgent.__new__(ResearchAgent)
     a._pool = ThreadPoolExecutor(max_workers=2)
 
     class _Store:
-        def retrieve_candidates(self, q, top_k=None): return candidates
-        def retrieve(self, q): return candidates
+        def retrieve_candidates(self, q, top_k=None):
+            read.append(q)
+            return candidates
+        def retrieve(self, q):
+            read.append(q)
+            return candidates
         def add_results(self, q, s):
             stored.append(list(s))
             return len(s)
@@ -55,7 +62,7 @@ def _run(monkeypatch, candidates, judge_verdict=(True, None), topup_new=None):
         def synthesize_grounded(self, q, s):     return ResearchOutput(query=q)
 
     a.synth = _Synth()
-    list(a.run_streaming("transformer attention"))
+    list(a.run_streaming("transformer attention", persist=persist))
     return stored
 
 
@@ -80,10 +87,22 @@ def test_live_search_stores_once_not_twice(monkeypatch):
     assert len(stored) == 1
 
 
-def test_iteration_sources_are_stored_exactly_once(monkeypatch):
+def test_a_run_without_persist_reads_the_store_but_writes_nothing(monkeypatch):
+    """Lượt research của khách: vẫn tận dụng tri thức đã lưu, nhưng không
+    nguồn nào khách tìm được lọt vào knowledge store của chủ."""
+    import time
+    read = []
+    assert _run(monkeypatch, [], persist=False, read=read) == []
+    assert read == ["transformer attention"]
+    assert _run(monkeypatch, [_sr("cũ", stored_at=time.time())],
+                judge_verdict=(False, "thiếu"), topup_new=[_sr("mới")], persist=False) == []
+
+
+@pytest.mark.parametrize(("persist", "expected"), [(True, ["live", "từ-iteration"]), (False, [])])
+def test_iteration_sources_are_stored_exactly_once(monkeypatch, persist, expected):
     """Lô đầu được gửi đi lưu SONG SONG với synthesis, nên nguồn mà vòng
     iteration lấy về sau đó nằm ngoài lô ấy. Phần dôi ra phải được ghi, và
-    không nguồn nào được ghi hai lần.
+    không nguồn nào được ghi hai lần — trừ khi lượt chạy không được lưu.
     """
     from concurrent.futures import ThreadPoolExecutor
     from backend.app.features.research.agent import ResearchAgent
@@ -127,8 +146,8 @@ def test_iteration_sources_are_stored_exactly_once(monkeypatch):
         def synthesize_grounded(self, q, s):     return ResearchOutput(query=q)
 
     a.synth = _Synth()
-    list(a.run_streaming("transformer attention"))
+    list(a.run_streaming("transformer attention", persist=persist))
 
     titles = [s.title for batch in stored for s in batch]
-    assert titles == ["live", "từ-iteration"]
+    assert titles == expected
     assert len(titles) == len(set(titles))

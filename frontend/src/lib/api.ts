@@ -19,8 +19,8 @@ const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 export const AUTH_CHANGED = "king:auth-changed";
 
 // Những request tiêu một lượt dùng thử của khách (GUEST_ROUTES ở
-// backend/app/core/auth.py, cột True): sau mỗi lần, số lượt còn lại đổi.
-const TRIAL_TURN = /\/api\/(chat\/stream|pdf\/stream|pdf\/summarize|hmer\/recognize)$/;
+// backend/app/core/auth.py, cột thứ ba khác None): sau mỗi lần, số lượt còn lại đổi.
+const TRIAL_TURN = /\/api\/(chat\/stream|pdf\/stream|pdf\/summarize|hmer\/recognize|research\/stream|research\/deep-dive)$/;
 
 function signalAuthChange(method: string, url: string, response: Response): void {
   const spentTurn = method === "POST" && TRIAL_TURN.test(url.split("?")[0]);

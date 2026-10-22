@@ -4,14 +4,17 @@ import logging
 import threading
 import time
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 
+from backend.app.core.auth import guest_model, is_guest
 from backend.app.core.rate_limit import rate_limit
 from backend.app.features.research.prompts import DEEP_DIVE_SYSTEM
 from backend.app.features.research.schemas import DeepDiveRequest, ResearchRequest, SessionHistoryResponse
 from backend.app.features.research.search.community import fetch_trending_papers
 from backend.app.features.research.service import ResearchService, SessionBusyError
+from backend.app.shared.conversation_store import ConversationManager
+from backend.app.shared.guest_store import guest_sessions
 from backend.app.shared.latency import timed
 from backend.app.shared.sse import LeasedStreamingResponse
 from backend.app.shared.model_guard import require_allowed_model
@@ -22,6 +25,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["research"])
 
 _service: ResearchService | None = None
+_guest_service: ResearchService | None = None
 
 # Trending-papers cache: HuggingFace's daily_papers list changes at most once
 # a day, and the endpoint is flaky over some networks — cache successful
@@ -41,17 +45,37 @@ def get_service() -> ResearchService:
     return _service
 
 
+def get_guest_service() -> ResearchService:
+    """Guests: the same agent, but history only in memory under its own
+    namespace, and nothing they find added to the knowledge store."""
+    global _guest_service
+    if _guest_service is None:
+        _guest_service = ResearchService(
+            agent=get_service().agent,
+            conversations=ConversationManager(namespace="guest-research", store=guest_sessions),
+            persist=False,
+        )
+    return _guest_service
+
+
+def _service_for(request: Request, req: ResearchRequest | DeepDiveRequest) -> ResearchService:
+    if is_guest(request):
+        req.provider, req.model = guest_model()
+        return get_guest_service()
+    return get_service()
+
+
 def sse(data: dict) -> str:
     return f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
 @router.post("/api/research/stream", dependencies=[Depends(rate_limit("research"))])
-async def research_stream(req: ResearchRequest):
+async def research_stream(req: ResearchRequest, request: Request):
     if not req.query.strip():
         raise HTTPException(status_code=400, detail="Query required")
+    service = _service_for(request, req)
     require_allowed_model(req.provider, req.model)
 
-    service = get_service()
     try:
         lock = service.begin_session(req.session_id)
     except SessionBusyError:
@@ -74,13 +98,13 @@ async def research_stream(req: ResearchRequest):
 
 
 @router.post("/api/research/deep-dive", dependencies=[Depends(rate_limit("expensive"))])
-async def deep_dive(req: DeepDiveRequest):
+async def deep_dive(req: DeepDiveRequest, request: Request):
     """Answer a follow-up question grounded in a single source (SSE streaming)."""
     if not req.question.strip():
         raise HTTPException(status_code=400, detail="Question required")
+    service = _service_for(request, req)
     require_allowed_model(req.provider, req.model)
 
-    service = get_service()
     try:
         lock = service.begin_session(req.session_id)
     except SessionBusyError:

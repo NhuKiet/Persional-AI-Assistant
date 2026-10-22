@@ -393,13 +393,16 @@ class ResearchAgent:
         cancel_event: threading.Event | None = None,
         history: list[dict] | None = None,
         focus: str = "all",
+        persist: bool = True,
     ) -> Generator[dict, None, None]:
-        yield from self._run_core(query, provider, model, cancel_event, history, focus)
+        """`persist=False` reads the knowledge store but adds nothing to it
+        (a guest's run: what strangers search for stays out of it)."""
+        yield from self._run_core(query, provider, model, cancel_event, history, focus, persist)
 
     def _run_core(
         self, query: str, provider: str | None, model: str | None,
         cancel_event: threading.Event | None, history: list[dict] | None,
-        focus: str = "all",
+        focus: str = "all", persist: bool = True,
     ) -> Generator[dict, None, ResearchOutput | None]:
         """Toàn bộ luồng thật: contextualize → gate 3 tầng → judge/top-up →
         search live → synthesize → iteration → persistence → done.
@@ -655,7 +658,7 @@ class ResearchAgent:
             dispatched  = len(newly_fetched)
             store_future = (
                 self._pool.submit(self._store_sources, knowledge, query, list(newly_fetched))
-                if newly_fetched else None
+                if newly_fetched and persist else None
             )
 
             if rag_path:
@@ -729,7 +732,7 @@ class ResearchAgent:
             # Iteration có thể đã lấy thêm nguồn SAU khi lô trên được gửi đi;
             # ghi phần dôi ra, và chỉ phần dôi ra — hai lô luôn rời nhau nên
             # không nguồn nào bị ghi hai lần.
-            if len(newly_fetched) > dispatched:
+            if persist and len(newly_fetched) > dispatched:
                 self._store_sources(knowledge, query, newly_fetched[dispatched:])
 
             yield {"type": "done", "data": _output_dict(output)}

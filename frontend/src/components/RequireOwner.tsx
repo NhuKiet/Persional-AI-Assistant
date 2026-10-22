@@ -1,26 +1,30 @@
 import type { ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
+import { canUse, guestToolsText } from "../lib/auth";
 import { loginHref } from "./GuestBanner";
 
 interface RequireOwnerProps {
   /** Shown in the heading: "<feature> cần đăng nhập". */
   feature: string;
+  /** The tool this page is, when the backend may open it to guests: a guest
+   *  it lists for that tool (/api/auth/me) gets the page too. */
+  tool?: string;
   children: ReactNode;
 }
 
 /** A page only the owner may use. A guest gets a short explanation and the
  *  way in instead — the backend refuses these routes to guests anyway
  *  (backend/app/core/auth.py); this is so the page says why. */
-export function RequireOwner({ feature, children }: RequireOwnerProps) {
+export function RequireOwner({ feature, tool, children }: RequireOwnerProps) {
   const { state, loading } = useAuth();
   const { pathname } = useLocation();
   // Until we know: render nothing, not the page — a guest would see it flash
   // and its first requests go out before the lock appears.
   if (loading) return null;
-  if (state.role !== "guest") return <>{children}</>;
+  if (state.role !== "guest" || (tool && canUse(state, tool))) return <>{children}</>;
 
-  const tried = state.guest?.enabled;
+  const tried = guestToolsText(state);
   return (
     <main className="locked-page">
       <div className="locked-card">
@@ -33,7 +37,7 @@ export function RequireOwner({ feature, children }: RequireOwnerProps) {
         <h1 className="locked-title">{feature} cần đăng nhập</h1>
         <p className="locked-text">
           {tried
-            ? "Tính năng này chỉ dành cho chủ trợ lý. Bạn vẫn có thể dùng thử Chat, PDF và Công thức viết tay."
+            ? `Tính năng này chỉ dành cho chủ trợ lý. Bạn vẫn có thể dùng thử ${tried}.`
             : "Tính năng này chỉ dành cho chủ trợ lý."}
         </p>
         <div className="locked-actions">

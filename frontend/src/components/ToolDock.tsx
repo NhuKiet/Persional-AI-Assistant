@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
-import { VISIBLE_TOOLS, type Tool } from "../config/tools";
+import type { Tool } from "../config/tools";
 import { useAuth } from "../hooks/useAuth";
+import { useVisibleTools } from "../hooks/useVisibleTools";
 import { canUse } from "../lib/auth";
 import { ToolIcon } from "./ToolIcon";
 
@@ -11,9 +12,10 @@ interface ToolDockProps {
 
 export function ToolDock({ onSelect, visible }: ToolDockProps) {
   const { state } = useAuth();
+  const tools = useVisibleTools();
   return (
     <div className={`dock ${visible ? "dock-visible" : "dock-hidden"}`}>
-      {VISIBLE_TOOLS.map(tool => {
+      {tools.map(tool => {
         // Still clickable: the page explains and offers to sign in.
         const locked = !canUse(state, tool.id);
         return (

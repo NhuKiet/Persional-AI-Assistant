@@ -2,7 +2,7 @@
 
 Two roles. The owner signs in with OWNER_PASSWORD and gets everything.
 Everyone else is a guest, who may try a short list of tools (chat, PDF,
-handwritten maths) a few times a day — see GUEST_ROUTES. The policy is
+handwritten maths, research) a few times a day — see GUEST_ROUTES. The policy is
 deny-by-default: a route not listed there needs the owner, so a feature added
 later is never opened to guests by accident.
 
@@ -39,7 +39,12 @@ logger = logging.getLogger(__name__)
 OWNER = "owner"
 GUEST = "guest"
 COOKIE_NAME = "king_session"
-GUEST_TOOLS = ["chat", "pdf", "hmer"]
+GUEST_TOOLS = ["chat", "pdf", "hmer", "research"]
+
+# The daily allowances a guest call can take from. Research has its own,
+# smaller one: each run calls several search APIs and many LLM rounds.
+TURN = "turn"
+RESEARCH = "research"
 
 _DAY = 24 * 3600
 
@@ -51,17 +56,21 @@ PUBLIC_ROUTES: list[tuple[str, str]] = [
     ("POST", r"/api/auth/login"),
     ("POST", r"/api/auth/logout"),
 ]
-# Guests too. `True` = each call spends one of the guest's daily turns.
-GUEST_ROUTES: list[tuple[str, str, bool]] = [
-    ("POST", r"/api/chat/stream", True),
-    ("POST", r"/api/pdf/upload", False),
-    ("GET", r"/api/pdf/raw/[^/]+", False),
-    ("DELETE", r"/api/pdf/file/[^/]+", False),
-    ("POST", r"/api/pdf/stream", True),
-    ("POST", r"/api/pdf/summarize", True),
-    ("GET", r"/api/hmer/status", False),
-    ("POST", r"/api/hmer/recognize", True),
-    ("POST", r"/api/hmer/explain", False),
+# Guests too. The third column is the allowance each call spends (None = free).
+GUEST_ROUTES: list[tuple[str, str, str | None]] = [
+    ("POST", r"/api/chat/stream", TURN),
+    ("POST", r"/api/pdf/upload", None),
+    ("GET", r"/api/pdf/raw/[^/]+", None),
+    ("DELETE", r"/api/pdf/file/[^/]+", None),
+    ("POST", r"/api/pdf/stream", TURN),
+    ("POST", r"/api/pdf/summarize", TURN),
+    ("GET", r"/api/hmer/status", None),
+    ("POST", r"/api/hmer/recognize", TURN),
+    ("POST", r"/api/hmer/explain", None),
+    ("GET", r"/api/research/trending", None),
+    ("POST", r"/api/research/stream", RESEARCH),
+    # One LLM answer about one source: priced like a chat turn.
+    ("POST", r"/api/research/deep-dive", TURN),
 ]
 
 _PUBLIC = [(m, re.compile(p)) for m, p in PUBLIC_ROUTES]
@@ -118,10 +127,12 @@ def role_for_cookie(cookie_header: str | None) -> str:
 
 
 class GuestQuota:
-    """GUEST_DAILY_LIMIT turns per client in any 24 hours. In memory, one
-    backend process (same assumption as core/rate_limit.py)."""
+    """`limit()` turns per client in any 24 hours. In memory, one backend
+    process (same assumption as core/rate_limit.py). The limit is read on
+    every call, so it follows the settings."""
 
-    def __init__(self, clock: Callable[[], float] = time.monotonic):
+    def __init__(self, limit: Callable[[], int], clock: Callable[[], float] = time.monotonic):
+        self._limit = limit
         self._clock = clock
         self._lock = threading.Lock()
         self._turns: dict[str, deque[float]] = {}
@@ -142,21 +153,30 @@ class GuestQuota:
 
     def remaining(self, client: str) -> int:
         with self._lock:
-            return max(0, settings.GUEST_DAILY_LIMIT - len(self._recent(client, self._clock())))
+            return max(0, self._limit() - len(self._recent(client, self._clock())))
 
     def spend(self, client: str) -> float | None:
         """Take one turn; None if taken, else seconds until one frees up."""
         with self._lock:
             now = self._clock()
             turns = self._recent(client, now)
-            if len(turns) >= settings.GUEST_DAILY_LIMIT:
+            if len(turns) >= self._limit():
                 return max(1.0, turns[0] + _DAY - now)
             turns.append(now)
             self._turns[client] = turns
             return None
 
 
-guest_quota = GuestQuota()
+guest_quota = GuestQuota(lambda: settings.GUEST_DAILY_LIMIT)
+guest_research_quota = GuestQuota(lambda: settings.GUEST_RESEARCH_DAILY_LIMIT)
+QUOTAS = {TURN: guest_quota, RESEARCH: guest_research_quota}
+
+
+def guest_tools() -> list[str]:
+    """The tools a guest may try with the current settings."""
+    if not settings.GUEST_ENABLED:
+        return []
+    return [t for t in GUEST_TOOLS if t != "research" or settings.GUEST_RESEARCH_DAILY_LIMIT > 0]
 
 
 def client_of(scope: Scope) -> str:
@@ -167,14 +187,16 @@ def client_of(scope: Scope) -> str:
 # ── the policy ──────────────────────────────────────────────────────────
 
 
-def _match(method: str, path: str) -> tuple[bool, bool, bool]:
-    """(public, guest_allowed, spends_a_turn)."""
+def _match(method: str, path: str) -> tuple[bool, bool, str | None]:
+    """(public, guest_allowed, the allowance it spends)."""
     if any(m == method and p.fullmatch(path) for m, p in _PUBLIC):
-        return True, True, False
+        return True, True, None
     for m, p, quota in _GUEST:
         if m == method and p.fullmatch(path):
+            if quota == RESEARCH and settings.GUEST_RESEARCH_DAILY_LIMIT == 0:
+                return False, False, None
             return False, True, quota
-    return False, False, False
+    return False, False, None
 
 
 async def _json(send: Send, status: int, body: dict, headers: list[tuple[bytes, bytes]] | None = None) -> None:
@@ -209,7 +231,7 @@ class AccessPolicyMiddleware:
             return
 
         public, allowed, spends = _match(method, scope["path"])
-        if public or (allowed and settings.GUEST_ENABLED and not spends):
+        if public or (allowed and settings.GUEST_ENABLED and spends is None):
             await self.app(scope, receive, send)
             return
         if not (allowed and settings.GUEST_ENABLED):
@@ -218,12 +240,14 @@ class AccessPolicyMiddleware:
                 "message": "Tính năng này cần đăng nhập.",
             })
             return
-        wait = guest_quota.spend(client_of(scope))
+        wait = QUOTAS[spends].spend(client_of(scope))
         if wait is not None:
             hours = math.ceil(wait / 3600)
+            what = "lượt Research" if spends == RESEARCH else "lượt dùng thử"
             await _json(send, 429, {
                 "detail": "guest_quota_exceeded",
-                "message": f"Hết lượt dùng thử hôm nay — thử lại sau khoảng {hours} giờ, hoặc đăng nhập.",
+                "quota": spends,
+                "message": f"Hết {what} hôm nay — thử lại sau khoảng {hours} giờ, hoặc đăng nhập.",
             }, headers=[(b"retry-after", str(math.ceil(wait)).encode())])
             return
         await self.app(scope, receive, send)
