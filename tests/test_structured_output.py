@@ -101,3 +101,20 @@ def test_key_points_falls_back_to_text_when_structured_result_is_all_too_short()
     s._make_key_points("q", "ctx", out)
 
     assert out.key_points == ["[FINDING] a valid fallback key point from the text parse path"]
+
+
+def test_structured_output_method_comes_from_capabilities():
+    seen = {}
+
+    class _LLM(_FakeLLM):
+        def with_structured_output(self, schema, **kwargs):
+            seen.update(kwargs)
+            return _FakeStructured(SummaryShortMedium(short="s", medium="m"))
+
+    caps = ModelCapabilities(200_000, True, False, structured_output_method="json_schema")
+    _synth(_LLM(), caps)._call_structured("p", SummaryShortMedium)
+    assert seen == {"method": "json_schema"}
+
+    seen.clear()
+    _synth(_LLM(), _STRUCTURED_CAPS)._call_structured("p", SummaryShortMedium)
+    assert seen == {}

@@ -253,8 +253,10 @@ class Synthesizer:
         parse path, not fail the section."""
         if not self.caps.supports_structured_output:
             return None
+        method = self.caps.structured_output_method
+        kwargs = {"method": method} if method else {}
         try:
-            return self._bound(effort).with_structured_output(schema).invoke(prompt)
+            return self._bound(effort).with_structured_output(schema, **kwargs).invoke(prompt)
         except Exception as e:  # noqa: BLE001
             logger.warning(
                 "Structured output failed for %s (falling back to text parse): %s",

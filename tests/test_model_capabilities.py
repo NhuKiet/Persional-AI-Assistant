@@ -29,7 +29,7 @@ def test_capabilities_ignore_default_model_of_another_provider(monkeypatch):
     monkeypatch.setattr(llm_mod.settings, "DEFAULT_PROVIDER", "openai")
     monkeypatch.setattr(llm_mod.settings, "DEFAULT_MODEL", "gpt-5.6-luna")
     caps = capabilities_for("anthropic")
-    assert caps.context_window == 200_000
+    assert caps.context_window == 1_000_000
 
 
 def test_resolve_model_matches_get_llm_defaults(monkeypatch):
@@ -38,7 +38,7 @@ def test_resolve_model_matches_get_llm_defaults(monkeypatch):
     monkeypatch.setattr(llm_mod.settings, "OLLAMA_MODEL", "llama3")
     assert llm_mod._resolve_model("ollama", None) == "llama3"
     assert llm_mod._resolve_model("openai", None) == "gpt-4o-mini"
-    assert llm_mod._resolve_model("anthropic", None) == "claude-sonnet-5"
+    assert llm_mod._resolve_model("anthropic", None) == "claude-sonnet-5-5"
     assert llm_mod._resolve_model("openai", "gpt-4o") == "gpt-4o"
 
 
@@ -85,3 +85,64 @@ def test_temperature_is_omitted_for_models_that_reject_it(monkeypatch):
     captured.clear()
     llm_mod.get_llm("openai", "gpt-4o-mini", temperature=0.1)
     assert captured["temperature"] == 0.1
+
+
+def test_every_claude_model_has_capabilities_without_sampling():
+    """A registry entry without a capability row would fall back to the
+    8K-window default, and any Claude row that allowed temperature would 400."""
+    for model_id, _ in llm_mod.MODEL_REGISTRY["anthropic"]:
+        caps = llm_mod.MODEL_CAPABILITIES[model_id]
+        assert caps.supports_temperature is False, model_id
+        assert caps.supports_structured_output is True, model_id
+        assert caps.structured_output_method == "json_schema", model_id
+        assert caps.context_window >= 200_000, model_id
+
+
+def test_claude_5_5_models_are_listed():
+    ids = {model_id for model_id, _ in llm_mod.MODEL_REGISTRY["anthropic"]}
+    assert {"claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"} <= ids
+
+
+def test_anthropic_client_gets_no_temperature_and_a_real_max_tokens(monkeypatch):
+    captured = {}
+
+    class _FakeChatAnthropic:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+    import sys
+    import types as _t
+    fake = _t.ModuleType("langchain_anthropic")
+    fake.ChatAnthropic = _FakeChatAnthropic
+    monkeypatch.setitem(sys.modules, "langchain_anthropic", fake)
+    monkeypatch.setattr(llm_mod.settings, "ANTHROPIC_API_KEY", "sk-ant-test")
+
+    llm_mod.get_llm("anthropic", "claude-opus-5-5", temperature=0.1)
+    assert "temperature" not in captured
+    assert captured["max_tokens"] == llm_mod._ANTHROPIC_MAX_TOKENS
+
+
+def test_refusal_fallback_is_opted_into_only_where_it_exists(monkeypatch):
+    captured = {}
+
+    class _FakeChatAnthropic:
+        def __init__(self, **kwargs):
+            captured.clear()
+            captured.update(kwargs)
+
+    import sys
+    import types as _t
+    fake = _t.ModuleType("langchain_anthropic")
+    fake.ChatAnthropic = _FakeChatAnthropic
+    monkeypatch.setitem(sys.modules, "langchain_anthropic", fake)
+    monkeypatch.setattr(llm_mod.settings, "ANTHROPIC_API_KEY", "sk-ant-test")
+
+    for model in ("claude-opus-5-5", "claude-sonnet-5-5"):
+        llm_mod.get_llm("anthropic", model)
+        assert captured["betas"] == [llm_mod._FALLBACK_BETA], model
+        assert captured["model_kwargs"] == {"extra_body": {"fallbacks": "default"}}, model
+
+    # Haiku 5.5 has no server-side fallback; older models predate the option.
+    for model in ("claude-haiku-5-5", "claude-opus-4-8", "claude-haiku-4-5-20251001"):
+        llm_mod.get_llm("anthropic", model)
+        assert "betas" not in captured and "model_kwargs" not in captured, model

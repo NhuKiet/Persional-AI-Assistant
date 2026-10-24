@@ -9,7 +9,9 @@ import { SHORTCUT_COPY, type Lang } from "../config/portfolio";
 import { toolPath, type Tool } from "../config/tools";
 import { useTheme } from "../hooks/useTheme";
 import { useVisibleTools } from "../hooks/useVisibleTools";
-import "@fontsource/noto-serif-sc/chinese-simplified-400.css";
+// Chữ Hán trên la bàn: chỉ ~100 glyph được dùng, cắt từ bộ 1,5 MB — sinh bởi
+// tools/subset_compass_font.py.
+import "../styles/compass-font.css";
 import "@fontsource/noto-serif-sc/latin-400.css";
 // Chỉ phần lịch (tính toán thuần) nạp cùng trang; cảnh 3D (three.js) nạp
 // lười trong effect bên dưới — xem three/compass/readout.ts.

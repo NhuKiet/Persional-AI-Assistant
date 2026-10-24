@@ -16,6 +16,9 @@ from backend.app.core.config import settings
 # provider -> list[(model_id, label)]
 MODEL_REGISTRY: dict[str, list[tuple[str, str]]] = {
     "anthropic": [
+        ("claude-opus-5-5", "Claude Opus 5.5"),
+        ("claude-sonnet-5-5", "Claude Sonnet 5.5"),
+        ("claude-haiku-5-5", "Claude Haiku 5.5"),
         ("claude-opus-4-8", "Claude Opus 4.8"),
         ("claude-sonnet-5", "Claude Sonnet 5"),
         ("claude-haiku-4-5-20251001", "Claude Haiku 4.5"),
@@ -39,6 +42,10 @@ class ModelCapabilities:
     supports_structured_output: bool
     supports_temperature: bool
     reasoning_effort_levels: tuple[str, ...] = ()
+    # `method` for with_structured_output; None leaves the library default.
+    structured_output_method: str | None = None
+    # A policy decline is retried server-side on the model Anthropic picks.
+    server_side_fallback: bool = False
 
 
 # Unknown models get the conservative option on every axis: assume a small
@@ -49,6 +56,20 @@ DEFAULT_CAPABILITIES = ModelCapabilities(
 
 _LUNA_EFFORTS = ("none", "low", "medium", "high", "xhigh", "max")
 
+
+def _claude(context_window: int, server_side_fallback: bool = False) -> ModelCapabilities:
+    """Claude 4.7 and later answer 400 to any temperature / top_p / top_k, and
+    API version 2026-10-21 removes them on every model, so none is sent.
+    langchain_anthropic's default structured-output method forces a tool call,
+    which Opus 5.5 and Sonnet 5.5 also refuse with a 400; json_schema uses
+    native structured output instead and works on every model listed here."""
+    return ModelCapabilities(
+        context_window, True, False,
+        structured_output_method="json_schema",
+        server_side_fallback=server_side_fallback,
+    )
+
+
 MODEL_CAPABILITIES: dict[str, ModelCapabilities] = {
     # supports_temperature=False is measured, not assumed: langchain_openai
     # silently drops any value other than 1.0 for this model.
@@ -56,10 +77,27 @@ MODEL_CAPABILITIES: dict[str, ModelCapabilities] = {
     "gpt-4.1-mini":  ModelCapabilities(1_047_576, True, True),
     "gpt-4o":        ModelCapabilities(128_000, True, True),
     "gpt-4o-mini":   ModelCapabilities(128_000, True, True),
-    "claude-opus-4-8":            ModelCapabilities(200_000, True, True),
-    "claude-sonnet-5":            ModelCapabilities(200_000, True, True),
-    "claude-haiku-4-5-20251001":  ModelCapabilities(200_000, True, True),
+    # Opus 5.5 and Sonnet 5.5 can decline with stop_reason "refusal" and an
+    # empty answer; Haiku 5.5 has no server-side fallback to opt into.
+    "claude-opus-5-5":            _claude(1_000_000, server_side_fallback=True),
+    "claude-sonnet-5-5":          _claude(1_000_000, server_side_fallback=True),
+    "claude-haiku-5-5":           _claude(1_000_000),
+    "claude-opus-4-8":            _claude(1_000_000),
+    "claude-sonnet-5":            _claude(1_000_000),
+    "claude-haiku-4-5-20251001":  _claude(200_000),
 }
+
+# langchain_anthropic sizes max_tokens from its model profiles and falls back
+# to 4096 for ids it doesn't know — Sonnet 5 and every 5.5 model, at 1.4.8.
+# Thinking is on by default on those and spends from the same budget, so 4096
+# truncates long answers. 16K is ample within LLM_TIMEOUT.
+_ANTHROPIC_MAX_TOKENS = 16_000
+
+# `fallbacks: "default"` lets Anthropic route a decline by its category. The
+# pinned SDK only types the list form, so the string goes in extra_body; the
+# beta header also moves langchain onto client.beta.messages, whose types know
+# the `fallback` content block marking the hand-over.
+_FALLBACK_BETA = "server-side-fallback-2026-07-01"
 
 
 class MissingProviderKey(ValueError):
@@ -129,7 +167,7 @@ def _resolve_model(provider: str, model: str | None) -> str:
     if provider == "ollama":
         return settings.OLLAMA_MODEL
     if provider == "anthropic":
-        return "claude-sonnet-5"
+        return "claude-sonnet-5-5"
     return "gpt-4o-mini"
 
 
@@ -177,12 +215,20 @@ def get_llm(
         if not settings.ANTHROPIC_API_KEY:
             raise MissingProviderKey("ANTHROPIC_API_KEY chưa cấu hình — không dùng được Claude.")
         from langchain_anthropic import ChatAnthropic
+        fallback_kwargs: dict = {}
+        if capabilities_for(provider, model).server_side_fallback:
+            fallback_kwargs = {
+                "betas": [_FALLBACK_BETA],
+                "model_kwargs": {"extra_body": {"fallbacks": "default"}},
+            }
         return ChatAnthropic(
             model=model,
+            max_tokens=_ANTHROPIC_MAX_TOKENS,
             api_key=settings.ANTHROPIC_API_KEY,
             default_request_timeout=settings.LLM_TIMEOUT,
             max_retries=settings.LLM_MAX_RETRIES,
             **temp_kwargs,
+            **fallback_kwargs,
         )
 
     if not settings.OPENAI_API_KEY:
